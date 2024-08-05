@@ -1,0 +1,65 @@
+# config.yml
+
+project_dir: "./output"
+scenario_dir: "./scenarios"
+seed: 123
+device: "auto"  # Automatically select device
+
+dataset_options:
+  num_episodes: 100
+  t_obs: 10
+  t_pred: 50
+
+training:
+  epochs: 1000
+  batch_size: 8
+  learning_rate: 0.001
+
+simulation_options:
+  lanelet_graph_conversion_steps: null
+  linear_lanelet_projection: true
+  sort_lanelet_assignments: false
+
+control_space_options:
+  lower_bound_acceleration: -6.0
+  upper_bound_acceleration: 6.5
+  lower_bound_velocity: 0.001
+  lower_bound_steering: -0.15
+  upper_bound_steering: 0.15
+  min_velocity_steering: 1.0
+
+viewer_options:
+  view_range: 110.0
+  window_size: 128
+
+respawner_options:
+  random_init_arclength: true
+  random_goal_arclength: true
+  random_start_timestep: true
+  only_intersections: false
+  route_length: [10, 15]
+  init_speed: "uniform_random"
+  min_init_arclength: 100.0
+  random_speed_range: [0.0, 50.0]
+  init_steering_angle: "uniform_random"
+  random_steering_angle_range: [-0.08, 0.08]
+  init_orientation_noise: 0.4
+  init_position_noise: 3.0
+  min_goal_distance: 100.0
+  min_goal_distance_l2: 100.0
+  max_goal_distance_l2: null
+  max_goal_distance: null
+  min_remaining_distance: null
+  max_attempts_outer: 50
+  min_vehicle_distance: 0.0
+  min_vehicle_speed: null
+  min_vehicles_route: null
+  max_attempts_inner: 5
+
+traffic_extraction_options:
+  edge_drawer: "NoEdgeDrawer"  # NoEdgeDrawer()
+  postprocessors: []
+  only_ego_inc_edges: false
+  assign_multiple_lanelets: true
+  ego_map_radius: 50.0
+  include_lanelet_vertices: false
