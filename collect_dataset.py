@@ -37,10 +37,10 @@ def run_experiment():
             obs = new_obs
         
         if episode_done:
-            time.sleep(2.0)
+            # time.sleep(2.0)
             continue
 
-        time.sleep(0.5)
+        # time.sleep(0.5)
 
         for t in range(config["dataset_options"]["t_pred"]):
             action = np.array([0.0, 0.0])
@@ -62,7 +62,7 @@ def run_experiment():
 
         print("Successfully collected episode")
         num_episodes += 1
-        time.sleep(2.0)
+        # time.sleep(2.0)
 
     dataset_dir = Path(config["project_dir"]) / "dataset"
     dataset_dir.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
