@@ -1,6 +1,6 @@
 from utils.dataset_utils import EnvironmentDataset, get_data_dimensions, create_data_loaders
 import torch
-from models.predictive_model import PredictiveModel
+from loss_function import CombinedLoss
 from torch import nn, optim
 from experiment_setup import load_config
 from pathlib import Path
@@ -202,7 +202,7 @@ def main():
 
     optimizer = optim.Adam(model.parameters(), lr=config["training"]["learning_rate"])
     scheduler = CosineAnnealingLR(optimizer, T_max=50, eta_min=1e-6)
-    criterion = nn.MSELoss()
+    criterion = CombinedLoss(alpha=1.0, beta=0.0, gamma=0.0, delta=0.01, device=device)
     
     train_model(model, train_loader, val_loader, optimizer, criterion, epochs=config["training"]["epochs"], device=device, scheduler=scheduler)
 
