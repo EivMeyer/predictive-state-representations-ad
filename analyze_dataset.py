@@ -7,12 +7,12 @@ import numpy as np
 
 def load_dataset():
     config = load_config()
-    dataset_path = Path(config["project_dir"]) / "dataset" / "dataset.pt"
-    dataset = torch.load(dataset_path)
+    dataset_path = Path(config["project_dir"]) / "dataset"
+    dataset = EnvironmentDataset(dataset_path)
     return dataset
 
 def visualize_episode(episode):
-    observations, actions, ego_states, next_observations, next_actions, dones = episode
+    observations, next_observations = episode['observations'], episode['next_observations']
 
     # Example to show one image from observations and one from predictions
     fig, axs = plt.subplots(1, 2, figsize=(10, 5))
@@ -40,7 +40,7 @@ def visualize_episode(episode):
 
     plt.show()
 
-def debug_dataset():
+def analyze_dataset():
     dataset = load_dataset()
     # Visualize the first episode as an example
     if len(dataset) > 0:
@@ -49,4 +49,4 @@ def debug_dataset():
         print("No episodes available in the dataset.")
 
 if __name__ == "__main__":
-    debug_dataset()
+    analyze_dataset()
