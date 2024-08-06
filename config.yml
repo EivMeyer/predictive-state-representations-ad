@@ -6,9 +6,9 @@ seed: 123
 device: "auto"  # Automatically select device
 
 dataset_options:
-  num_episodes: 100
+  num_episodes: 1000
   t_obs: 10
-  t_pred: 50
+  t_pred: 1
 
 training:
   epochs: 1000
@@ -30,7 +30,7 @@ control_space_options:
 
 viewer_options:
   view_range: 110.0
-  window_size: 128
+  window_size: 256
 
 respawner_options:
   random_init_arclength: true
