@@ -12,49 +12,10 @@ from pathlib import Path
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
 import numpy as np
 from matplotlib.gridspec import GridSpec
 
-def collate_fn(batch, device):
-    observations, actions, ego_states, next_observations, _, _ = zip(*batch)
-    
-    # Convert to tensors and move to GPU in one step
-    obs = torch.tensor(np.array(observations), device=device)
-    act = torch.tensor(np.array(actions), device=device)
-    ego = torch.tensor(np.array(ego_states), device=device)
-    next_obs = torch.tensor(np.array(next_observations), device=device)
-    
-    return obs, act, ego, next_obs
-
-def create_data_loaders(dataset, batch_size, device, train_ratio=0.8):
-    """
-    Split the dataset into training and validation sets, then create DataLoaders.
-    
-    Args:
-    dataset (Dataset): The full dataset
-    batch_size (int): Batch size for the DataLoaders
-    train_ratio (float): Ratio of data to use for training (default: 0.8)
-
-    Returns:
-    train_loader (DataLoader): DataLoader for the training set
-    val_loader (DataLoader): DataLoader for the validation set
-    """
-    # Calculate the size of each split
-    dataset_size = len(dataset)
-    train_size = int(train_ratio * dataset_size)
-    val_size = dataset_size - train_size
-
-    # Split the dataset
-    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
-
-    # Create DataLoaders with custom collate_fn
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
-                              collate_fn=lambda b: collate_fn(b, device))
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False,
-                            collate_fn=lambda b: collate_fn(b, device))
-
-    return train_loader, val_loader
 
 def prepare_image(img):
     img = np.squeeze(img)
@@ -71,43 +32,77 @@ def normalize(img):
     img_min, img_max = img.min(), img.max()
     return (img - img_min) / (img_max - img_min) if img_min != img_max else img
 
-
 def setup_visualization(seq_length):
     plt.ion()  # Turn on interactive mode
-    fig = plt.figure(figsize=(20, 10))
-    gs = GridSpec(3, seq_length, figure=fig)
+    fig = plt.figure(figsize=(30, 20))  # Increased width to accommodate new grid
+    gs = GridSpec(6, seq_length + 3, figure=fig)  # Added 3 columns for new grid
     
     axes = []
+    # First sample
     for i in range(seq_length):
         axes.append(fig.add_subplot(gs[0, i]))
-    axes.append(fig.add_subplot(gs[1:, :seq_length//2]))
-    axes.append(fig.add_subplot(gs[1:, seq_length//2:]))
+    axes.append(fig.add_subplot(gs[1:3, :seq_length//2]))
+    axes.append(fig.add_subplot(gs[1:3, seq_length//2:seq_length]))
+    
+    # Second sample
+    for i in range(seq_length):
+        axes.append(fig.add_subplot(gs[3, i]))
+    axes.append(fig.add_subplot(gs[4:, :seq_length//2]))
+    axes.append(fig.add_subplot(gs[4:, seq_length//2:seq_length]))
+    
+    # 3x3 grid for training predictions
+    for i in range(3):
+        for j in range(3):
+            axes.append(fig.add_subplot(gs[i*2:(i+1)*2, seq_length + j]))
     
     plt.show()
     return fig, axes
 
-def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoch):
+def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoch, train_predictions):
     for ax in axes:
         ax.clear()
         ax.axis('off')
 
     seq_length = observations.shape[1]
 
-    # Display input sequence
+    # Display input sequence and results for first sample
     for i in range(seq_length):
         obs = normalize(prepare_image(observations[0, i].cpu().numpy()))
         axes[i].imshow(obs, cmap='viridis' if obs.ndim == 2 else None)
-        axes[i].set_title(f'Input t-{seq_length-1-i}')
+        axes[i].set_title(f'Input 1 t-{seq_length-1-i}')
 
-    # Display ground truth
-    ground_truth_np = normalize(prepare_image(ground_truth.cpu().numpy()))
-    axes[-2].imshow(ground_truth_np, cmap='viridis' if ground_truth_np.ndim == 2 else None)
-    axes[-2].set_title('Ground Truth')
+    ground_truth_np = normalize(prepare_image(ground_truth[0].cpu().numpy()))
+    axes[seq_length].imshow(ground_truth_np, cmap='viridis' if ground_truth_np.ndim == 2 else None)
+    axes[seq_length].set_title('Ground Truth 1')
 
-    # Display prediction
-    prediction_np = normalize(prepare_image(prediction.cpu().numpy()))
-    axes[-1].imshow(prediction_np, cmap='viridis' if prediction_np.ndim == 2 else None)
-    axes[-1].set_title('Prediction')
+    prediction_np = normalize(prepare_image(prediction[0].cpu().numpy()))
+    axes[seq_length + 1].imshow(prediction_np, cmap='viridis' if prediction_np.ndim == 2 else None)
+    axes[seq_length + 1].set_title('Prediction 1')
+
+    # Display input sequence and results for second sample
+    for i in range(seq_length):
+        obs = normalize(prepare_image(observations[1, i].cpu().numpy()))
+        axes[seq_length + 2 + i].imshow(obs, cmap='viridis' if obs.ndim == 2 else None)
+        axes[seq_length + 2 + i].set_title(f'Input 2 t-{seq_length-1-i}')
+
+    ground_truth_np = normalize(prepare_image(ground_truth[1].cpu().numpy()))
+    axes[-11].imshow(ground_truth_np, cmap='viridis' if ground_truth_np.ndim == 2 else None)
+    axes[-11].set_title('Ground Truth 2')
+
+    prediction_np = normalize(prepare_image(prediction[1].cpu().numpy()))
+    axes[-10].imshow(prediction_np, cmap='viridis' if prediction_np.ndim == 2 else None)
+    axes[-10].set_title('Prediction 2')
+
+    # Display 3x3 grid of training predictions
+    num_train_preds = min(9, len(train_predictions))
+    for i in range(9):
+        if i < num_train_preds:
+            pred_np = normalize(prepare_image(train_predictions[i].cpu().numpy()))
+            axes[-9 + i].imshow(pred_np, cmap='viridis' if pred_np.ndim == 2 else None)
+            axes[-9 + i].set_title(f'Train Pred {i+1}')
+        else:
+            axes[-9 + i].imshow(np.zeros_like(pred_np), cmap='viridis')
+            axes[-9 + i].set_title(f'N/A')
 
     plt.suptitle(f'Epoch {epoch}')
     fig.tight_layout()
@@ -115,26 +110,86 @@ def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoc
     fig.canvas.flush_events()
     plt.pause(0.1)  # Pause to update the plot
 
-def calculate_variance(tensor):
-    # Calculate variance across all dimensions except the batch dimension
-    return torch.var(tensor.view(tensor.size(0), -1), dim=1).mean()
+
+def calculate_prediction_diversity(tensor):
+    """
+    Calculate the average pairwise difference between predictions in a batch.
+    A value close to 0 indicates potential mean collapse.
+    
+    Args:
+    tensor (torch.Tensor): Input tensor of shape (batch_size, ...)
+    
+    Returns:
+    float: Average pairwise difference
+    """
+    # Reshape tensor to (batch_size, -1)
+    batch_size = tensor.size(0)
+    flattened = tensor.view(batch_size, -1)
+    
+    # Calculate pairwise differences
+    diff_matrix = torch.cdist(flattened, flattened, p=2)
+    
+    # Calculate mean of upper triangle (excluding diagonal)
+    diversity = diff_matrix.triu(diagonal=1).sum() / (batch_size * (batch_size - 1) / 2)
+    
+    return diversity.item()
+
+
+def analyze_predictions(predictions, targets):
+    """
+    Analyze predictions for potential mean collapse and other statistics.
+    
+    Args:
+    predictions (torch.Tensor): Model predictions
+    targets (torch.Tensor): Ground truth targets
+    
+    Returns:
+    dict: Dictionary containing various statistics
+    """
+    pred_diversity = calculate_prediction_diversity(predictions)
+    target_diversity = calculate_prediction_diversity(targets)
+    
+    pred_mean = torch.mean(predictions).item()
+    pred_std = torch.std(predictions).item()
+    target_mean = torch.mean(targets).item()
+    target_std = torch.std(targets).item()
+    
+    return {
+        "prediction_diversity": pred_diversity,
+        "target_diversity": target_diversity,
+        "pred_mean": pred_mean,
+        "pred_std": pred_std,
+        "target_mean": target_mean,
+        "target_std": target_std
+    }
+
 
 def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device, scheduler):
     model.train()
     
-    # Get a hold-out sample for visualization
-    hold_out_obs, hold_out_actions, hold_out_ego_states, hold_out_next_obs = next(iter(val_loader))
-    hold_out_target = hold_out_next_obs[:, 0].to(device)
+    # Get two hold-out samples for visualization
+    hold_out_batch = next(iter(val_loader))
+    hold_out_obs = hold_out_batch['observations'][:2]  # Get first two samples
+    hold_out_target = hold_out_batch['next_observations'][:2]
 
     # Setup visualization
     seq_length = hold_out_obs.shape[1]
     fig, axes = setup_visualization(seq_length)
 
     for epoch in range(epochs):
-        total_loss = 0
-        total_pred_var = 0
-        total_target_var = 0
-        num_batches = 0
+        epoch_stats = {
+            "total_loss": [],
+            "mse_loss": [],
+            "ssim_loss": [],
+            "perceptual_loss": [],
+            "diversity_loss": [],
+            "prediction_diversity": [],
+            "target_diversity": [],
+            "pred_mean": [],
+            "pred_std": [],
+            "target_mean": [],
+            "target_std": []
+        }
         
         for iteration, batch in enumerate(train_loader):
             optimizer.zero_grad()
@@ -142,28 +197,38 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
             targets = batch['next_observations'][:, 0]
             
             predictions = model(batch)
-            loss = criterion(predictions, targets)
+            loss, loss_components = criterion(predictions, targets)
             
             loss.backward()
             optimizer.step()
-            
-            total_loss += loss.item()
-            total_pred_var += calculate_variance(predictions).item()
-            total_target_var += calculate_variance(targets).item()
-            num_batches += 1
-            
-            if iteration % 100 == 0:
-                print(f"Epoch {epoch}, Iteration {iteration}, Loss: {loss.item():.4f}")
 
-        avg_loss = total_loss / num_batches
-        avg_pred_var = total_pred_var / num_batches
-        avg_target_var = total_target_var / num_batches
-        
+            # Collect loss statistics
+            epoch_stats["total_loss"].append(loss.item())
+            epoch_stats["mse_loss"].append(loss_components['mse'])
+            epoch_stats["ssim_loss"].append(loss_components['ssim'])
+            epoch_stats["perceptual_loss"].append(loss_components['perceptual'])
+            epoch_stats["diversity_loss"].append(loss_components['diversity'])
+            
+            # Collect statistics
+            with torch.no_grad():
+                stats = analyze_predictions(predictions, targets)
+                for key, value in stats.items():
+                    epoch_stats[key].append(value)
+            
+            if (iteration + 1) % 100 == 0:
+                print(f"Epoch {epoch}, Iteration {iteration + 1}")
+                print(f"  Loss: {loss.item():.4f}")
+            
+            # Store first 9 training predictions for visualization
+            if iteration == 0:
+                train_predictions = predictions[:9].detach()
+
+        # Calculate and print mean statistics for the epoch
         print(f"Epoch {epoch} completed:")
-        print(f"  Average Loss: {avg_loss:.4f}")
-        print(f"  Average Prediction Variance: {avg_pred_var:.4f}")
-        print(f"  Average Target Variance: {avg_target_var:.4f}")
-        print(f"  Variance Ratio (Pred/Target): {avg_pred_var/avg_target_var:.4f}")
+        for key, values in epoch_stats.items():
+            mean_value = np.mean(values)
+            std_value = np.std(values)
+            print(f"  Mean {key}: {mean_value:.4f} (±{std_value:.4f})")
 
         # Step the scheduler
         scheduler.step()
@@ -178,7 +243,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
             hold_out_pred = model(hold_out_batch)
         model.train()
 
-        visualize_prediction(fig, axes, hold_out_obs, hold_out_target[0], hold_out_pred[0], epoch)
+        visualize_prediction(fig, axes, hold_out_obs, hold_out_target, hold_out_pred, epoch, train_predictions)
 
 
     plt.ioff()  # Turn off interactive mode
@@ -205,8 +270,8 @@ def main():
     model = PredictiveModelV2(obs_dim, action_dim, ego_state_dim)
     model = model.to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=config["training"]["learning_rate"])
-    scheduler = CosineAnnealingLR(optimizer, T_max=50, eta_min=1e-6)
+    optimizer = optim.Adam(model.parameters(), lr=config["training"]["learning_rate"], weight_decay=1e-5)
+    scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2) # CosineAnnealingLR(optimizer, T_max=50, eta_min=1e-5)
     criterion = CombinedLoss(alpha=1.0, beta=0.0, gamma=0.0, delta=0.01, device=device)
     
     train_model(model, train_loader, val_loader, optimizer, criterion, epochs=config["training"]["epochs"], device=device, scheduler=scheduler)
