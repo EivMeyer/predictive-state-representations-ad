@@ -1,9 +1,7 @@
-import torch
 import numpy as np
 import setup as setup
 from experiment_setup import load_config, setup_experiment
 from utils.dataset_utils import EnvironmentDataset
-import time
 from pathlib import Path
 
 def collect_dataset():
@@ -37,10 +35,7 @@ def collect_dataset():
             obs = new_obs
         
         if episode_done:
-            # time.sleep(2.0)
             continue
-
-        # time.sleep(0.5)
 
         for t in range(config["dataset_options"]["t_pred"]):
             action = np.array([0.0, 0.0])
@@ -60,10 +55,8 @@ def collect_dataset():
 
         dataset.add_episode(obs_sequence, actions, ego_states, next_obs_sequence, next_actions, done_sequence)
 
-        print("Successfully collected episode")
         num_episodes += 1
-        # time.sleep(2.0)
-
+        print(f'Successfully collected episode {num_episodes}/{config["dataset_options"]["num_episodes"]}')
 
 if __name__ == "__main__":
     collect_dataset()

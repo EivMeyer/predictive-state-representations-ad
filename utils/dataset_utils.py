@@ -19,12 +19,12 @@ class EnvironmentDataset:
 
     def add_episode(self, observations, actions, ego_states, next_observations, next_actions, dones):
         episode_data = {
-            'observations': np.array(observations, dtype=np.float32),
+            'observations': np.array(observations, dtype=np.uint8),  # Assuming 8-bit color images
             'actions': np.array(actions, dtype=np.float32),
             'ego_states': np.array(ego_states, dtype=np.float32),
-            'next_observations': np.array(next_observations, dtype=np.float32),
+            'next_observations': np.array(next_observations, dtype=np.uint8),  # Assuming 8-bit color images
             'next_actions': np.array(next_actions, dtype=np.float32),
-            'dones': np.array(dones, dtype=np.float32)
+            'dones': np.array(dones, dtype=bool)
         }
         episode_filename = f"episode_{self.episode_count}.pt"
         torch.save(episode_data, self.data_dir / episode_filename)
@@ -38,7 +38,17 @@ class EnvironmentDataset:
         if idx < 0 or idx >= self.episode_count:
             raise IndexError("Episode index out of range")
         episode_path = self.data_dir / self.episode_files[idx]
-        return torch.load(episode_path)
+        data = torch.load(episode_path)
+        
+        # Convert numpy arrays to PyTorch tensors and apply necessary conversions
+        data['observations'] = torch.from_numpy(data['observations']).float() / 255.0
+        data['next_observations'] = torch.from_numpy(data['next_observations']).float() / 255.0
+        data['actions'] = torch.from_numpy(data['actions']).float()
+        data['ego_states'] = torch.from_numpy(data['ego_states']).float()
+        data['next_actions'] = torch.from_numpy(data['next_actions']).float()
+        data['dones'] = torch.from_numpy(data['dones']).float()
+        
+        return data
 
     def get_dataloader(self, batch_size=32, shuffle=True, num_workers=4, device='cpu'):
         from torch.utils.data import DataLoader
