@@ -1,5 +1,10 @@
 from utils.dataset_utils import EnvironmentDataset, get_data_dimensions, create_data_loaders
 import torch
+from models.predictive_model_v0 import PredictiveModelV0
+from models.predictive_model_v1 import PredictiveModelV1
+from models.predictive_model_v2 import PredictiveModelV2
+from models.simple_reconstructive_model import SimpleReconstructiveModel
+from models.single_step_predictive_model import SingleStepPredictiveModel
 from loss_function import CombinedLoss
 from torch import nn, optim
 from experiment_setup import load_config
@@ -197,7 +202,7 @@ def main():
     print(f"Training samples: {len(train_loader)}")
     print(f"Validation samples: {len(val_loader)}")
     
-    model = PredictiveModel(obs_dim, action_dim, ego_state_dim)
+    model = PredictiveModelV2(obs_dim, action_dim, ego_state_dim)
     model = model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=config["training"]["learning_rate"])

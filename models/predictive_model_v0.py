@@ -1,11 +1,10 @@
 import torch
 import torch.nn as nn
 
-class PredictiveModel(nn.Module):
+class PredictiveModelV0(nn.Module):
     def __init__(self, obs_dim, action_dim, ego_state_dim, hidden_dim=64):
         super().__init__()
         
-        self.obs_shape = (3, 128, 128)  # Corrected observation shape
         self.obs_dim = obs_dim
         self.action_dim = action_dim
         self.ego_state_dim = ego_state_dim
@@ -51,13 +50,13 @@ class PredictiveModel(nn.Module):
         observations, actions, ego_states = batch['observations'], batch['actions'], batch['ego_states']
         batch_size, seq_len, height, width, channels = observations.shape
         
-        # Assert input dimensions
-        assert (height, width, channels) == (128, 128, 3), f"Expected input shape (128, 128, 3), got {(height, width, channels)}"
         assert actions.shape == (batch_size, seq_len, self.action_dim), f"Expected actions shape {(batch_size, seq_len, self.action_dim)}, got {actions.shape}"
         assert ego_states.shape == (batch_size, seq_len, self.ego_state_dim), f"Expected ego_states shape {(batch_size, seq_len, self.ego_state_dim)}, got {ego_states.shape}"
         
         # Process observations
-        obs_reshaped = observations.view(batch_size * seq_len, channels, height, width)
+        obs_reshaped = observations.permute(0, 1, 4, 2, 3).contiguous()
+        obs_reshaped = obs_reshaped.view(-1, channels, height, width)
+
         obs_features = self.obs_encoder(obs_reshaped)
         obs_features = self.obs_flatten(obs_features)
         obs_features = obs_features.view(batch_size, seq_len, -1)
