@@ -25,6 +25,7 @@ from commonroad_geometric.rendering.plugins.implementations import (
 from commonroad_geometric.rendering.plugins.obstacles.render_obstacle_plugin import RenderObstaclePlugin
 from commonroad_geometric.rendering.plugins.obstacles.render_obstacle_flow_plugin import RenderObstacleFlowPlugin
 from commonroad_geometric.rendering.viewer.pyglet.gl_viewer_2d import GLViewerOptions
+from commonroad_geometric.rendering.color.color import Color
 from commonroad_geometric.simulation.interfaces.static.scenario_simulation import ScenarioSimulation, ScenarioSimulationOptions
 from commonroad_geometric.simulation.ego_simulation.respawning.implementations import RandomRespawner, RandomRespawnerOptions
 from commonroad_geometric.dataset.extraction.traffic.traffic_extractor import TrafficExtractorOptions
@@ -74,19 +75,28 @@ def create_rl_experiment_config(config):
                             camera_rotation_speed=None
                         ),
                         plugins=[
-                            RenderLaneletNetworkPlugin(lanelet_linewidth=0.64),
+                            RenderLaneletNetworkPlugin(
+                                lanelet_linewidth=0.0,
+                                fill_color=Color("grey")
+                            ),
                             RenderPlanningProblemSetPlugin(
                                 render_trajectory=False,
                                 render_start_waypoints=False,
                                 render_goal_waypoints=True,
                                 render_look_ahead_point=False
                             ),
-                            RenderTrafficGraphPlugin(),
+                            # RenderTrafficGraphPlugin(),
                             RenderEgoVehiclePlugin(
                                 render_trail=False,
+                                ego_vehicle_linewidth=0.0,
+                                ego_vehicle_color_collision=None,
+                                ego_vehicle_fill_color=Color((0.1, 0.8, 0.1, 1.0))
                             ),
                             RenderObstaclePlugin(
                                 from_graph=False,
+                                obstacle_fill_color=Color("red"),
+                                obstacle_color=Color("red"),
+                                obstacle_line_width=0.0
                             ),
                             # RenderObstacleFlowPlugin(
                             #     obstacle_line_width=0.0
