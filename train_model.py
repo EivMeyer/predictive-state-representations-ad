@@ -1,5 +1,4 @@
-from torch.utils.data import DataLoader, random_split
-from utils.dataset_utils import EnvironmentDataset, get_data_dimensions
+from utils.dataset_utils import EnvironmentDataset, get_data_dimensions, create_data_loaders
 import torch
 from models.predictive_model import PredictiveModel
 from torch import nn, optim
@@ -132,15 +131,12 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
         total_target_var = 0
         num_batches = 0
         
-        for iteration, (observations, actions, ego_states, next_observations) in enumerate(train_loader):
+        for iteration, batch in enumerate(train_loader):
             optimizer.zero_grad()
             
-            observations = observations.to(device)
-            actions = actions.to(device)
-            ego_states = ego_states.to(device)
-            targets = next_observations[:, 0].to(device)
+            targets = batch['next_observations'][:, 0]
             
-            predictions = model(observations, actions, ego_states)
+            predictions = model(batch)
             loss = criterion(predictions, targets)
             
             loss.backward()
@@ -174,7 +170,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
         # Visualize prediction on hold-out sample at the end of each epoch
         model.eval()
         with torch.no_grad():
-            hold_out_pred = model(hold_out_obs.to(device), hold_out_actions.to(device), hold_out_ego_states.to(device))
+            hold_out_pred = model(hold_out_batch)
         model.train()
 
         visualize_prediction(fig, axes, hold_out_obs, hold_out_target[0], hold_out_pred[0], epoch)
@@ -186,10 +182,10 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
 
 def main():
     config = load_config()
-    dataset_path = Path(config["project_dir"]) / "dataset" / "dataset.pt"
+    dataset_path = Path(config["project_dir"]) / "dataset"
     
     # Load the full dataset
-    full_dataset = EnvironmentDataset.load_from_file(dataset_path)
+    full_dataset = EnvironmentDataset(dataset_path)
 
     # Get data dimensions
     obs_dim, action_dim, ego_state_dim = get_data_dimensions(full_dataset)
@@ -198,6 +194,8 @@ def main():
     batch_size = config["training"]["batch_size"]  # You can adjust this based on your GPU memory
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train_loader, val_loader = create_data_loaders(full_dataset, batch_size, device)
+    print(f"Training samples: {len(train_loader)}")
+    print(f"Validation samples: {len(val_loader)}")
     
     model = PredictiveModel(obs_dim, action_dim, ego_state_dim)
     model = model.to(device)

@@ -47,7 +47,8 @@ class PredictiveModel(nn.Module):
             nn.Linear(hidden_dim * 8, obs_dim)
         )
 
-    def forward(self, observations, actions, ego_states):
+    def forward(self, batch):
+        observations, actions, ego_states = batch['observations'], batch['actions'], batch['ego_states']
         batch_size, seq_len, height, width, channels = observations.shape
         
         # Assert input dimensions

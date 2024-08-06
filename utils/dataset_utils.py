@@ -1,41 +1,118 @@
 # utils/dataset_utils.py
 
 import torch
-from torch.utils.data import Dataset
-from experiment_setup import load_config
+from torch.utils.data import Dataset, DataLoader, random_split
 from pathlib import Path
 import numpy as np
+import os
 
-class EnvironmentDataset(Dataset):
-    def __init__(self, data=None):
-        # Initialize with data if provided, else start with an empty list
-        if data is not None:
-            self.data = data
-        else:
-            self.data = []
+class EnvironmentDataset:
+    def __init__(self, data_dir):
+        self.data_dir = Path(data_dir)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.episode_files = []
+        self.load_existing_episodes()
+
+    def load_existing_episodes(self):
+        self.episode_files = sorted([f for f in os.listdir(self.data_dir) if f.startswith("episode_") and f.endswith(".pt")])
+        self.episode_count = len(self.episode_files)
 
     def add_episode(self, observations, actions, ego_states, next_observations, next_actions, dones):
-        # Convert lists to numpy arrays before storing
-        self.data.append((
-            np.array(observations, dtype=np.float32),
-            np.array(actions, dtype=np.float32),
-            np.array(ego_states, dtype=np.float32),
-            np.array(next_observations, dtype=np.float32),
-            np.array(next_actions, dtype=np.float32),
-            np.array(dones, dtype=np.float32)
-        ))
+        episode_data = {
+            'observations': np.array(observations, dtype=np.float32),
+            'actions': np.array(actions, dtype=np.float32),
+            'ego_states': np.array(ego_states, dtype=np.float32),
+            'next_observations': np.array(next_observations, dtype=np.float32),
+            'next_actions': np.array(next_actions, dtype=np.float32),
+            'dones': np.array(dones, dtype=np.float32)
+        }
+        episode_filename = f"episode_{self.episode_count}.pt"
+        torch.save(episode_data, self.data_dir / episode_filename)
+        self.episode_files.append(episode_filename)
+        self.episode_count += 1
 
     def __len__(self):
-        return len(self.data)
+        return self.episode_count
 
     def __getitem__(self, idx):
-        return self.data[idx]
+        if idx < 0 or idx >= self.episode_count:
+            raise IndexError("Episode index out of range")
+        episode_path = self.data_dir / self.episode_files[idx]
+        return torch.load(episode_path)
 
-    @classmethod
-    def load_from_file(cls, file_path):
-        # Load the dataset from a file and pass it to the constructor
-        data = torch.load(file_path)
-        return cls(data)
+    def get_dataloader(self, batch_size=32, shuffle=True, num_workers=4, device='cpu'):
+        from torch.utils.data import DataLoader
+
+        def collate_fn(batch):
+            return {
+                'observations': torch.stack([torch.from_numpy(item['observations']) for item in batch]).to(device),
+                'actions': torch.stack([torch.from_numpy(item['actions']) for item in batch]).to(device),
+                'ego_states': torch.stack([torch.from_numpy(item['ego_states']) for item in batch]).to(device),
+                'next_observations': torch.stack([torch.from_numpy(item['next_observations']) for item in batch]).to(device),
+                'next_actions': torch.stack([torch.from_numpy(item['next_actions']) for item in batch]).to(device),
+                'dones': torch.stack([torch.from_numpy(item['dones']) for item in batch]).to(device)
+            }
+
+        return DataLoader(
+            self,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            num_workers=num_workers,
+            collate_fn=collate_fn
+        )
+    
+
+def collate_fn(batch, device='cpu'):
+    return {
+        'observations': torch.from_numpy(np.stack([item['observations'] for item in batch])).to(device),
+        'actions': torch.from_numpy(np.stack([item['actions'] for item in batch])).to(device),
+        'ego_states': torch.from_numpy(np.stack([item['ego_states'] for item in batch])).to(device),
+        'next_observations': torch.from_numpy(np.stack([item['next_observations'] for item in batch])).to(device),
+        'next_actions': torch.from_numpy(np.stack([item['next_actions'] for item in batch])).to(device),
+        'dones': torch.from_numpy(np.stack([item['dones'] for item in batch])).to(device)
+    }
+
+
+def get_dataloader(dataset_dir, batch_size=32, shuffle=True, num_workers=4, device='cpu'):
+    dataset = EnvironmentDataset(dataset_dir)
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        collate_fn=lambda batch: collate_fn(batch, device)
+    )
+
+
+def create_data_loaders(dataset, batch_size, device, train_ratio=0.8):
+    """
+    Split the dataset into training and validation sets, then create DataLoaders.
+    
+    Args:
+    dataset (Dataset): The full dataset
+    batch_size (int): Batch size for the DataLoaders
+    train_ratio (float): Ratio of data to use for training (default: 0.8)
+
+    Returns:
+    train_loader (DataLoader): DataLoader for the training set
+    val_loader (DataLoader): DataLoader for the validation set
+    """
+    # Calculate the size of each split
+    dataset_size = len(dataset)
+    train_size = int(train_ratio * dataset_size)
+    val_size = dataset_size - train_size
+
+    # Split the dataset
+    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+
+    # Create DataLoaders with custom collate_fn
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
+                              collate_fn=lambda b: collate_fn(b, device))
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False,
+                            collate_fn=lambda b: collate_fn(b, device))
+
+    return train_loader, val_loader
+
 
 
 def get_data_dimensions(dataset):
@@ -54,7 +131,7 @@ def get_data_dimensions(dataset):
     first_item = dataset[0]
     
     # Unpack the first item
-    observations, actions, ego_states, _, _, _ = first_item
+    observations, actions, ego_states = first_item['observations'], first_item['actions'], first_item['ego_states']
     
     # Get dimensions
     obs_shape = observations[0].shape  # Shape of a single observation

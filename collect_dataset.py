@@ -6,11 +6,11 @@ from utils.dataset_utils import EnvironmentDataset
 import time
 from pathlib import Path
 
-def run_experiment():
+def collect_dataset():
     config = load_config()
     _, environment = setup_experiment(config)
 
-    dataset = EnvironmentDataset()
+    dataset = EnvironmentDataset(Path(config["project_dir"]) / "dataset")
     num_episodes = 0
 
     while num_episodes < config["dataset_options"]["num_episodes"]:
@@ -64,9 +64,6 @@ def run_experiment():
         num_episodes += 1
         # time.sleep(2.0)
 
-    dataset_dir = Path(config["project_dir"]) / "dataset"
-    dataset_dir.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
-    torch.save(dataset, dataset_dir / "dataset.pt")
 
 if __name__ == "__main__":
-    run_experiment()
+    collect_dataset()
