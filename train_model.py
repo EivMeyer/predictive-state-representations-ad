@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
 import numpy as np
 from matplotlib.gridspec import GridSpec
+import wandb
 
 
 def prepare_image(img):
@@ -242,6 +243,9 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
             epoch_averages[key] = {"mean": mean_value, "std": std_value}
             print(f"  Mean {key}: {mean_value:.4f} (±{std_value:.4f})")
 
+        # Log all metrics to wandb
+        wandb.log(epoch_averages, step=epoch)
+
         # Step the scheduler
         scheduler.step()
 
@@ -253,7 +257,11 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
         model.eval()
         with torch.no_grad():
             hold_out_pred = model(hold_out_batch)
-        model.train()
+
+        # Log images to wandb
+        wandb.log({
+            "hold_out_prediction": wandb.Image(fig),
+        }, step=epoch)
         
         # Visualization
         metrics = {
@@ -261,11 +269,15 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
             'Diversity (train)': epoch_averages['prediction_diversity']["mean"],
             # Add any other metrics you're tracking
         }
-        
         visualize_prediction(fig, axes, hold_out_obs, hold_out_target, hold_out_pred, epoch, train_predictions, metrics)
+        
+        model.train()
 
     plt.ioff()  # Turn off interactive mode
     plt.show()  # Keep the final plot open
+
+    # Finish wandb run
+    wandb.finish()
 
 
 def main():
@@ -291,6 +303,11 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=config["training"]["learning_rate"], weight_decay=1e-5)
     scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2) # CosineAnnealingLR(optimizer, T_max=50, eta_min=1e-5)
     criterion = CombinedLoss(alpha=1.0, beta=0.0, gamma=0.0, delta=0.0, device=device)
+
+    wandb.init(project="PredictiveStateRepresentations-AD", config={
+        "model": model.__class__.__name__,
+        **config
+    })
     
     train_model(model, train_loader, val_loader, optimizer, criterion, epochs=config["training"]["epochs"], device=device, scheduler=scheduler)
 
