@@ -9,6 +9,7 @@ from models.single_step_predictive_model import SingleStepPredictiveModel
 from loss_function import CombinedLoss
 from torch import nn, optim
 from experiment_setup import load_config
+from tqdm import tqdm
 from pathlib import Path
 import numpy as np
 import torch
@@ -35,21 +36,26 @@ def normalize(img):
 
 def setup_visualization(seq_length):
     plt.ion()  # Turn on interactive mode
-    fig = plt.figure(figsize=(30, 20))  # Increased width to accommodate new grid
-    gs = GridSpec(6, seq_length + 3, figure=fig)  # Added 3 columns for new grid
+    fig = plt.figure(figsize=(30, 20))
+    gs = GridSpec(8, seq_length + 3, figure=fig)
     
     axes = []
-    # First sample
-    for i in range(seq_length):
-        axes.append(fig.add_subplot(gs[0, i]))
-    axes.append(fig.add_subplot(gs[1:3, :seq_length//2]))
-    axes.append(fig.add_subplot(gs[1:3, seq_length//2:seq_length]))
     
-    # Second sample
+    # Input sequence for first sample
     for i in range(seq_length):
-        axes.append(fig.add_subplot(gs[3, i]))
-    axes.append(fig.add_subplot(gs[4:, :seq_length//2]))
-    axes.append(fig.add_subplot(gs[4:, seq_length//2:seq_length]))
+        axes.append(fig.add_subplot(gs[0:2, i]))
+    
+    # Ground truth and prediction for first sample
+    axes.append(fig.add_subplot(gs[2:4, :seq_length//2]))
+    axes.append(fig.add_subplot(gs[2:4, seq_length//2:seq_length]))
+    
+    # Input sequence for second sample
+    for i in range(seq_length):
+        axes.append(fig.add_subplot(gs[4:6, i]))
+    
+    # Ground truth and prediction for second sample
+    axes.append(fig.add_subplot(gs[6:8, :seq_length//2]))
+    axes.append(fig.add_subplot(gs[6:8, seq_length//2:seq_length]))
     
     # 3x3 grid for training predictions
     for i in range(3):
@@ -59,58 +65,61 @@ def setup_visualization(seq_length):
     plt.show()
     return fig, axes
 
-def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoch, train_predictions):
+def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoch, train_predictions, metrics):
     for ax in axes:
         ax.clear()
         ax.axis('off')
-
+    
     seq_length = observations.shape[1]
-
-    # Display input sequence and results for first sample
-    for i in range(seq_length):
-        obs = normalize(prepare_image(observations[0, i].cpu().numpy()))
-        axes[i].imshow(obs, cmap='viridis' if obs.ndim == 2 else None)
-        axes[i].set_title(f'Input 1 t-{seq_length-1-i}')
-
-    ground_truth_np = normalize(prepare_image(ground_truth[0].cpu().numpy()))
-    axes[seq_length].imshow(ground_truth_np, cmap='viridis' if ground_truth_np.ndim == 2 else None)
-    axes[seq_length].set_title('Ground Truth 1')
-
-    prediction_np = normalize(prepare_image(prediction[0].cpu().numpy()))
-    axes[seq_length + 1].imshow(prediction_np, cmap='viridis' if prediction_np.ndim == 2 else None)
-    axes[seq_length + 1].set_title('Prediction 1')
-
-    # Display input sequence and results for second sample
-    for i in range(seq_length):
-        obs = normalize(prepare_image(observations[1, i].cpu().numpy()))
-        axes[seq_length + 2 + i].imshow(obs, cmap='viridis' if obs.ndim == 2 else None)
-        axes[seq_length + 2 + i].set_title(f'Input 2 t-{seq_length-1-i}')
-
-    ground_truth_np = normalize(prepare_image(ground_truth[1].cpu().numpy()))
-    axes[-11].imshow(ground_truth_np, cmap='viridis' if ground_truth_np.ndim == 2 else None)
-    axes[-11].set_title('Ground Truth 2')
-
-    prediction_np = normalize(prepare_image(prediction[1].cpu().numpy()))
-    axes[-10].imshow(prediction_np, cmap='viridis' if prediction_np.ndim == 2 else None)
-    axes[-10].set_title('Prediction 2')
-
+    
+    def plot_sample(start_idx, sample_num):
+        # Display input sequence
+        for i in range(seq_length):
+            obs = normalize(prepare_image(observations[sample_num-1, i].cpu().numpy()))
+            axes[start_idx + i].imshow(obs, cmap='viridis' if obs.ndim == 2 else None)
+            axes[start_idx + i].set_title(f'Input {sample_num} (t-{seq_length-1-i})', fontsize=10)
+        
+        # Display ground truth
+        gt_np = normalize(prepare_image(ground_truth[sample_num-1].cpu().numpy()))
+        axes[start_idx + seq_length].imshow(gt_np, cmap='viridis' if gt_np.ndim == 2 else None)
+        axes[start_idx + seq_length].set_title(f'Ground Truth {sample_num} (Hold-out)', fontsize=12, fontweight='bold')
+        
+        # Display prediction
+        pred_np = normalize(prepare_image(prediction[sample_num-1].cpu().numpy()))
+        axes[start_idx + seq_length + 1].imshow(pred_np, cmap='viridis' if pred_np.ndim == 2 else None)
+        axes[start_idx + seq_length + 1].set_title(f'Prediction {sample_num} (Hold-out)', fontsize=12, fontweight='bold')
+        
+        # Add MSE for this prediction
+        mse = np.mean((gt_np - pred_np) ** 2)
+        axes[start_idx + seq_length + 1].text(0.5, -0.1, f'MSE: {mse:.4f}', 
+                                              horizontalalignment='center', 
+                                              transform=axes[start_idx + seq_length + 1].transAxes)
+    
+    # Plot first sample
+    plot_sample(0, 1)
+    
+    # Plot second sample
+    plot_sample(seq_length + 2, 2)
+    
     # Display 3x3 grid of training predictions
     num_train_preds = min(9, len(train_predictions))
     for i in range(9):
+        ax = axes[-9 + i]
         if i < num_train_preds:
             pred_np = normalize(prepare_image(train_predictions[i].cpu().numpy()))
-            axes[-9 + i].imshow(pred_np, cmap='viridis' if pred_np.ndim == 2 else None)
-            axes[-9 + i].set_title(f'Train Pred {i+1}')
+            ax.imshow(pred_np, cmap='viridis' if pred_np.ndim == 2 else None)
+            ax.set_title(f'Train Pred {i+1}', fontsize=10)
         else:
-            axes[-9 + i].imshow(np.zeros_like(pred_np), cmap='viridis')
-            axes[-9 + i].set_title(f'N/A')
-
-    plt.suptitle(f'Epoch {epoch}')
-    fig.tight_layout()
+            ax.imshow(np.zeros_like(pred_np), cmap='viridis')
+            ax.set_title(f'N/A', fontsize=10)
+    
+    # Add overall metrics to suptitle
+    metrics_text = "\n".join([f"{k}: {v:.4f}" for k, v in metrics.items()])
+    fig.suptitle(f'Prediction Analysis - Epoch {epoch}\n\n{metrics_text}', fontsize=16, fontweight='bold')
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
     fig.canvas.draw()
     fig.canvas.flush_events()
     plt.pause(0.1)  # Pause to update the plot
-
 
 def calculate_prediction_diversity(tensor):
     """
@@ -192,7 +201,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
             "target_std": []
         }
         
-        for iteration, batch in enumerate(train_loader):
+        for iteration, batch in tqdm(enumerate(train_loader), leave=False, total=len(train_loader)):
             optimizer.zero_grad()
             
             targets = batch['next_observations'][:, 0]
@@ -221,14 +230,16 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
                 print(f"  Loss: {loss.item():.4f}")
             
             # Store first 9 training predictions for visualization
-            if iteration == 0:
+            if iteration == len(train_loader) - 1:
                 train_predictions = predictions[:9].detach()
 
         # Calculate and print mean statistics for the epoch
         print(f"Epoch {epoch} completed:")
+        epoch_averages = {}
         for key, values in epoch_stats.items():
             mean_value = np.mean(values)
             std_value = np.std(values)
+            epoch_averages[key] = {"mean": mean_value, "std": std_value}
             print(f"  Mean {key}: {mean_value:.4f} (±{std_value:.4f})")
 
         # Step the scheduler
@@ -243,9 +254,15 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
         with torch.no_grad():
             hold_out_pred = model(hold_out_batch)
         model.train()
-
-        visualize_prediction(fig, axes, hold_out_obs, hold_out_target, hold_out_pred, epoch, train_predictions)
-
+        
+        # Visualization
+        metrics = {
+            'MSE (train)': epoch_averages['mse_loss']["mean"],
+            'Diversity (train)': epoch_averages['prediction_diversity']["mean"],
+            # Add any other metrics you're tracking
+        }
+        
+        visualize_prediction(fig, axes, hold_out_obs, hold_out_target, hold_out_pred, epoch, train_predictions, metrics)
 
     plt.ioff()  # Turn off interactive mode
     plt.show()  # Keep the final plot open
@@ -265,8 +282,8 @@ def main():
     batch_size = config["training"]["batch_size"]  # You can adjust this based on your GPU memory
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train_loader, val_loader = create_data_loaders(full_dataset, batch_size, device)
-    print(f"Training samples: {len(train_loader)}")
-    print(f"Validation samples: {len(val_loader)}")
+    print(f"Training minibatches: {len(train_loader)}")
+    print(f"Validation minibatches: {len(val_loader)}")
     
     model = PredictiveModelV3(obs_dim=obs_dim, action_dim=action_dim, ego_state_dim=ego_state_dim)
     model = model.to(device)
