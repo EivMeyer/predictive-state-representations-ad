@@ -176,7 +176,7 @@ def analyze_predictions(predictions, targets):
     }
 
 
-def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device, scheduler):
+def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, scheduler, max_grad_norm):
     model.train()
     
     # Get two hold-out samples for visualization
@@ -187,9 +187,6 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
     # Setup visualization
     seq_length = hold_out_obs.shape[1]
     fig, axes = setup_visualization(seq_length)
-    
-    # Set the gradient clipping value
-    max_grad_norm = 1.0
 
     for epoch in range(epochs):
         epoch_stats = {
@@ -319,7 +316,7 @@ def main():
         **config
     })
     
-    train_model(model, train_loader, val_loader, optimizer, criterion, epochs=config["training"]["epochs"], device=device, scheduler=scheduler)
+    train_model(model, train_loader, val_loader, optimizer, criterion, epochs=config["training"]["epochs"], scheduler=scheduler, max_grad_norm=config["training"]["max_grad_norm"])
 
 if __name__ == "__main__":
     main()
