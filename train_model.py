@@ -285,7 +285,7 @@ def main():
     dataset_path = Path(config["project_dir"]) / "dataset"
     
     # Load the full dataset
-    full_dataset = EnvironmentDataset(dataset_path)
+    full_dataset = EnvironmentDataset(dataset_path, downsample_factor=config["training"]["downsample_factor"])
 
     # Get data dimensions
     obs_dim, action_dim, ego_state_dim = get_data_dimensions(full_dataset)

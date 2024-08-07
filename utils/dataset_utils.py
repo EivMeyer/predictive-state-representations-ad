@@ -5,12 +5,14 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from pathlib import Path
 import numpy as np
 import os
+import cv2
 
 class EnvironmentDataset:
-    def __init__(self, data_dir):
+    def __init__(self, data_dir, downsample_factor=1):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.episode_files = []
+        self.downsample_factor = downsample_factor
         self.load_existing_episodes()
 
     def load_existing_episodes(self):
@@ -33,12 +35,23 @@ class EnvironmentDataset:
 
     def __len__(self):
         return self.episode_count
+    
+    def downsample_image(self, image):
+        if self.downsample_factor > 1:
+            return cv2.resize(image, (image.shape[1] // self.downsample_factor, 
+                                      image.shape[0] // self.downsample_factor), 
+                              interpolation=cv2.INTER_AREA)
+        return image
 
     def __getitem__(self, idx):
         if idx < 0 or idx >= self.episode_count:
             raise IndexError("Episode index out of range")
         episode_path = self.data_dir / self.episode_files[idx]
         data = torch.load(episode_path)
+        
+        # Apply downsampling to observations and next_observations
+        data['observations'] = np.array([self.downsample_image(obs) for obs in data['observations']])
+        data['next_observations'] = np.array([self.downsample_image(obs) for obs in data['next_observations']])
         
         # Convert numpy arrays to PyTorch tensors and apply necessary conversions
         data['observations'] = torch.from_numpy(data['observations']).float() / 255.0
