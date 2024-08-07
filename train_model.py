@@ -250,9 +250,10 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
         # Step the scheduler
         scheduler.step()
 
-        # Optional: Log the current learning rate
+        # Log the current learning rate
         current_lr = scheduler.get_last_lr()[0]
         print(f"Current learning rate: {current_lr}")
+        wandb.log({"learning_rate": current_lr}, step=epoch)
 
         # Visualize prediction on hold-out sample at the end of each epoch
         model.eval()
@@ -261,7 +262,8 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
 
         # Log images to wandb
         wandb.log({
-            "hold_out_prediction": wandb.Image(fig),
+            "holdout_predictions": [wandb.Image(hold_out_pred[i].cpu().numpy(), caption=f"Prediction {i}") for i in range(2)],
+            "holdout_targets": [wandb.Image(hold_out_target[i].cpu().numpy(), caption=f"Target {i}") for i in range(2)],
         }, step=epoch)
         
         # Visualization
