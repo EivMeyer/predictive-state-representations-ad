@@ -51,7 +51,8 @@ class PredictiveModelV2(nn.Module):
         self.output_fc = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim * 2),
             nn.ReLU(),
-            nn.Linear(hidden_dim * 2, obs_dim)
+            nn.Linear(hidden_dim * 2, obs_dim),
+            nn.Sigmoid()  # Ensure output is in [0, 1] range for image prediction
         )
 
     def forward(self, batch):

@@ -39,7 +39,8 @@ class PredictiveModelV1(nn.Module):
             nn.Linear(hidden_dim * 2, hidden_dim * 4),
             nn.ReLU(),
             nn.BatchNorm1d(hidden_dim * 4),
-            nn.Linear(hidden_dim * 4, obs_dim)
+            nn.Linear(hidden_dim * 4, obs_dim),
+            nn.Sigmoid()  # Ensure output is in [0, 1] range for image prediction
         )
 
     def forward(self, batch):
