@@ -1,3 +1,5 @@
+import hydra
+from omegaconf import DictConfig, OmegaConf
 from utils.dataset_utils import EnvironmentDataset, get_data_dimensions, create_data_loaders
 import torch
 from models.predictive_model_v0 import PredictiveModelV0
@@ -20,6 +22,17 @@ import numpy as np
 from matplotlib.gridspec import GridSpec
 import wandb
 
+def get_model_class(model_type):
+    model_classes = {
+        "PredictiveModelV0": PredictiveModelV0,
+        "PredictiveModelV1": PredictiveModelV1,
+        "PredictiveModelV2": PredictiveModelV2,
+        "PredictiveModelV3": PredictiveModelV3,
+        "PredictiveModelV4": PredictiveModelV4,
+        "SimpleReconstructiveModel": SimpleReconstructiveModel,
+        "SingleStepPredictiveModel": SingleStepPredictiveModel
+    }
+    return model_classes.get(model_type)
 
 def prepare_image(img):
     img = np.squeeze(img)
@@ -266,8 +279,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
 
         # Log images to wandb
         wandb.log({
-            "holdout_predictions": [wandb.Image(hold_out_pred[i].cpu().numpy(), caption=f"Prediction {i}") for i in range(2)],
-            "holdout_targets": [wandb.Image(hold_out_target[i].cpu().numpy(), caption=f"Target {i}") for i in range(2)],
+            "hold_out_prediction": wandb.Image(fig),
         }, step=epoch)
         
         # Visualization
@@ -286,37 +298,38 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
     # Finish wandb run
     wandb.finish()
 
-
-def main():
-    config = load_config()
-    dataset_path = Path(config["project_dir"]) / "dataset"
+@hydra.main(version_base=None, config_path=".", config_name="config")
+def main(cfg: DictConfig):
+    dataset_path = Path(cfg.project_dir) / "dataset"
     
     # Load the full dataset
-    full_dataset = EnvironmentDataset(dataset_path, downsample_factor=config["training"]["downsample_factor"])
+    full_dataset = EnvironmentDataset(dataset_path, downsample_factor=cfg.training.downsample_factor)
 
     # Get data dimensions
     obs_dim, action_dim, ego_state_dim = get_data_dimensions(full_dataset)
     
     # Create train and validation loaders
-    batch_size = config["training"]["batch_size"]  # You can adjust this based on your GPU memory
+    batch_size = cfg.training.batch_size
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train_loader, val_loader = create_data_loaders(full_dataset, batch_size, device)
     print(f"Training minibatches: {len(train_loader)}")
     print(f"Validation minibatches: {len(val_loader)}")
     
-    model = PredictiveModelV4(obs_dim=obs_dim, action_dim=action_dim, ego_state_dim=ego_state_dim)
+    # Get the model class based on the config
+    ModelClass = get_model_class(cfg.training.model_type)
+    if ModelClass is None:
+        raise ValueError(f"Invalid model type: {cfg.training.model_type}")
+    
+    model = ModelClass(obs_dim=obs_dim, action_dim=action_dim, ego_state_dim=ego_state_dim)
     model = model.to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=config["training"]["learning_rate"], weight_decay=1e-5)
-    scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2) # CosineAnnealingLR(optimizer, T_max=50, eta_min=1e-5)
+    optimizer = optim.Adam(model.parameters(), lr=cfg.training.learning_rate, weight_decay=1e-5)
+    scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
     criterion = CombinedLoss(alpha=1.0, beta=0.0, gamma=0.0, delta=0.0, device=device)
 
-    wandb.init(project="PredictiveStateRepresentations-AD", config={
-        "model": model.__class__.__name__,
-        **config
-    })
+    wandb.init(project="PredictiveStateRepresentations-AD", config=OmegaConf.to_container(cfg, resolve=True))
     
-    train_model(model, train_loader, val_loader, optimizer, criterion, epochs=config["training"]["epochs"], scheduler=scheduler, max_grad_norm=config["training"]["max_grad_norm"])
+    train_model(model, train_loader, val_loader, optimizer, criterion, epochs=cfg.training.epochs, scheduler=scheduler, max_grad_norm=cfg.training.max_grad_norm)
 
 if __name__ == "__main__":
     main()
