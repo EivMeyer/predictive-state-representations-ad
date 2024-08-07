@@ -187,6 +187,9 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
     # Setup visualization
     seq_length = hold_out_obs.shape[1]
     fig, axes = setup_visualization(seq_length)
+    
+    # Set the gradient clipping value
+    max_grad_norm = 1.0
 
     for epoch in range(epochs):
         epoch_stats = {
@@ -212,6 +215,10 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
             loss, loss_components = criterion(predictions, targets)
             
             loss.backward()
+
+            # Apply gradient clipping
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+
             optimizer.step()
 
             # Collect loss statistics
