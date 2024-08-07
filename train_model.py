@@ -11,7 +11,6 @@ from models.simple_reconstructive_model import SimpleReconstructiveModel
 from models.single_step_predictive_model import SingleStepPredictiveModel
 from loss_function import CombinedLoss
 from torch import nn, optim
-from experiment_setup import load_config
 from tqdm import tqdm
 from pathlib import Path
 import numpy as np

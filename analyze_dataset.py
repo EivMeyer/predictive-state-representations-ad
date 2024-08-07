@@ -1,15 +1,10 @@
-import torch
+import hydra
+from omegaconf import DictConfig, OmegaConf
 import matplotlib.pyplot as plt
-from experiment_setup import load_config
 from utils.dataset_utils import EnvironmentDataset
 from pathlib import Path
 import numpy as np
 
-def load_dataset():
-    config = load_config()
-    dataset_path = Path(config["project_dir"]) / "dataset"
-    dataset = EnvironmentDataset(dataset_path)
-    return dataset
 
 def visualize_episode(episode):
     observations, next_observations = episode['observations'], episode['next_observations']
@@ -40,13 +35,17 @@ def visualize_episode(episode):
 
     plt.show()
 
-def analyze_dataset():
-    dataset = load_dataset()
-    # Visualize the first episode as an example
+@hydra.main(version_base=None, config_path=".", config_name="config")
+def main(cfg: DictConfig):
+    dataset_path = Path(cfg.project_dir) / "dataset"
+    dataset = EnvironmentDataset(dataset_path)
+
+    # Visualize the first 10 episodes as examples
     if len(dataset) > 0:
-        visualize_episode(dataset[0])
+        for i in range(10):
+            visualize_episode(dataset[i])
     else:
         print("No episodes available in the dataset.")
 
 if __name__ == "__main__":
-    analyze_dataset()
+    main()
