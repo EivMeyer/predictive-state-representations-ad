@@ -31,12 +31,6 @@ from commonroad_geometric.simulation.ego_simulation.respawning.implementations i
 from commonroad_geometric.dataset.extraction.traffic.traffic_extractor import TrafficExtractorOptions
 from commonroad.common.solution import VehicleType, VehicleModel
 
-def load_config():
-    """Load configuration from a YAML file."""
-    with open('config.yml', 'r') as file:
-        config = yaml.safe_load(file)
-    return config
-
 def create_rl_experiment_config(config):
     """Create an RLExperimentConfig based on the provided configuration."""
     rewarder = SumRewardAggregator([])  # Add reward computers as needed

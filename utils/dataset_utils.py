@@ -32,6 +32,7 @@ class EnvironmentDataset:
         torch.save(episode_data, self.data_dir / episode_filename)
         self.episode_files.append(episode_filename)
         self.episode_count += 1
+        return episode_filename
 
     def __len__(self):
         return self.episode_count

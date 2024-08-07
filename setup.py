@@ -8,7 +8,7 @@ from stable_baselines3 import PPO
 from commonroad_geometric.learning.reinforcement.constants import COMMONROAD_GYM_ENV_ID
 
 # Load configuration from YAML
-with open('config.yml', 'r') as file:
+with open('config.yaml', 'r') as file:
     config = yaml.safe_load(file)
 
 # Register the CommonRoad environment

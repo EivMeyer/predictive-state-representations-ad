@@ -16,7 +16,7 @@ This project develops and evaluates predictive models for autonomous vehicle nav
    python train_model.py
    ```
 
-3. Modify `config.yml` to adjust simulation parameters and training settings.
+3. Modify `config.yaml` to adjust simulation parameters and training settings.
 
 ## Models
 

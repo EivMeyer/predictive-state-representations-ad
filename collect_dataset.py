@@ -1,23 +1,26 @@
+import hydra
+from omegaconf import DictConfig, OmegaConf
 import numpy as np
 import setup as setup
-from experiment_setup import load_config, setup_experiment
+from experiment_setup import setup_experiment
 from utils.dataset_utils import EnvironmentDataset
 from pathlib import Path
 
-def collect_dataset():
-    config = load_config()
-    _, environment = setup_experiment(config)
-
-    dataset = EnvironmentDataset(Path(config["project_dir"]) / "dataset")
+@hydra.main(version_base=None, config_path=".", config_name="config")
+def main(cfg: DictConfig):
+    cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+    _, environment = setup_experiment(cfg_dict)
+    
+    dataset = EnvironmentDataset(Path(cfg["project_dir"]) / "dataset")
     num_episodes = 0
 
-    while num_episodes < config["dataset_options"]["num_episodes"]:
+    while num_episodes < cfg.dataset_options.num_episodes:
         obs_sequence, actions, ego_states, next_obs_sequence, next_actions, done_sequence = [], [], [], [], [], []
         episode_done = False
 
         obs = environment.reset()[0]
         
-        for t in range(config["dataset_options"]["t_obs"]):
+        for t in range(cfg.dataset_options.t_obs):
             action = environment.action_space.sample()
             new_obs, reward, done, info = environment.step(actions=[action])
             if done:
@@ -37,7 +40,7 @@ def collect_dataset():
         if episode_done:
             continue
 
-        for t in range(config["dataset_options"]["t_pred"]):
+        for t in range(cfg.dataset_options.t_pred):
             action = np.array([0.0, 0.0])
             new_obs, reward, done, info = environment.step(actions=[action])
             new_obs = new_obs[0]
@@ -53,10 +56,10 @@ def collect_dataset():
                 episode_done = True
                 break
 
-        dataset.add_episode(obs_sequence, actions, ego_states, next_obs_sequence, next_actions, done_sequence)
+        episode_filename = dataset.add_episode(obs_sequence, actions, ego_states, next_obs_sequence, next_actions, done_sequence)
 
         num_episodes += 1
-        print(f'Successfully collected episode {num_episodes}/{config["dataset_options"]["num_episodes"]}')
+        print(f'Successfully collected episode {num_episodes}/{cfg.dataset_options.num_episodes} - saved to {episode_filename}')
 
 if __name__ == "__main__":
-    collect_dataset()
+    main()
