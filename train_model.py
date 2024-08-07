@@ -3,6 +3,7 @@ import torch
 from models.predictive_model_v0 import PredictiveModelV0
 from models.predictive_model_v1 import PredictiveModelV1
 from models.predictive_model_v2 import PredictiveModelV2
+from models.predictive_model_v3 import PredictiveModelV3
 from models.simple_reconstructive_model import SimpleReconstructiveModel
 from models.single_step_predictive_model import SingleStepPredictiveModel
 from loss_function import CombinedLoss
@@ -267,12 +268,12 @@ def main():
     print(f"Training samples: {len(train_loader)}")
     print(f"Validation samples: {len(val_loader)}")
     
-    model = PredictiveModelV2(obs_dim, action_dim, ego_state_dim)
+    model = PredictiveModelV3(obs_dim=obs_dim, action_dim=action_dim, ego_state_dim=ego_state_dim)
     model = model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=config["training"]["learning_rate"], weight_decay=1e-5)
     scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2) # CosineAnnealingLR(optimizer, T_max=50, eta_min=1e-5)
-    criterion = CombinedLoss(alpha=1.0, beta=0.0, gamma=0.0, delta=0.01, device=device)
+    criterion = CombinedLoss(alpha=1.0, beta=0.0, gamma=0.0, delta=0.0, device=device)
     
     train_model(model, train_loader, val_loader, optimizer, criterion, epochs=config["training"]["epochs"], device=device, scheduler=scheduler)
 
