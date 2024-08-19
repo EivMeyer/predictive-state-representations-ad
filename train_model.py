@@ -71,15 +71,18 @@ def setup_visualization(seq_length):
     axes.append(fig.add_subplot(gs[6:8, :seq_length//2]))
     axes.append(fig.add_subplot(gs[6:8, seq_length//2:seq_length]))
     
-    # 3x3 grid for training predictions
+    # 3x3 grid for training predictions and ground truths
     for i in range(3):
         for j in range(3):
+            # Prediction
             axes.append(fig.add_subplot(gs[i*2:(i+1)*2, seq_length + j]))
+            # Ground truth
+            axes.append(fig.add_subplot(gs[i*2+1:(i+1)*2+1, seq_length + j]))
     
     plt.show()
     return fig, axes
 
-def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoch, train_predictions, metrics):
+def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoch, train_predictions, train_ground_truth, metrics):
     for ax in axes:
         ax.clear()
         ax.axis('off')
@@ -105,8 +108,8 @@ def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoc
         
         # Add MSE for this prediction
         mse = np.mean((gt_np - pred_np) ** 2)
-        axes[start_idx + seq_length + 1].text(0.5, -0.1, f'MSE: {mse:.4f}', 
-                                              horizontalalignment='center', 
+        axes[start_idx + seq_length + 1].text(0.5, -0.1, f'MSE: {mse:.4f}',
+                                              horizontalalignment='center',
                                               transform=axes[start_idx + seq_length + 1].transAxes)
     
     # Plot first sample
@@ -115,17 +118,33 @@ def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoc
     # Plot second sample
     plot_sample(seq_length + 2, 2)
     
-    # Display 3x3 grid of training predictions
+    # Display 3x3 grid of training predictions and ground truths
     num_train_preds = min(9, len(train_predictions))
     for i in range(9):
-        ax = axes[-9 + i]
+        ax_pred = axes[-18 + 2*i]
+        ax_gt = axes[-17 + 2*i]
+        
         if i < num_train_preds:
             pred_np = normalize(prepare_image(train_predictions[i].cpu().numpy()))
-            ax.imshow(pred_np, cmap='viridis' if pred_np.ndim == 2 else None)
-            ax.set_title(f'Train Pred {i+1}', fontsize=10)
+            gt_np = normalize(prepare_image(train_ground_truth[i].cpu().numpy()))
+            
+            ax_pred.imshow(pred_np, cmap='viridis' if pred_np.ndim == 2 else None)
+            ax_pred.set_title(f'Train Pred {i+1}', fontsize=10)
+            
+            ax_gt.imshow(gt_np, cmap='viridis' if gt_np.ndim == 2 else None)
+            ax_gt.set_title(f'Train GT {i+1}', fontsize=10)
+            
+            # Add MSE for this training prediction
+            mse = np.mean((gt_np - pred_np) ** 2)
+            ax_pred.text(0.5, -0.1, f'MSE: {mse:.4f}',
+                         horizontalalignment='center',
+                         transform=ax_pred.transAxes,
+                         fontsize=8)
         else:
-            ax.imshow(np.zeros_like(pred_np), cmap='viridis')
-            ax.set_title(f'N/A', fontsize=10)
+            ax_pred.imshow(np.zeros_like(pred_np), cmap='viridis')
+            ax_pred.set_title('N/A', fontsize=10)
+            ax_gt.imshow(np.zeros_like(pred_np), cmap='viridis')
+            ax_gt.set_title('N/A', fontsize=10)
     
     # Add overall metrics to suptitle
     metrics_text = "\n".join([f"{k}: {v:.4f}" for k, v in metrics.items()])
@@ -250,6 +269,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
             # Store first 9 training predictions for visualization
             if iteration == len(train_loader) - 1:
                 train_predictions = predictions[:9].detach()
+                train_ground_truth = targets[:9].detach()
 
         # Calculate and print mean statistics for the epoch
         print(f"Epoch {epoch} completed:")
@@ -287,7 +307,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
             'Diversity (train)': epoch_averages['prediction_diversity']["mean"],
             # Add any other metrics you're tracking
         }
-        visualize_prediction(fig, axes, hold_out_obs, hold_out_target, hold_out_pred, epoch, train_predictions, metrics)
+        visualize_prediction(fig, axes, hold_out_obs, hold_out_target, hold_out_pred, epoch, train_predictions, train_ground_truth, metrics)
         
         model.train()
 
