@@ -10,69 +10,131 @@ hydra:
   run:
     dir: .
 
+# Directory for project output files
 project_dir: "./output"
-scenario_dir: "./scenarios"
-seed: 123
-device: "auto"  # Automatically select device
 
+# Directory containing scenario files
+scenario_dir: "./scenarios"
+
+# Random seed for reproducibility
+seed: 123
+
+# Automatically select the device (CPU/GPU)
+device: "auto"
+
+# Dataset generation options
 dataset_options:
+  # Number of episodes to collect for the dataset
   num_episodes: 1000
+  # Number of timesteps for observation
   t_obs: 5
+  # Number of timesteps for prediction
   t_pred: 1
 
+# Training configuration
 training:
+  # Number of training epochs
   epochs: 1000
-  batch_size: 32
+  # Batch size for training
+  batch_size: 8
+  # Learning rate for the optimizer
   learning_rate: 0.001
-  downsample_factor: 4
+  # Factor to downsample input images
+  downsample_factor: 1
+  # Maximum gradient norm for gradient clipping
   max_grad_norm: 10.0
+  # Type of model to use for training
   model_type: "PredictiveModelV4"
 
+# Simulation options
 simulation_options:
+  # Steps for lanelet graph conversion (if any)
   lanelet_graph_conversion_steps: null
+  # Use linear projection for lanelets
   linear_lanelet_projection: true
+  # Whether to sort lanelet assignments
   sort_lanelet_assignments: false
 
+# Control space options
 control_space_options:
+  # Minimum acceleration
   lower_bound_acceleration: -6.0
+  # Maximum acceleration
   upper_bound_acceleration: 6.5
+  # Minimum velocity
   lower_bound_velocity: 0.001
+  # Minimum steering angle
   lower_bound_steering: -0.15
+  # Maximum steering angle
   upper_bound_steering: 0.15
+  # Minimum velocity for steering
   min_velocity_steering: 1.0
 
+# Viewer options
 viewer_options:
+  # Range of view in the simulation
   view_range: 110.0
-  window_size: 800
+  # Size of the viewer window
+  window_size: 128
 
+# Respawner options
 respawner_options:
+  # Randomize initial arclength
   random_init_arclength: true
+  # Randomize goal arclength
   random_goal_arclength: true
+  # Randomize start timestep
   random_start_timestep: true
+  # Spawn only at intersections
   only_intersections: false
+  # Min and max route length
   route_length: [10, 15]
+  # Initial speed distribution
   init_speed: "uniform_random"
+  # Minimum initial arclength
   min_init_arclength: 100.0
+  # Range for random speed
   random_speed_range: [0.0, 50.0]
+  # Initial steering angle distribution
   init_steering_angle: "uniform_random"
+  # Range for random steering angle
   random_steering_angle_range: [-0.08, 0.08]
+  # Noise in initial orientation
   init_orientation_noise: 0.4
+  # Noise in initial position
   init_position_noise: 3.0
+  # Minimum distance to goal
   min_goal_distance: 100.0
+  # Minimum L2 distance to goal
   min_goal_distance_l2: 100.0
+  # Maximum L2 distance to goal (if any)
   max_goal_distance_l2: null
+  # Maximum distance to goal (if any)
   max_goal_distance: null
+  # Minimum remaining distance (if any)
   min_remaining_distance: null
+  # Maximum outer attempts for respawning
   max_attempts_outer: 50
+  # Minimum distance between vehicles
   min_vehicle_distance: 0.0
+  # Minimum vehicle speed (if any)
   min_vehicle_speed: null
+  # Minimum number of vehicles on route (if any)
   min_vehicles_route: null
+  # Maximum inner attempts for respawning
   max_attempts_inner: 5
 
+# Traffic extraction options
 traffic_extraction_options:
-  edge_drawer: "NoEdgeDrawer"  # NoEdgeDrawer()
+  # Type of edge drawer to use
+  edge_drawer: "NoEdgeDrawer"
+  # List of postprocessors to apply
   postprocessors: []
+  # Consider only ego-centric incoming edges
   only_ego_inc_edges: false
+  # Assign vehicles to multiple lanelets
   assign_multiple_lanelets: true
+  # Radius of ego-centric map
   ego_map_radius: 50.0
+  # Include lanelet vertices in extraction
   include_lanelet_vertices: false
