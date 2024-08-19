@@ -11,6 +11,7 @@ from commonroad_geometric.learning.reinforcement.termination_criteria.implementa
     TimeoutCriterion
 )
 from commonroad_geometric.dataset.extraction.traffic.traffic_extractor import TrafficExtractorOptions, TrafficFeatureComputerOptions
+from commonroad_geometric.dataset.extraction.traffic.traffic_extractor_factory import TrafficExtractorFactory
 from commonroad_geometric.simulation.ego_simulation.control_space.implementations import PIDControlSpace, SteeringAccelerationSpace
 from commonroad_geometric.simulation.ego_simulation.ego_vehicle_simulation import EgoVehicleSimulationOptions
 from commonroad_geometric.learning.reinforcement.observer.implementations import RenderObserver
@@ -110,7 +111,7 @@ def create_rl_experiment_config(config):
         simulation_cls=ScenarioSimulation,
         simulation_options=config['simulation_options'],
         termination_criteria=termination_criteria,
-        traffic_extraction_options=TrafficExtractorOptions(
+        traffic_extraction_factory=TrafficExtractorFactory(options=TrafficExtractorOptions(
             edge_drawer=config['traffic_extraction_options']['edge_drawer'],
             postprocessors=config['traffic_extraction_options']['postprocessors'],
             only_ego_inc_edges=config['traffic_extraction_options']['only_ego_inc_edges'],
@@ -118,7 +119,7 @@ def create_rl_experiment_config(config):
             ego_map_radius=config['traffic_extraction_options']['ego_map_radius'],
             include_lanelet_vertices=config['traffic_extraction_options']['include_lanelet_vertices'],
             feature_computers=feature_computers
-        )
+        ))
     )
 
     return rl_experiment_config
