@@ -94,7 +94,7 @@ def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoc
             axes[start_idx + i].set_title(f'Input {sample_num} (t-{seq_length-1-i})', fontsize=10)
         
         # Display ground truth
-        gt_np = normalize(prepare_image(ground_truth[sample_num-1].cpu().numpy()))
+        gt_np = normalize(prepare_image(ground_truth[sample_num-1, 0].cpu().numpy()))
         axes[start_idx + seq_length].imshow(gt_np, cmap='viridis' if gt_np.ndim == 2 else None)
         axes[start_idx + seq_length].set_title(f'Ground Truth {sample_num} (Hold-out)', fontsize=12, fontweight='bold')
         
