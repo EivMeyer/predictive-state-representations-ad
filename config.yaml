@@ -23,13 +23,15 @@ seed: 123
 device: "auto"
 
 # Dataset generation options
-dataset_options:
+dataset:
   # Number of episodes to collect for the dataset
   num_episodes: 1000
   # Number of timesteps for observation
   t_obs: 5
   # Number of timesteps for prediction
   t_pred: 1
+  # Number of processes for dataset generation
+  num_workers: 1
 
 # Training configuration
 training:
@@ -47,7 +49,7 @@ training:
   model_type: "PredictiveModelV4"
 
 # Simulation options
-simulation_options:
+simulation:
   # Steps for lanelet graph conversion (if any)
   lanelet_graph_conversion_steps: null
   # Use linear projection for lanelets
@@ -56,7 +58,7 @@ simulation_options:
   sort_lanelet_assignments: false
 
 # Control space options
-control_space_options:
+control_space:
   # Minimum acceleration
   lower_bound_acceleration: -6.0
   # Maximum acceleration
@@ -71,14 +73,14 @@ control_space_options:
   min_velocity_steering: 1.0
 
 # Viewer options
-viewer_options:
+viewer:
   # Range of view in the simulation
   view_range: 110.0
   # Size of the viewer window
-  window_size: 128
+  window_size: 800
 
 # Respawner options
-respawner_options:
+respawner:
   # Randomize initial arclength
   random_init_arclength: true
   # Randomize goal arclength
@@ -125,7 +127,7 @@ respawner_options:
   max_attempts_inner: 5
 
 # Traffic extraction options
-traffic_extraction_options:
+traffic_extraction:
   # Type of edge drawer to use
   edge_drawer: "NoEdgeDrawer"
   # List of postprocessors to apply

@@ -1,65 +1,83 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import numpy as np
-import setup as setup
 from experiment_setup import setup_experiment
 from utils.dataset_utils import EnvironmentDataset
 from pathlib import Path
+from tqdm import tqdm
+
+def collect_episodes(cfg_dict, env, num_episodes):
+    dataset = EnvironmentDataset(Path(cfg_dict["project_dir"]) / "dataset")
+    
+    episodes_collected = 0
+    with tqdm(total=num_episodes, desc="Collecting episodes") as pbar:
+        while episodes_collected < num_episodes:
+            obs_sequences, action_sequences, ego_state_sequences = [], [], []
+            next_obs_sequences, next_action_sequences, done_sequences = [], [], []
+            
+            obs = env.reset()
+            
+            for t in range(cfg_dict['dataset']['t_obs']):
+                actions = [env.action_space.sample() for _ in range(env.num_envs)]
+                new_obs, rewards, dones, infos = env.step(actions)
+                
+                ego_states = env.get_attr('ego_vehicle_simulation')
+                ego_states = [np.array([e.ego_vehicle.state.velocity, 
+                                        e.ego_vehicle.state.acceleration, 
+                                        e.ego_vehicle.state.steering_angle, 
+                                        e.ego_vehicle.state.yaw_rate]) for e in ego_states]
+                
+                for i in range(env.num_envs):
+                    if len(obs_sequences) <= i:
+                        obs_sequences.append([])
+                        action_sequences.append([])
+                        ego_state_sequences.append([])
+                    
+                    obs_sequences[i].append(obs[i])
+                    action_sequences[i].append(actions[i])
+                    ego_state_sequences[i].append(ego_states[i])
+                
+                obs = new_obs
+            
+            for t in range(cfg_dict['dataset']['t_pred']):
+                actions = [[0.0, 0.0] for _ in range(env.num_envs)]
+                new_obs, rewards, dones, infos = env.step(actions)
+                
+                for i in range(env.num_envs):
+                    if len(next_obs_sequences) <= i:
+                        next_obs_sequences.append([])
+                        next_action_sequences.append([])
+                        done_sequences.append([])
+                    
+                    next_obs_sequences[i].append(new_obs[i])
+                    next_action_sequences[i].append(actions[i])
+                    done_sequences[i].append(dones[i])
+            
+            for i in range(env.num_envs):
+                dataset.add_episode(
+                    obs_sequences[i], 
+                    action_sequences[i], 
+                    ego_state_sequences[i],
+                    next_obs_sequences[i], 
+                    next_action_sequences[i], 
+                    done_sequences[i]
+                )
+                episodes_collected += 1
+                pbar.update(1)
+                
+                if episodes_collected >= num_episodes:
+                    break
+    
+    return dataset
 
 @hydra.main(version_base=None, config_path=".", config_name="config")
 def main(cfg: DictConfig):
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
-    _, environment = setup_experiment(cfg_dict)
+    experiment, env = setup_experiment(cfg_dict)
     
-    dataset = EnvironmentDataset(Path(cfg["project_dir"]) / "dataset")
-    num_episodes = 0
-
-    while num_episodes < cfg.dataset_options.num_episodes:
-        obs_sequence, actions, ego_states, next_obs_sequence, next_actions, done_sequence = [], [], [], [], [], []
-        episode_done = False
-
-        obs = environment.reset()[0]
-        
-        for t in range(cfg.dataset_options.t_obs):
-            action = environment.action_space.sample()
-            new_obs, reward, done, info = environment.step(actions=[action])
-            if done:
-                episode_done = True
-                break
-            new_obs = new_obs[0]
-            reward = reward[0]
-            done = done[0]
-            info = info[0]
-
-            ego_state = environment.get_attr('ego_vehicle_simulation')[0].ego_vehicle.state
-            obs_sequence.append(obs)
-            actions.append(action)
-            ego_states.append(np.array([ego_state.velocity, ego_state.acceleration, ego_state.steering_angle, ego_state.yaw_rate]))
-            obs = new_obs
-        
-        if episode_done:
-            continue
-
-        for t in range(cfg.dataset_options.t_pred):
-            action = np.array([0.0, 0.0])
-            new_obs, reward, done, info = environment.step(actions=[action])
-            new_obs = new_obs[0]
-            reward = reward[0]
-            done = done[0]
-            info = info[0]
-
-            next_obs_sequence.append(new_obs)
-            next_actions.append(action)
-            done_sequence.append(done)
-
-            if done:
-                episode_done = True
-                break
-
-        episode_filename = dataset.add_episode(obs_sequence, actions, ego_states, next_obs_sequence, next_actions, done_sequence)
-
-        num_episodes += 1
-        print(f'Successfully collected episode {num_episodes}/{cfg.dataset_options.num_episodes} - saved to {episode_filename}')
+    dataset = collect_episodes(cfg_dict, env, cfg.dataset.num_episodes)
+    
+    print(f"Dataset collection complete. Total episodes: {len(dataset)}")
 
 if __name__ == "__main__":
     main()

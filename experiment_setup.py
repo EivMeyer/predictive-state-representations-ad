@@ -54,7 +54,7 @@ def create_rl_experiment_config(config):
 
     rl_experiment_config = RLExperimentConfig(
         control_space_cls=SteeringAccelerationSpace,
-        control_space_options=config['control_space_options'],
+        control_space_options=config['control_space'],
         ego_vehicle_simulation_options=EgoVehicleSimulationOptions(
             vehicle_model=VehicleModel.KS,
             vehicle_type=VehicleType.BMW_320i
@@ -63,61 +63,55 @@ def create_rl_experiment_config(config):
             'disable_graph_extraction': True,
             'raise_exceptions': True,
             'observer': RenderObserver(
-                renderer=TrafficSceneRenderer(
-                    options=TrafficSceneRendererOptions(
-                        camera=EgoVehicleCamera(
-                            view_range=config["viewer_options"]["view_range"],
-                            camera_rotation_speed=None
+                renderer_options=TrafficSceneRendererOptions(
+                    camera=EgoVehicleCamera(
+                        view_range=config["viewer"]["view_range"],
+                        camera_rotation_speed=None
+                    ),
+                    plugins=[
+                        RenderLaneletNetworkPlugin(
+                            lanelet_linewidth=0.0,
+                            fill_color=Color("grey")
                         ),
-                        plugins=[
-                            RenderLaneletNetworkPlugin(
-                                lanelet_linewidth=0.0,
-                                fill_color=Color("grey")
-                            ),
-                            RenderPlanningProblemSetPlugin(
-                                render_trajectory=False,
-                                render_start_waypoints=False,
-                                render_goal_waypoints=True,
-                                render_look_ahead_point=False
-                            ),
-                            # RenderTrafficGraphPlugin(),
-                            RenderEgoVehiclePlugin(
-                                render_trail=False,
-                                ego_vehicle_linewidth=0.0,
-                                ego_vehicle_color_collision=None,
-                                ego_vehicle_fill_color=Color((0.1, 0.8, 0.1, 1.0))
-                            ),
-                            RenderObstaclePlugin(
-                                from_graph=False,
-                                obstacle_fill_color=Color("red"),
-                                obstacle_color=Color("red"),
-                                obstacle_line_width=0.0
-                            ),
-                            # RenderObstacleFlowPlugin(
-                            #     obstacle_line_width=0.0
-                            # )
-                        ],
-                        viewer_options=GLViewerOptions(
-                            window_height=config["viewer_options"]["window_size"],
-                            window_width=config["viewer_options"]["window_size"],
-                        )
+                        RenderPlanningProblemSetPlugin(
+                            render_trajectory=False,
+                            render_start_waypoints=False,
+                            render_goal_waypoints=True,
+                            render_look_ahead_point=False
+                        ),
+                        RenderEgoVehiclePlugin(
+                            render_trail=False,
+                            ego_vehicle_linewidth=0.0,
+                            ego_vehicle_color_collision=None,
+                            ego_vehicle_fill_color=Color((0.1, 0.8, 0.1, 1.0))
+                        ),
+                        RenderObstaclePlugin(
+                            from_graph=False,
+                            obstacle_fill_color=Color("red"),
+                            obstacle_color=Color("red"),
+                            obstacle_line_width=0.0
+                        ),
+                    ],
+                    viewer_options=GLViewerOptions(
+                        window_height=config["viewer"]["window_size"],
+                        window_width=config["viewer"]["window_size"],
                     )
                 )
             )
         },
         respawner_cls=RandomRespawner,
-        respawner_options=config['respawner_options'],
+        respawner_options=config['respawner'],
         rewarder=rewarder,
         simulation_cls=ScenarioSimulation,
-        simulation_options=config['simulation_options'],
+        simulation_options=config['simulation'],
         termination_criteria=termination_criteria,
         traffic_extraction_factory=TrafficExtractorFactory(options=TrafficExtractorOptions(
-            edge_drawer=config['traffic_extraction_options']['edge_drawer'],
-            postprocessors=config['traffic_extraction_options']['postprocessors'],
-            only_ego_inc_edges=config['traffic_extraction_options']['only_ego_inc_edges'],
-            assign_multiple_lanelets=config['traffic_extraction_options']['assign_multiple_lanelets'],
-            ego_map_radius=config['traffic_extraction_options']['ego_map_radius'],
-            include_lanelet_vertices=config['traffic_extraction_options']['include_lanelet_vertices'],
+            edge_drawer=config['traffic_extraction']['edge_drawer'],
+            postprocessors=config['traffic_extraction']['postprocessors'],
+            only_ego_inc_edges=config['traffic_extraction']['only_ego_inc_edges'],
+            assign_multiple_lanelets=config['traffic_extraction']['assign_multiple_lanelets'],
+            ego_map_radius=config['traffic_extraction']['ego_map_radius'],
+            include_lanelet_vertices=config['traffic_extraction']['include_lanelet_vertices'],
             feature_computers=feature_computers
         ))
     )
@@ -132,7 +126,7 @@ def setup_experiment(config):
     # Create the environment
     environment = experiment.make_env(
         scenario_dir=Path(config["scenario_dir"]),
-        n_envs=1,
+        n_envs=config["dataset"]["num_workers"],
         seed=config["seed"]
     )
     return experiment, environment
