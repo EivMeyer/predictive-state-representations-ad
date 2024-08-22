@@ -1,10 +1,14 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 class PredictiveModelV0(nn.Module):
-    def __init__(self, obs_dim, action_dim, ego_state_dim, hidden_dim=64):
+    def __init__(self, obs_shape, action_dim, ego_state_dim, hidden_dim=64):
         super().__init__()
         
+        obs_dim = np.prod(obs_shape)  # Total dimension of observation
+
+        self.obs_shape = obs_shape
         self.obs_dim = obs_dim
         self.action_dim = action_dim
         self.ego_state_dim = ego_state_dim

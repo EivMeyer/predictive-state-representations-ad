@@ -147,7 +147,7 @@ def get_data_dimensions(dataset):
     dataset (EnvironmentDataset): The dataset to examine
 
     Returns:
-    obs_dim (int): Total dimension of a single observation
+    obs_shape (int): Shape of a single observation
     action_dim (int): Dimension of the action space
     ego_state_dim (int): Dimension of the ego state
     """
@@ -168,4 +168,4 @@ def get_data_dimensions(dataset):
     print(f"Action dimension: {action_dim}")
     print(f"Ego state dimension: {ego_state_dim}")
     
-    return obs_dim, action_dim, ego_state_dim
+    return obs_shape, action_dim, ego_state_dim

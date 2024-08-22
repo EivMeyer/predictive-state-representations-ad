@@ -1,10 +1,14 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 class SimpleReconstructiveModel(nn.Module):
-    def __init__(self, obs_dim, *args, **kwargs):
+    def __init__(self, obs_shape, *args, **kwargs):
         super().__init__()
         
+        obs_dim = np.prod(obs_shape)  # Total dimension of observation
+
+        self.obs_shape = obs_shape
         self.obs_dim = obs_dim
 
         self.encoder = nn.Sequential(

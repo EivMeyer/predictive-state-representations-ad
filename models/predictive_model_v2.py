@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+import numpy as np
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
@@ -17,9 +18,12 @@ class PositionalEncoding(nn.Module):
         return x + self.pe[:x.size(0)]
 
 class PredictiveModelV2(nn.Module):
-    def __init__(self, obs_dim, action_dim, ego_state_dim, hidden_dim=256, nhead=8, num_layers=6):
+    def __init__(self, obs_shape, action_dim, ego_state_dim, hidden_dim=256, nhead=8, num_layers=6):
         super().__init__()
         
+        obs_dim = np.prod(obs_shape)  # Total dimension of observation
+
+        self.obs_shape = obs_shape
         self.obs_dim = obs_dim
         self.action_dim = action_dim
         self.ego_state_dim = ego_state_dim

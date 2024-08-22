@@ -167,7 +167,7 @@ def calculate_prediction_diversity(tensor):
     """
     # Reshape tensor to (batch_size, -1)
     batch_size = tensor.size(0)
-    flattened = tensor.view(batch_size, -1)
+    flattened = tensor.reshape(batch_size, -1)
     
     # Calculate pairwise differences
     diff_matrix = torch.cdist(flattened, flattened, p=2)
@@ -325,7 +325,7 @@ def main(cfg: DictConfig):
     full_dataset = EnvironmentDataset(dataset_path, downsample_factor=cfg.training.downsample_factor)
 
     # Get data dimensions
-    obs_dim, action_dim, ego_state_dim = get_data_dimensions(full_dataset)
+    obs_shape, action_dim, ego_state_dim = get_data_dimensions(full_dataset)
     
     # Create train and validation loaders
     batch_size = cfg.training.batch_size
@@ -339,7 +339,7 @@ def main(cfg: DictConfig):
     if ModelClass is None:
         raise ValueError(f"Invalid model type: {cfg.training.model_type}")
     
-    model = ModelClass(obs_dim=obs_dim, action_dim=action_dim, ego_state_dim=ego_state_dim)
+    model = ModelClass(obs_shape=obs_shape, action_dim=action_dim, ego_state_dim=ego_state_dim)
     model = model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=cfg.training.learning_rate, weight_decay=1e-5)
