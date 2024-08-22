@@ -46,7 +46,7 @@ training:
   # Maximum gradient norm for gradient clipping
   max_grad_norm: 10.0
   # Type of model to use for training
-  model_type: "PredictiveModelV4"
+  model_type: "PredictiveModelV5"
 
 # Simulation options
 simulation:
@@ -77,7 +77,7 @@ viewer:
   # Range of view in the simulation
   view_range: 110.0
   # Size of the viewer window
-  window_size: 800
+  window_size: 64
 
 # Respawner options
 respawner:

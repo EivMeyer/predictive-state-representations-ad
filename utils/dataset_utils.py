@@ -158,12 +158,10 @@ def get_data_dimensions(dataset):
     
     # Get dimensions
     obs_shape = observations[0].shape  # Shape of a single observation
-    obs_dim = np.prod(obs_shape)  # Total dimension of observation
     action_dim = len(actions[0])  # Dimension of a single action
     ego_state_dim = len(ego_states[0])  # Dimension of a single ego state
     
     print(f"Observation shape: {obs_shape}")
-    print(f"Observation dimension: {obs_dim}")
     print(f"Action dimension: {action_dim}")
     print(f"Ego state dimension: {ego_state_dim}")
     

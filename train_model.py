@@ -7,6 +7,7 @@ from models.predictive_model_v1 import PredictiveModelV1
 from models.predictive_model_v2 import PredictiveModelV2
 from models.predictive_model_v3 import PredictiveModelV3
 from models.predictive_model_v4 import PredictiveModelV4
+from models.predictive_model_v5 import PredictiveModelV5
 from models.simple_reconstructive_model import SimpleReconstructiveModel
 from models.single_step_predictive_model import SingleStepPredictiveModel
 from loss_function import CombinedLoss
@@ -28,6 +29,7 @@ def get_model_class(model_type):
         "PredictiveModelV2": PredictiveModelV2,
         "PredictiveModelV3": PredictiveModelV3,
         "PredictiveModelV4": PredictiveModelV4,
+        "PredictiveModelV5": PredictiveModelV5,
         "SimpleReconstructiveModel": SimpleReconstructiveModel,
         "SingleStepPredictiveModel": SingleStepPredictiveModel
     }
