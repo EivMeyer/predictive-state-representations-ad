@@ -130,8 +130,7 @@ def create_data_loaders(dataset, batch_size, device, train_ratio=0.8):
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
     # Create DataLoaders with custom collate_fn
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
-                              collate_fn=lambda b: collate_fn(b, device))
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, collate_fn=lambda b: collate_fn(b, device))
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False,
                             collate_fn=lambda b: collate_fn(b, device))
 
