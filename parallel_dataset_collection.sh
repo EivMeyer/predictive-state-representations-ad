@@ -31,7 +31,7 @@ else
 fi
 
 base_dir="./output"
-merge_dir="${base_dir}/merged_dataset"
+merge_dir="${base_dir}/dataset"
 
 # Calculate episodes per worker
 episodes_per_worker=$((total_episodes / num_workers))
@@ -64,18 +64,26 @@ wait
 
 echo "All dataset collection jobs completed."
 
-# Merge datasets
+# Merge datasets with renaming
 echo "Merging datasets..."
+episode_counter=0
 for ((i=1; i<=${num_workers}; i++)); do
     worker_dir="${base_dir}/worker_${i}/dataset"
     if [ -d "$worker_dir" ]; then
-        cp -r "${worker_dir}"/* "${merge_dir}/"
+        for episode_file in "${worker_dir}"/*; do
+            if [ -f "$episode_file" ]; then
+                new_name=$(printf "episode_%d.pt" $episode_counter)
+                cp "$episode_file" "${merge_dir}/${new_name}"
+                episode_counter=$((episode_counter + 1))
+            fi
+        done
     else
         echo "Warning: Dataset directory for worker ${i} not found."
     fi
 done
 
 echo "Dataset merge completed. Merged dataset is in ${merge_dir}"
+echo "Total episodes in merged dataset: $episode_counter"
 
 # Automatically remove individual worker directories
 echo "Removing individual worker directories..."
@@ -84,4 +92,4 @@ for ((i=1; i<=${num_workers}; i++)); do
 done
 echo "Individual worker directories removed."
 
-echo "Script completed. Collected $total_episodes episodes in total."
+echo "Script completed. Collected and merged $episode_counter episodes in total."
