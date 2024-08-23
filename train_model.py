@@ -11,7 +11,6 @@ from tqdm import tqdm
 from pathlib import Path
 import numpy as np
 import torch
-from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
 import numpy as np
 import wandb
 import matplotlib.pyplot as plt
@@ -275,8 +274,9 @@ def main(cfg: DictConfig):
     model = ModelClass(obs_shape=obs_shape, action_dim=action_dim, ego_state_dim=ego_state_dim)
     model = model.to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=cfg.training.learning_rate, weight_decay=1e-5)
-    scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
+    optimizer = optim.AdamW(model.parameters(), lr=cfg.training.learning_rate, weight_decay=cfg.training.weight_decay)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.training.epochs, eta_min=1e-6)
+
     criterion = CombinedLoss(alpha=1.0, beta=0.0, gamma=0.0, delta=0.0, device=device)
 
     wandb.init(project="PredictiveStateRepresentations-AD", config=OmegaConf.to_container(cfg, resolve=True))

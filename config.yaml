@@ -36,11 +36,13 @@ dataset:
 # Training configuration
 training:
   # Number of training epochs
-  epochs: 1000
+  epochs: 100
   # Batch size for training
   batch_size: 256
   # Learning rate for the optimizer
-  learning_rate: 0.001
+  learning_rate: 0.005
+  # Weight decay for the optimizer
+  weight_decay: 0.0001
   # Factor to downsample input images
   downsample_factor: 1
   # Maximum gradient norm for gradient clipping
