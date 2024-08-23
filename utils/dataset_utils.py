@@ -54,9 +54,12 @@ class EnvironmentDataset:
         data['observations'] = np.array([self.downsample_image(obs) for obs in data['observations']])
         data['next_observations'] = np.array([self.downsample_image(obs) for obs in data['next_observations']])
         
-        # Convert numpy arrays to PyTorch tensors and apply necessary conversions
-        data['observations'] = torch.from_numpy(data['observations']).float() / 255.0
-        data['next_observations'] = torch.from_numpy(data['next_observations']).float() / 255.0
+        # Convert to PyTorch tensors and adjust format
+        # From [time, height, width, channels] to [time, channels, height, width]
+        data['observations'] = torch.from_numpy(data['observations']).float().permute(0, 3, 1, 2).contiguous() / 255.0
+        data['next_observations'] = torch.from_numpy(data['next_observations']).float().permute(0, 3, 1, 2).contiguous() / 255.0
+
+        # Convert other data to tensors
         data['actions'] = torch.from_numpy(data['actions']).float()
         data['ego_states'] = torch.from_numpy(data['ego_states']).float()
         data['next_actions'] = torch.from_numpy(data['next_actions']).float()

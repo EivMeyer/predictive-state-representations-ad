@@ -14,6 +14,7 @@ class PredictiveModelV5(nn.Module):
             nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(),
+            nn.MaxPool2d(2, 2),
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
@@ -21,11 +22,14 @@ class PredictiveModelV5(nn.Module):
             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
+            nn.MaxPool2d(2, 2),
+            nn.AdaptiveAvgPool2d((1, 1)),  # Adaptive pooling to fixed size
+            nn.Flatten(),  # Flatten the output
         )
         
         # Calculate the size of the encoder output
         with torch.no_grad():
-            dummy_input = torch.zeros(1, 3, obs_shape[0], obs_shape[1])
+            dummy_input = torch.zeros(1, 3, obs_shape[1], obs_shape[2])
             encoder_output = self.encoder(dummy_input)
             encoder_output_size = encoder_output.view(1, -1).size(1)
         
@@ -85,17 +89,18 @@ class PredictiveModelV5(nn.Module):
 
     def forward(self, batch):
         observations = batch['observations']
-        batch_size, seq_len, height, width, channels = observations.shape
+        batch_size, seq_len, channels, height, width = observations.shape
+
+        # Reshape to process all time steps at once
+        observations_reshaped = observations.view(batch_size * seq_len, channels, height, width)
         
-        # Process each observation through the encoder
-        encoded = []
-        for t in range(seq_len):
-            x = observations[:, t].permute(0, 3, 1, 2).contiguous()  # [batch_size, channels, height, width]
-            x = self.encoder(x)
-            encoded.append(x.view(batch_size, -1))
+        # Process all observations through the encoder
+        encoded = self.encoder(observations_reshaped)
         
-        # Stack encoded observations and process through LSTM
-        encoded = torch.stack(encoded, dim=1)  # [batch_size, seq_len, features]
+        # Reshape the encoded output
+        encoded = encoded.view(batch_size, seq_len, -1)
+
+        # Process through LSTM
         _, (h_n, _) = self.lstm(encoded)
         
         # Apply BatchNorm to LSTM output
@@ -106,8 +111,5 @@ class PredictiveModelV5(nn.Module):
         
         # Generate prediction using the decoder
         prediction = self.decoder(x)
-        
-        # Reshape to match the expected output shape [batch_size, height, width, channels]
-        prediction = prediction.permute(0, 2, 3, 1)
         
         return prediction
