@@ -96,11 +96,33 @@ class EnvironmentDataset(Dataset):
         return data
 
     @staticmethod
-    def collate_fn(batch, device='cpu'):
-        batch = batch[0]  # Since batch_size=1, DataLoader returns a list of one item
-        return {key: value.to(device) for key, value in batch.items()}
+    def collate_fn(batch):
+        # Determine the total number of samples across all subbatches
+        total_samples = sum(subbatch['observations'].size(0) for subbatch in batch)
+        
+        # Get the shapes of the tensors
+        first_subbatch = batch[0]
+        shapes = {key: first_subbatch[key].shape[1:] for key in first_subbatch.keys()}
+        
+        # Pre-allocate tensors for the merged batch on CPU
+        merged_batch = {
+            key: torch.empty((total_samples, *shapes[key]),
+                            dtype=first_subbatch[key].dtype,
+                            pin_memory=True)  # Use pinned memory for faster transfers
+            for key in first_subbatch.keys()
+        }
+        
+        # Fill the pre-allocated tensors
+        start_idx = 0
+        for subbatch in batch:
+            batch_size = subbatch['observations'].size(0)
+            for key in merged_batch.keys():
+                merged_batch[key][start_idx:start_idx+batch_size].copy_(subbatch[key])
+            start_idx += batch_size
+        
+        return merged_batch
 
-def create_data_loaders(dataset, batch_size=1, train_ratio=0.8, num_workers=4, pin_memory=True, device='cpu'):
+def create_data_loaders(dataset, batch_size, train_ratio, prefetch_factor, num_workers, pin_memory):
     dataset_size = len(dataset)
     train_size = int(train_ratio * dataset_size)
     val_size = dataset_size - train_size
@@ -113,7 +135,8 @@ def create_data_loaders(dataset, batch_size=1, train_ratio=0.8, num_workers=4, p
         shuffle=True, 
         num_workers=num_workers,
         pin_memory=pin_memory,
-        collate_fn=lambda batch: EnvironmentDataset.collate_fn(batch, device)
+        collate_fn=EnvironmentDataset.collate_fn,
+        prefetch_factor=prefetch_factor,  # Prefetch 2 batches per worker
     )
     
     val_loader = DataLoader(
@@ -122,7 +145,8 @@ def create_data_loaders(dataset, batch_size=1, train_ratio=0.8, num_workers=4, p
         shuffle=False,
         num_workers=num_workers,
         pin_memory=pin_memory,
-        collate_fn=lambda batch: EnvironmentDataset.collate_fn(batch, device)
+        collate_fn=EnvironmentDataset.collate_fn,
+        prefetch_factor=prefetch_factor,  # Prefetch 2 batches per worker
     )
 
     return train_loader, val_loader
@@ -157,3 +181,8 @@ def get_data_dimensions(dataset):
     print(f"Ego state dimension: {ego_state_dim}")
     
     return obs_shape, action_dim, ego_state_dim
+
+def move_batch_to_device(batch, device):
+    # Move entire batch to GPU at once
+    batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
+    return batch

@@ -1,6 +1,6 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
-from utils.dataset_utils import EnvironmentDataset, get_data_dimensions, create_data_loaders
+from utils.dataset_utils import EnvironmentDataset, get_data_dimensions, create_data_loaders, move_batch_to_device
 import torch
 from models.predictive_model_v5 import PredictiveModelV5
 from models.predictive_model_v6 import PredictiveModelV6
@@ -13,48 +13,11 @@ from pathlib import Path
 import numpy as np
 import torch
 import numpy as np
-import wandb
 import matplotlib.pyplot as plt
 import time
 from utils.visualization_utils import setup_visualization, visualize_prediction
 import torch.multiprocessing as mp
-
-
-class AdaptiveLogger:
-    def __init__(self, base_batch_size=32, base_log_interval=50):
-        self.base_batch_size = base_batch_size
-        self.base_log_interval = base_log_interval
-        self.start_time = time.time()
-        self.total_samples = 0
-        self.last_log_time = self.start_time
-
-    def should_log(self, iteration, batch_size):
-        current_time = time.time()
-        time_since_last_log = current_time - self.last_log_time
-        
-        # Adjust log interval based on batch size
-        adjusted_interval = max(1, int(self.base_log_interval * (self.base_batch_size / batch_size)))
-        
-        # Log if enough iterations have passed or if enough time has passed (e.g., at least 10 seconds)
-        if iteration % adjusted_interval == 0 or time_since_last_log >= 10:
-            self.last_log_time = current_time
-            return True
-        return False
-
-    def log(self, epoch, iteration, loss, batch_size):
-        current_time = time.time()
-        elapsed_time = current_time - self.start_time
-        self.total_samples += batch_size
-
-        speed_samples = self.total_samples / elapsed_time
-        speed_batches = iteration / elapsed_time
-
-        print(f"Epoch {epoch}, Iteration {iteration}")
-        print(f"  Loss: {loss.item():.4f}")
-        print(f"  Speed: {speed_samples:.2f} samples/second ({speed_batches:.2f} batches/second)")
-        print(f"  Allocated GPU Memory: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
-        print(f"  Cached GPU Memory: {torch.cuda.memory_reserved() / 1e9:.2f} GB")
-
+from utils.training_utils import AdaptiveLogger, analyze_predictions, init_wandb
 
 
 def get_model_class(model_type):
@@ -67,63 +30,7 @@ def get_model_class(model_type):
     return model_classes.get(model_type)
 
 
-
-def calculate_prediction_diversity(tensor):
-    """
-    Calculate the average pairwise difference between predictions in a batch.
-    A value close to 0 indicates potential mean collapse.
-    
-    Args:
-    tensor (torch.Tensor): Input tensor of shape (batch_size, ...)
-    
-    Returns:
-    float: Average pairwise difference
-    """
-    # Reshape tensor to (batch_size, -1)
-    batch_size = tensor.size(0)
-    flattened = tensor.reshape(batch_size, -1)
-    
-    # Calculate pairwise differences
-    diff_matrix = torch.cdist(flattened, flattened, p=2)
-    
-    # Calculate mean of upper triangle (excluding diagonal)
-    diversity = diff_matrix.triu(diagonal=1).sum() / (batch_size * (batch_size - 1) / 2)
-    
-    return diversity.item()
-
-
-def analyze_predictions(predictions, targets):
-    """
-    Analyze predictions for potential mean collapse and other statistics.
-    
-    Args:
-    predictions (torch.Tensor): Model predictions
-    targets (torch.Tensor): Ground truth targets
-    
-    Returns:
-    dict: Dictionary containing various statistics
-    """
-    pred_diversity = calculate_prediction_diversity(predictions)
-    target_diversity = calculate_prediction_diversity(targets)
-    
-    pred_mean = torch.mean(predictions).item()
-    pred_std = torch.std(predictions).item()
-    target_mean = torch.mean(targets).item()
-    target_std = torch.std(targets).item()
-    
-    return {
-        "prediction_diversity": pred_diversity,
-        "target_diversity": target_diversity,
-        "pred_mean": pred_mean,
-        "pred_std": pred_std,
-        "target_mean": target_mean,
-        "target_std": target_std
-    }
-
-def move_batch_to_device(batch, device):
-    return {k: v.to(device) for k, v in batch.items()}
-
-def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, scheduler, max_grad_norm, device):
+def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, scheduler, max_grad_norm, device, wandb, create_plots, stdout_logging):
     logger = AdaptiveLogger(base_batch_size=32, base_log_interval=50)
 
     model.train()
@@ -135,8 +42,9 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
     hold_out_target = hold_out_batch['next_observations'][:2]
 
     # Setup visualization
-    seq_length = hold_out_obs.shape[1]
-    fig, axes = setup_visualization(seq_length)
+    if create_plots:
+        seq_length = hold_out_obs.shape[1]
+        fig, axes = setup_visualization(seq_length)
 
     for epoch in range(epochs):
         epoch_stats = {
@@ -187,11 +95,11 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
                     epoch_stats[key].append(value)
             
             total_iterations += 1
-            if logger.should_log(iteration, len(batch)):
+            if stdout_logging and logger.should_log(iteration, len(batch)):
                 logger.log(epoch, iteration, loss, len(batch))
             
             # Store first 9 training predictions for visualization
-            if iteration == len(train_loader) - 1:
+            if create_plots and iteration == len(train_loader) - 1:
                 train_predictions = predictions[:9].detach()
                 train_ground_truth = targets[:9].detach()
 
@@ -222,27 +130,29 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
         wandb.log({"epoch_speed": epoch_speed}, step=epoch)
 
         # Visualize prediction on hold-out sample at the end of each epoch
-        model.eval()
-        with torch.no_grad():
-            hold_out_pred = model(hold_out_batch)
+        if create_plots:
+            model.eval()
+            with torch.no_grad():
+                hold_out_pred = model(hold_out_batch)
 
-        # Log images to wandb
-        wandb.log({
-            "hold_out_prediction": wandb.Image(fig),
-        }, step=epoch)
+            # Log images to wandb
+            wandb.log({
+                "hold_out_prediction": wandb.Image(fig),
+            }, step=epoch)
         
-        # Visualization
-        metrics = {
-            'MSE (train)': epoch_averages['mse_loss']["mean"],
-            'Diversity (train)': epoch_averages['prediction_diversity']["mean"],
-            # Add any other metrics you're tracking
-        }
-        visualize_prediction(fig, axes, hold_out_obs, hold_out_target, hold_out_pred, epoch, train_predictions, train_ground_truth, metrics)
+            # Visualization
+            metrics = {
+                'MSE (train)': epoch_averages['mse_loss']["mean"],
+                'Diversity (train)': epoch_averages['prediction_diversity']["mean"],
+                # Add any other metrics you're tracking
+            }
+            visualize_prediction(fig, axes, hold_out_obs, hold_out_target, hold_out_pred, epoch, train_predictions, train_ground_truth, metrics)
         
         model.train()
 
-    plt.ioff()  # Turn off interactive mode
-    plt.show()  # Keep the final plot open
+    if create_plots:
+        plt.ioff()  # Turn off interactive mode
+        plt.show()  # Keep the final plot open
 
     # Finish wandb run
     wandb.finish()
@@ -252,6 +162,8 @@ def main(cfg: DictConfig):
     # Set the multiprocessing start method to 'spawn'
     if __name__ == '__main__':
         mp.set_start_method('spawn', force=True)
+
+    wandb = init_wandb(cfg)
 
     dataset_path = Path(cfg.project_dir) / "dataset"
     
@@ -264,7 +176,14 @@ def main(cfg: DictConfig):
     # Create train and validation loaders
     batch_size = cfg.training.batch_size
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    train_loader, val_loader = create_data_loaders(full_dataset, batch_size, cfg.training.train_ratio, cfg.training.num_workers, cfg.training.pin_memory)
+    train_loader, val_loader = create_data_loaders(
+        dataset=full_dataset, 
+        batch_size=batch_size, 
+        train_ratio=cfg.training.train_ratio, 
+        num_workers=cfg.training.num_workers, 
+        pin_memory=cfg.training.pin_memory,
+        prefetch_factor=cfg.training.prefetch_factor
+    )
     print(f"Training on {device}")
     print(f"Training minibatches: {len(train_loader)}")
     print(f"Validation minibatches: {len(val_loader)}")
@@ -278,13 +197,11 @@ def main(cfg: DictConfig):
     model = model.to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=cfg.training.learning_rate, weight_decay=cfg.training.weight_decay)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.training.epochs, eta_min=1e-6)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.training.epochs, eta_min=1e-4)
 
     criterion = CombinedLoss(alpha=1.0, beta=0.0, gamma=0.0, delta=0.0, device=device)
-
-    wandb.init(project="PredictiveStateRepresentations-AD", config=OmegaConf.to_container(cfg, resolve=True))
     
-    train_model(model, train_loader, val_loader, optimizer, criterion, epochs=cfg.training.epochs, scheduler=scheduler, max_grad_norm=cfg.training.max_grad_norm, device=device)
+    train_model(model, train_loader, val_loader, optimizer, criterion, epochs=cfg.training.epochs, scheduler=scheduler, max_grad_norm=cfg.training.max_grad_norm, device=device, wandb=wandb, create_plots=cfg.training.create_plots, stdout_logging=cfg.training.stdout_logging)
 
 if __name__ == "__main__":
     main()

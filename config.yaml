@@ -35,10 +35,16 @@ dataset:
   # Number of processes for dataset generation
   num_workers: 1
 
+wandb:
+  # Enable Weights & Biases logging
+  enabled: true
+  # Project name for Weights & Biases
+  project: PredictiveStateRepresentations-AD
+
 # Training configuration
 training:
   # Number of training epochs
-  epochs: 100
+  epochs: 1000
   # Batch size for training
   batch_size: 1
   # Learning rate for the optimizer
@@ -54,9 +60,15 @@ training:
   # Training set split size
   train_ratio: 0.9
   # Number of processes for fetching data in dataloader
-  num_workers: 0
+  num_workers: 8
   # Whether to use pinned host memory for faster data copies
-  pin_memory: false
+  pin_memory: true
+  # Prefetch factor for dataloader. This is the number of batches to load in advance. Higher values can speed up training.
+  prefetch_factor: 2
+  # Whether to plot predictions during training
+  create_plots: true
+  # Whether to log training metrics to stdout
+  stdout_logging: true
 
 # Simulation options
 simulation:
