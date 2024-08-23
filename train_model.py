@@ -20,6 +20,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmResta
 import numpy as np
 import wandb
 import matplotlib.pyplot as plt
+import time
 from utils.visualization_utils import setup_visualization, visualize_prediction
 
 def get_model_class(model_type):
@@ -116,6 +117,9 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
             "target_mean": [],
             "target_std": []
         }
+
+        start_time = time.time()
+        total_iterations = 0
         
         for iteration, batch in tqdm(enumerate(train_loader), leave=False, total=len(train_loader)):
             optimizer.zero_grad()
@@ -145,9 +149,14 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
                 for key, value in stats.items():
                     epoch_stats[key].append(value)
             
-            if (iteration + 1) % 100 == 0:
+            total_iterations += 1
+            if (iteration + 1) % 50 == 0:
+                current_time = time.time()
+                elapsed_time = current_time - start_time
+                speed = total_iterations / elapsed_time
                 print(f"Epoch {epoch}, Iteration {iteration + 1}")
                 print(f"  Loss: {loss.item():.4f}")
+                print(f"  Speed: {speed:.2f} iterations/second")
             
             # Store first 9 training predictions for visualization
             if iteration == len(train_loader) - 1:
@@ -173,6 +182,12 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
         current_lr = scheduler.get_last_lr()[0]
         print(f"Current learning rate: {current_lr}")
         wandb.log({"learning_rate": current_lr}, step=epoch)
+
+        # Calculate and log overall epoch speed
+        epoch_time = time.time() - start_time
+        epoch_speed = len(train_loader) / epoch_time
+        print(f"Epoch speed: {epoch_speed:.2f} iterations/second")
+        wandb.log({"epoch_speed": epoch_speed}, step=epoch)
 
         # Visualize prediction on hold-out sample at the end of each epoch
         model.eval()
