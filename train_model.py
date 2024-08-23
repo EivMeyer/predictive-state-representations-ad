@@ -2,11 +2,6 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 from utils.dataset_utils import EnvironmentDataset, get_data_dimensions, create_data_loaders
 import torch
-from models.predictive_model_v0 import PredictiveModelV0
-from models.predictive_model_v1 import PredictiveModelV1
-from models.predictive_model_v2 import PredictiveModelV2
-from models.predictive_model_v3 import PredictiveModelV3
-from models.predictive_model_v4 import PredictiveModelV4
 from models.predictive_model_v5 import PredictiveModelV5
 from models.simple_reconstructive_model import SimpleReconstructiveModel
 from models.single_step_predictive_model import SingleStepPredictiveModel
@@ -24,13 +19,46 @@ import time
 from utils.visualization_utils import setup_visualization, visualize_prediction
 import torch.multiprocessing as mp
 
+
+class AdaptiveLogger:
+    def __init__(self, base_batch_size=32, base_log_interval=50):
+        self.base_batch_size = base_batch_size
+        self.base_log_interval = base_log_interval
+        self.start_time = time.time()
+        self.total_samples = 0
+        self.last_log_time = self.start_time
+
+    def should_log(self, iteration, batch_size):
+        current_time = time.time()
+        time_since_last_log = current_time - self.last_log_time
+        
+        # Adjust log interval based on batch size
+        adjusted_interval = max(1, int(self.base_log_interval * (self.base_batch_size / batch_size)))
+        
+        # Log if enough iterations have passed or if enough time has passed (e.g., at least 10 seconds)
+        if iteration % adjusted_interval == 0 or time_since_last_log >= 10:
+            self.last_log_time = current_time
+            return True
+        return False
+
+    def log(self, epoch, iteration, loss, batch_size):
+        current_time = time.time()
+        elapsed_time = current_time - self.start_time
+        self.total_samples += batch_size
+
+        speed_samples = self.total_samples / elapsed_time
+        speed_batches = iteration / elapsed_time
+
+        print(f"Epoch {epoch}, Iteration {iteration}")
+        print(f"  Loss: {loss.item():.4f}")
+        print(f"  Speed: {speed_samples:.2f} samples/second ({speed_batches:.2f} batches/second)")
+        print(f"  Allocated GPU Memory: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
+        print(f"  Cached GPU Memory: {torch.cuda.memory_reserved() / 1e9:.2f} GB")
+
+
+
 def get_model_class(model_type):
     model_classes = {
-        "PredictiveModelV0": PredictiveModelV0,
-        "PredictiveModelV1": PredictiveModelV1,
-        "PredictiveModelV2": PredictiveModelV2,
-        "PredictiveModelV3": PredictiveModelV3,
-        "PredictiveModelV4": PredictiveModelV4,
         "PredictiveModelV5": PredictiveModelV5,
         "SimpleReconstructiveModel": SimpleReconstructiveModel,
         "SingleStepPredictiveModel": SingleStepPredictiveModel
@@ -94,8 +122,9 @@ def analyze_predictions(predictions, targets):
 def move_batch_to_device(batch, device):
     return {k: v.to(device) for k, v in batch.items()}
 
+def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, scheduler, max_grad_norm, device):
+    logger = AdaptiveLogger(base_batch_size=32, base_log_interval=50)
 
-def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, scheduler, max_grad_norm):
     model.train()
     
     # Get two hold-out samples for visualization
@@ -157,13 +186,8 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
                     epoch_stats[key].append(value)
             
             total_iterations += 1
-            if (iteration + 1) % 50 == 0:
-                current_time = time.time()
-                elapsed_time = current_time - start_time
-                speed = total_iterations / elapsed_time
-                print(f"Epoch {epoch}, Iteration {iteration + 1}")
-                print(f"  Loss: {loss.item():.4f}")
-                print(f"  Speed: {speed:.2f} iterations/second")
+            if logger.should_log(iteration, len(batch)):
+                logger.log(epoch, iteration, loss, len(batch))
             
             # Store first 9 training predictions for visualization
             if iteration == len(train_loader) - 1:
