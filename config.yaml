@@ -38,7 +38,7 @@ training:
   # Number of training epochs
   epochs: 1000
   # Batch size for training
-  batch_size: 8
+  batch_size: 256
   # Learning rate for the optimizer
   learning_rate: 0.001
   # Factor to downsample input images
@@ -47,6 +47,12 @@ training:
   max_grad_norm: 10.0
   # Type of model to use for training
   model_type: "PredictiveModelV5"
+  # Training set split size
+  train_ratio: 0.9
+  # Number of processes for fetching data in dataloader
+  num_workers: 0
+  # Whether to use pinned host memory for faster data copies
+  pin_memory: false
 
 # Simulation options
 simulation:

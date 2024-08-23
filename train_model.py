@@ -22,6 +22,7 @@ import wandb
 import matplotlib.pyplot as plt
 import time
 from utils.visualization_utils import setup_visualization, visualize_prediction
+import torch.multiprocessing as mp
 
 def get_model_class(model_type):
     model_classes = {
@@ -90,12 +91,16 @@ def analyze_predictions(predictions, targets):
         "target_std": target_std
     }
 
+def move_batch_to_device(batch, device):
+    return {k: v.to(device) for k, v in batch.items()}
+
 
 def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, scheduler, max_grad_norm):
     model.train()
     
     # Get two hold-out samples for visualization
     hold_out_batch = next(iter(val_loader))
+    hold_out_batch = move_batch_to_device(hold_out_batch, device)
     hold_out_obs = hold_out_batch['observations'][:2]  # Get first two samples
     hold_out_target = hold_out_batch['next_observations'][:2]
 
@@ -122,6 +127,8 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
         total_iterations = 0
         
         for iteration, batch in tqdm(enumerate(train_loader), leave=False, total=len(train_loader)):
+            batch = move_batch_to_device(batch, device)
+
             optimizer.zero_grad()
             
             targets = batch['next_observations'][:, 0]
@@ -217,6 +224,10 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
 
 @hydra.main(version_base=None, config_path=".", config_name="config")
 def main(cfg: DictConfig):
+    # Set the multiprocessing start method to 'spawn'
+    if __name__ == '__main__':
+        mp.set_start_method('spawn', force=True)
+
     dataset_path = Path(cfg.project_dir) / "dataset"
     
     # Load the full dataset
@@ -228,7 +239,7 @@ def main(cfg: DictConfig):
     # Create train and validation loaders
     batch_size = cfg.training.batch_size
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    train_loader, val_loader = create_data_loaders(full_dataset, batch_size, device)
+    train_loader, val_loader = create_data_loaders(full_dataset, batch_size, cfg.training.train_ratio, cfg.training.num_workers, cfg.training.pin_memory)
     print(f"Training minibatches: {len(train_loader)}")
     print(f"Validation minibatches: {len(val_loader)}")
     
@@ -246,7 +257,7 @@ def main(cfg: DictConfig):
 
     wandb.init(project="PredictiveStateRepresentations-AD", config=OmegaConf.to_container(cfg, resolve=True))
     
-    train_model(model, train_loader, val_loader, optimizer, criterion, epochs=cfg.training.epochs, scheduler=scheduler, max_grad_norm=cfg.training.max_grad_norm)
+    train_model(model, train_loader, val_loader, optimizer, criterion, epochs=cfg.training.epochs, scheduler=scheduler, max_grad_norm=cfg.training.max_grad_norm, device=device)
 
 if __name__ == "__main__":
     main()

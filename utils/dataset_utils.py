@@ -111,7 +111,7 @@ def get_dataloader(dataset_dir, batch_size=32, shuffle=True, num_workers=4, devi
     )
 
 
-def create_data_loaders(dataset, batch_size, device, train_ratio=0.8):
+def create_data_loaders(dataset, batch_size, train_ratio=0.8, num_workers=1, pin_memory=True):
     """
     Split the dataset into training and validation sets, then create DataLoaders.
     
@@ -119,6 +119,8 @@ def create_data_loaders(dataset, batch_size, device, train_ratio=0.8):
     dataset (Dataset): The full dataset
     batch_size (int): Batch size for the DataLoaders
     train_ratio (float): Ratio of data to use for training (default: 0.8)
+    num_workers (int): Number of subprocesses to use for data loading (default: 1)
+    pin_memory (bool): Whether to pin memory in data loader (default: True)
 
     Returns:
     train_loader (DataLoader): DataLoader for the training set
@@ -132,10 +134,25 @@ def create_data_loaders(dataset, batch_size, device, train_ratio=0.8):
     # Split the dataset
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
-    # Create DataLoaders with custom collate_fn
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, collate_fn=lambda b: collate_fn(b, device))
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False,
-                            collate_fn=lambda b: collate_fn(b, device))
+    # Create DataLoaders with optimizations
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=batch_size, 
+        shuffle=True, 
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        drop_last=True,
+        collate_fn=collate_fn
+    )
+    
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=batch_size, 
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        collate_fn=collate_fn
+    )
 
     return train_loader, val_loader
 
