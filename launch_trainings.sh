@@ -3,6 +3,7 @@
 # Array of model types
 MODEL_TYPES=(
     "PredictiveModelV5"
+    "PredictiveModelV6"
     "SimpleReconstructiveModel"
     "SingleStepPredictiveModel"
 )

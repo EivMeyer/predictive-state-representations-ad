@@ -50,7 +50,7 @@ training:
   # Maximum gradient norm for gradient clipping
   max_grad_norm: 10.0
   # Type of model to use for training
-  model_type: "PredictiveModelV5"
+  model_type: "PredictiveModelV6"
   # Training set split size
   train_ratio: 0.9
   # Number of processes for fetching data in dataloader

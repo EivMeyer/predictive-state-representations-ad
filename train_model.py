@@ -3,6 +3,7 @@ from omegaconf import DictConfig, OmegaConf
 from utils.dataset_utils import EnvironmentDataset, get_data_dimensions, create_data_loaders
 import torch
 from models.predictive_model_v5 import PredictiveModelV5
+from models.predictive_model_v6 import PredictiveModelV6
 from models.simple_reconstructive_model import SimpleReconstructiveModel
 from models.single_step_predictive_model import SingleStepPredictiveModel
 from loss_function import CombinedLoss
@@ -59,6 +60,7 @@ class AdaptiveLogger:
 def get_model_class(model_type):
     model_classes = {
         "PredictiveModelV5": PredictiveModelV5,
+        "PredictiveModelV6": PredictiveModelV6,
         "SimpleReconstructiveModel": SimpleReconstructiveModel,
         "SingleStepPredictiveModel": SingleStepPredictiveModel
     }
