@@ -1,5 +1,3 @@
-# utils/dataset_utils.py
-
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 from pathlib import Path
@@ -7,156 +5,127 @@ import numpy as np
 import os
 import cv2
 
-class EnvironmentDataset:
-    def __init__(self, data_dir, downsample_factor=1):
+class EnvironmentDataset(Dataset):
+    def __init__(self, data_dir, downsample_factor=1, batch_size=32):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.episode_files = []
         self.downsample_factor = downsample_factor
-        self.load_existing_episodes()
+        self.batch_size = batch_size
+        self.current_batch = []
+        self.episode_files = []
+        self.load_existing_batches()
 
-    def load_existing_episodes(self):
-        self.episode_files = sorted([f for f in os.listdir(self.data_dir) if f.startswith("episode_") and f.endswith(".pt")])
-        self.episode_count = len(self.episode_files)
+    def load_existing_batches(self):
+        self.episode_files = sorted([f for f in os.listdir(self.data_dir) if f.startswith("batch_") and f.endswith(".pt")])
+        self.batch_count = len(self.episode_files)
 
     def add_episode(self, observations, actions, ego_states, next_observations, next_actions, dones):
+        # Preprocess images as uint8 for storage
+        observations = np.array([self._preprocess_image(obs) for obs in observations])
+        next_observations = np.array([self._preprocess_image(obs) for obs in next_observations])
+
+        # Convert data to tensors at this stage
         episode_data = {
-            'observations': np.array(observations, dtype=np.uint8),  # Assuming 8-bit color images
-            'actions': np.array(actions, dtype=np.float32),
-            'ego_states': np.array(ego_states, dtype=np.float32),
-            'next_observations': np.array(next_observations, dtype=np.uint8),  # Assuming 8-bit color images
-            'next_actions': np.array(next_actions, dtype=np.float32),
-            'dones': np.array(dones, dtype=bool)
+            'observations': torch.tensor(observations, dtype=torch.uint8),  # Stored as uint8
+            'actions': torch.tensor(actions, dtype=torch.float32),
+            'ego_states': torch.tensor(ego_states, dtype=torch.float32),
+            'next_observations': torch.tensor(next_observations, dtype=torch.uint8),  # Stored as uint8
+            'next_actions': torch.tensor(next_actions, dtype=torch.float32),
+            'dones': torch.tensor(dones, dtype=torch.bool)
         }
-        episode_filename = f"episode_{self.episode_count}.pt"
-        torch.save(episode_data, self.data_dir / episode_filename)
-        self.episode_files.append(episode_filename)
-        self.episode_count += 1
-        return episode_filename
+
+        self.current_batch.append(episode_data)
+
+        if len(self.current_batch) >= self.batch_size:
+            self._save_current_batch()
+
+    def _preprocess_image(self, image):
+        if self.downsample_factor > 1:
+            image = cv2.resize(image, (image.shape[1] // self.downsample_factor, 
+                                       image.shape[0] // self.downsample_factor), 
+                               interpolation=cv2.INTER_AREA)
+        return image.transpose(2, 0, 1)  # [C, H, W] format
+
+    def _save_current_batch(self):
+        batch_data = {
+            'observations': [],
+            'actions': [],
+            'ego_states': [],
+            'next_observations': [],
+            'next_actions': [],
+            'dones': []
+        }
+
+        for episode in self.current_batch:
+            batch_data['observations'].append(episode['observations'])
+            batch_data['actions'].append(episode['actions'])
+            batch_data['ego_states'].append(episode['ego_states'])
+            batch_data['next_observations'].append(episode['next_observations'])
+            batch_data['next_actions'].append(episode['next_actions'])
+            batch_data['dones'].append(episode['dones'])
+
+        # Stack the data along the batch dimension
+        for key in batch_data:
+            if key in ['observations', 'next_observations']:
+                batch_data[key] = np.stack(batch_data[key])  # uint8 storage
+            else:
+                batch_data[key] = torch.stack(batch_data[key])
+
+        batch_index = len(self.episode_files)
+        batch_filename = f"batch_{batch_index}.pt"
+        torch.save(batch_data, self.data_dir / batch_filename)
+        
+        self.episode_files.append(batch_filename)
+        self.batch_count += 1
+        self.current_batch = []
 
     def __len__(self):
-        return self.episode_count
-    
-    def downsample_image(self, image):
-        if self.downsample_factor > 1:
-            return cv2.resize(image, (image.shape[1] // self.downsample_factor, 
-                                      image.shape[0] // self.downsample_factor), 
-                              interpolation=cv2.INTER_AREA)
-        return image
+        return self.batch_count
 
     def __getitem__(self, idx):
-        if idx < 0 or idx >= self.episode_count:
-            raise IndexError("Episode index out of range")
-        episode_path = self.data_dir / self.episode_files[idx]
-        data = torch.load(episode_path)
+        if idx < 0 or idx >= self.batch_count:
+            raise IndexError("Batch index out of range")
         
-        # Apply downsampling to observations and next_observations
-        data['observations'] = np.array([self.downsample_image(obs) for obs in data['observations']])
-        data['next_observations'] = np.array([self.downsample_image(obs) for obs in data['next_observations']])
-        
-        # Convert to PyTorch tensors and adjust format
-        # From [time, height, width, channels] to [time, channels, height, width]
-        data['observations'] = torch.from_numpy(data['observations']).float().permute(0, 3, 1, 2).contiguous() / 255.0
-        data['next_observations'] = torch.from_numpy(data['next_observations']).float().permute(0, 3, 1, 2).contiguous() / 255.0
+        file = self.episode_files[idx]
+        data = torch.load(self.data_dir / file)
 
-        # Convert other data to tensors
-        data['actions'] = torch.from_numpy(data['actions']).float()
-        data['ego_states'] = torch.from_numpy(data['ego_states']).float()
-        data['next_actions'] = torch.from_numpy(data['next_actions']).float()
-        data['dones'] = torch.from_numpy(data['dones']).float()
-        
+        # Convert images from uint8 to float32 and normalize
+        data['observations'] = torch.tensor(data['observations']).float() / 255.0
+        data['next_observations'] = torch.tensor(data['next_observations']).float() / 255.0
+
         return data
 
-    def get_dataloader(self, batch_size=32, shuffle=True, num_workers=4, device='cpu'):
-        from torch.utils.data import DataLoader
+    @staticmethod
+    def collate_fn(batch, device='cpu'):
+        batch = batch[0]  # Since batch_size=1, DataLoader returns a list of one item
+        return {key: value.to(device) for key, value in batch.items()}
 
-        def collate_fn(batch):
-            return {
-                'observations': torch.stack([torch.from_numpy(item['observations']) for item in batch]).to(device),
-                'actions': torch.stack([torch.from_numpy(item['actions']) for item in batch]).to(device),
-                'ego_states': torch.stack([torch.from_numpy(item['ego_states']) for item in batch]).to(device),
-                'next_observations': torch.stack([torch.from_numpy(item['next_observations']) for item in batch]).to(device),
-                'next_actions': torch.stack([torch.from_numpy(item['next_actions']) for item in batch]).to(device),
-                'dones': torch.stack([torch.from_numpy(item['dones']) for item in batch]).to(device)
-            }
-
-        return DataLoader(
-            self,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            num_workers=num_workers,
-            collate_fn=collate_fn
-        )
-    
-
-def collate_fn(batch, device='cpu'):
-    return {
-        'observations': torch.from_numpy(np.stack([item['observations'] for item in batch])).to(device),
-        'actions': torch.from_numpy(np.stack([item['actions'] for item in batch])).to(device),
-        'ego_states': torch.from_numpy(np.stack([item['ego_states'] for item in batch])).to(device),
-        'next_observations': torch.from_numpy(np.stack([item['next_observations'] for item in batch])).to(device),
-        'next_actions': torch.from_numpy(np.stack([item['next_actions'] for item in batch])).to(device),
-        'dones': torch.from_numpy(np.stack([item['dones'] for item in batch])).to(device)
-    }
-
-
-def get_dataloader(dataset_dir, batch_size=32, shuffle=True, num_workers=4, device='cpu'):
-    dataset = EnvironmentDataset(dataset_dir)
-    return DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        num_workers=num_workers,
-        collate_fn=lambda batch: collate_fn(batch, device)
-    )
-
-
-def create_data_loaders(dataset, batch_size, train_ratio=0.8, num_workers=1, pin_memory=True):
-    """
-    Split the dataset into training and validation sets, then create DataLoaders.
-    
-    Args:
-    dataset (Dataset): The full dataset
-    batch_size (int): Batch size for the DataLoaders
-    train_ratio (float): Ratio of data to use for training (default: 0.8)
-    num_workers (int): Number of subprocesses to use for data loading (default: 1)
-    pin_memory (bool): Whether to pin memory in data loader (default: True)
-
-    Returns:
-    train_loader (DataLoader): DataLoader for the training set
-    val_loader (DataLoader): DataLoader for the validation set
-    """
-    # Calculate the size of each split
+def create_data_loaders(dataset, batch_size=1, train_ratio=0.8, num_workers=4, pin_memory=True, device='cpu'):
     dataset_size = len(dataset)
     train_size = int(train_ratio * dataset_size)
     val_size = dataset_size - train_size
 
-    # Split the dataset
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
-    # Create DataLoaders with optimizations
     train_loader = DataLoader(
         train_dataset, 
-        batch_size=batch_size, 
+        batch_size=batch_size,  # Each item is a pre-batched set of episodes
         shuffle=True, 
         num_workers=num_workers,
         pin_memory=pin_memory,
-        drop_last=True,
-        collate_fn=collate_fn
+        collate_fn=lambda batch: EnvironmentDataset.collate_fn(batch, device)
     )
     
     val_loader = DataLoader(
         val_dataset, 
-        batch_size=batch_size, 
+        batch_size=batch_size,  # Each item is a pre-batched set of episodes
         shuffle=False,
         num_workers=num_workers,
         pin_memory=pin_memory,
-        collate_fn=collate_fn
+        collate_fn=lambda batch: EnvironmentDataset.collate_fn(batch, device)
     )
 
     return train_loader, val_loader
-
-
 
 def get_data_dimensions(dataset):
     """
@@ -170,16 +139,18 @@ def get_data_dimensions(dataset):
     action_dim (int): Dimension of the action space
     ego_state_dim (int): Dimension of the ego state
     """
-    # Get the first item from the dataset
-    first_item = dataset[0]
+    # Get the first batch from the dataset
+    first_batch = dataset[0]
     
     # Unpack the first item
-    observations, actions, ego_states = first_item['observations'], first_item['actions'], first_item['ego_states']
+    observations = first_batch['observations']
+    actions = first_batch['actions']
+    ego_states = first_batch['ego_states']
     
     # Get dimensions
-    obs_shape = observations[0].shape  # Shape of a single observation
-    action_dim = len(actions[0])  # Dimension of a single action
-    ego_state_dim = len(ego_states[0])  # Dimension of a single ego state
+    obs_shape = observations.shape[1:]  # Shape of a single observation
+    action_dim = actions.shape[-1]  # Dimension of the action space
+    ego_state_dim = ego_states.shape[-1]  # Dimension of the ego state
     
     print(f"Observation shape: {obs_shape}")
     print(f"Action dimension: {action_dim}")

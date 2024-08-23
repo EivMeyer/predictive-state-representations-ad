@@ -26,6 +26,8 @@ device: "auto"
 dataset:
   # Number of episodes to collect for the dataset
   num_episodes: 1000
+  # Number of episodes per batch
+  batch_size: 64
   # Number of timesteps for observation
   t_obs: 5
   # Number of timesteps for prediction
@@ -38,7 +40,7 @@ training:
   # Number of training epochs
   epochs: 100
   # Batch size for training
-  batch_size: 256
+  batch_size: 1
   # Learning rate for the optimizer
   learning_rate: 0.005
   # Weight decay for the optimizer

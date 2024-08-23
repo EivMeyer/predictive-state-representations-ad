@@ -34,7 +34,6 @@ fi
 episodes_per_restart=$(get_integer_input "Enter the number of episodes to collect before restarting a worker: ")
 
 base_dir="./output"
-merge_dir="${base_dir}/dataset"
 
 # Calculate episodes per worker
 episodes_per_worker=$((total_episodes / num_workers))
@@ -67,9 +66,8 @@ manage_worker() {
         
         collect_dataset $worker_id $episodes_to_collect $run_id
         
-        new_episodes=$(find ${base_dir}/worker_${worker_id}/run_${run_id}/dataset -name "episode_*.pt" 2>/dev/null | wc -l)
-        collected_episodes=$((collected_episodes + new_episodes))
-        echo "Worker $worker_id has collected $collected_episodes episodes so far"
+        collected_episodes=$((collected_episodes + episodes_to_collect))
+        echo "Worker $worker_id has collected $collected_episodes out of $total_episodes episodes so far"
         
         run_id=$((run_id + 1))
         
@@ -78,9 +76,6 @@ manage_worker() {
         fi
     done
 }
-
-# Create merge directory
-mkdir -p "${merge_dir}"
 
 # Run workers with periodic restarts
 for ((i=1; i<=${num_workers}; i++)); do
@@ -96,32 +91,7 @@ wait
 
 echo "All dataset collection jobs completed."
 
-# Merge datasets with renaming
-echo "Merging datasets..."
-episode_counter=0
-for ((i=1; i<=${num_workers}; i++)); do
-    worker_dir="${base_dir}/worker_${i}"
-    for run_dir in "$worker_dir"/run_*; do
-        if [ -d "$run_dir/dataset" ]; then
-            for episode_file in "$run_dir/dataset"/*; do
-                if [ -f "$episode_file" ]; then
-                    new_name=$(printf "episode_%d.pt" $episode_counter)
-                    cp "$episode_file" "${merge_dir}/${new_name}"
-                    episode_counter=$((episode_counter + 1))
-                fi
-            done
-        fi
-    done
-done
+# Call the merge_datasets.sh script
+./merge_datasets.sh
 
-echo "Dataset merge completed. Merged dataset is in ${merge_dir}"
-echo "Total episodes in merged dataset: $episode_counter"
-
-# Automatically remove individual worker directories
-echo "Removing individual worker directories..."
-for ((i=1; i<=${num_workers}; i++)); do
-    rm -rf "${base_dir}/worker_${i}"
-done
-echo "Individual worker directories removed."
-
-echo "Script completed. Collected and merged $episode_counter episodes in total."
+echo "Script completed. Dataset collection and merging are done."

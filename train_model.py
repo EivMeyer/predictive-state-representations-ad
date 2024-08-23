@@ -263,6 +263,7 @@ def main(cfg: DictConfig):
     batch_size = cfg.training.batch_size
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train_loader, val_loader = create_data_loaders(full_dataset, batch_size, cfg.training.train_ratio, cfg.training.num_workers, cfg.training.pin_memory)
+    print(f"Training on {device}")
     print(f"Training minibatches: {len(train_loader)}")
     print(f"Validation minibatches: {len(val_loader)}")
     

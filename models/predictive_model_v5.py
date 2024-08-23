@@ -29,7 +29,7 @@ class PredictiveModelV5(nn.Module):
         
         # Calculate the size of the encoder output
         with torch.no_grad():
-            dummy_input = torch.zeros(1, 3, obs_shape[1], obs_shape[2])
+            dummy_input = torch.zeros(1, 3, obs_shape[-2], obs_shape[-1])
             encoder_output = self.encoder(dummy_input)
             encoder_output_size = encoder_output.view(1, -1).size(1)
         

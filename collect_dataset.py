@@ -7,7 +7,10 @@ from pathlib import Path
 from tqdm import tqdm
 
 def collect_episodes(cfg_dict, env, num_episodes):
-    dataset = EnvironmentDataset(Path(cfg_dict["project_dir"]) / "dataset")
+    dataset = EnvironmentDataset(
+        data_dir=Path(cfg_dict["project_dir"]) / "dataset",
+        batch_size=cfg_dict["dataset"]["batch_size"],
+    )
     
     episodes_collected = 0
     with tqdm(total=num_episodes, desc="Collecting episodes") as pbar:
