@@ -16,22 +16,40 @@ get_integer_input() {
     done
 }
 
-# Get number of workers
-if [ $# -ge 1 ]; then
-    num_workers=$1
-else
+# Initialize variables
+num_workers=""
+total_episodes=""
+episodes_per_restart=""
+
+# Parse command line options
+while getopts "w:e:r:" opt; do
+    case "$opt" in
+        w) num_workers=$OPTARG ;;
+        e) total_episodes=$OPTARG ;;
+        r) episodes_per_restart=$OPTARG ;;
+        *) echo "Usage: $0 [-w num_workers] [-e total_episodes] [-r episodes_per_restart]" >&2
+           exit 1 ;;
+    esac
+done
+
+# Get number of workers if not provided
+if [ -z "$num_workers" ]; then
     num_workers=$(get_integer_input "Enter the number of workers: ")
 fi
 
-# Get total number of episodes
-if [ $# -ge 2 ]; then
-    total_episodes=$2
-else
+# Get total number of episodes if not provided
+if [ -z "$total_episodes" ]; then
     total_episodes=$(get_integer_input "Enter the total number of episodes to collect: ")
 fi
 
-# Get number of episodes per restart
-episodes_per_restart=$(get_integer_input "Enter the number of episodes to collect before restarting a worker: ")
+# Get number of episodes per restart if not provided
+if [ -z "$episodes_per_restart" ]; then
+    episodes_per_restart=$(get_integer_input "Enter the number of episodes to collect before restarting a worker: ")
+fi
+
+echo "Number of workers: $num_workers"
+echo "Total number of episodes: $total_episodes"
+echo "Episodes per restart: $episodes_per_restart"
 
 base_dir="./output"
 
