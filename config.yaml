@@ -27,11 +27,11 @@ dataset:
   # Number of episodes to collect for the dataset
   num_episodes: 1000
   # Number of episodes per batch
-  batch_size: 64
+  batch_size: 32
   # Number of timesteps for observation
-  t_obs: 10
+  t_obs: 5
   # Number of timesteps for prediction
-  t_pred: 10
+  t_pred: 5
   # Number of processes for dataset generation
   num_workers: 1
 
@@ -50,13 +50,13 @@ training:
   # Batch size for training
   batch_size: 1
   # Learning rate for the optimizer
-  learning_rate: 0.005
+  learning_rate: 0.001
   # Weight decay for the optimizer
-  weight_decay: 0.0001
+  weight_decay: 0.00001
   # Factor to downsample input images
   downsample_factor: 1
   # Maximum gradient norm for gradient clipping
-  max_grad_norm: 10.0
+  max_grad_norm: 1.0
   # Training set split size
   train_ratio: 0.9
   # Number of processes for fetching data in dataloader
