@@ -53,6 +53,11 @@ echo "Episodes per restart: $episodes_per_restart"
 
 base_dir="./output"
 
+# Delete existing dataset
+echo "Deleting existing dataset..."
+rm -rf "$base_dir"
+mkdir -p "$base_dir"
+
 # Calculate episodes per worker
 episodes_per_worker=$((total_episodes / num_workers))
 remainder=$((total_episodes % num_workers))
