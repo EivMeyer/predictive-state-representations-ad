@@ -71,7 +71,7 @@ class PredictiveModelV8(nn.Module):
         self.encoder_projector = nn.Linear(encoder_output_size, hidden_dim)
         
         # Positional encoding
-        self.pos_encoder = PositionalEncoding(hidden_dim)
+        self.pos_encoder = PositionalEncoding(hidden_dim, max_len=num_frames_to_predict)
         
         # Transformer encoder
         encoder_layers = nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=nhead)
