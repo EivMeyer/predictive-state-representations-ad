@@ -80,9 +80,24 @@ class PredictiveModelV8(nn.Module):
         # Transformer decoder
         decoder_layers = nn.TransformerDecoderLayer(d_model=hidden_dim, nhead=nhead)
         self.transformer_decoder = nn.TransformerDecoder(decoder_layers, num_layers=num_decoder_layers)
-        
-        # Output projection
-        self.output_projector = nn.Linear(hidden_dim, 3 * obs_shape[-2] * obs_shape[-1])
+
+        # Decoder with BatchNorm
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(self.hidden_dim, 128, kernel_size=4, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(16, 3, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(3),
+        )
         
         self._initialize_weights()
 
@@ -122,9 +137,14 @@ class PredictiveModelV8(nn.Module):
         
         # Generate future frame predictions in parallel
         output = self.transformer_decoder(decoder_input, memory)
-        output = self.output_projector(output)
+        
+        # Reshape output for decoding
+        output = output.view(-1, self.hidden_dim, 1, 1)  # Reshape to (N, C, H, W) format for ConvTranspose2d
+
+        # Decode predicted features back into image space
+        predictions = self.decoder(output)
         
         # Reshape output to (batch_size, num_frames_to_predict, channels, height, width)
-        predictions = output.permute(1, 0, 2).view(batch_size, self.num_frames_to_predict, channels, height, width)
+        predictions = predictions.view(batch_size, self.num_frames_to_predict, channels, height, width)
         
         return predictions
