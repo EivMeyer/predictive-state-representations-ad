@@ -2,54 +2,53 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-# Goal: Improved performance due to increased model capacity. 
-# Result: Near perfect next state prediction (eager-shape-45)
+# Goal: Simplest possible extension to V6 model to predict future frames.
 
-class PredictiveModelV6(nn.Module):
-    def __init__(self, obs_shape, action_dim, ego_state_dim, hidden_dim=64, *args, **kwargs):
+class PredictiveModelV7(nn.Module):
+    def __init__(self, obs_shape, action_dim, ego_state_dim, hidden_dim=64, num_frames_to_predict=5):
         super().__init__()
         
         self.obs_shape = obs_shape
         self.hidden_dim = hidden_dim
+        self.num_frames_to_predict = num_frames_to_predict
         
-        # CNN encoder with BatchNorm
+        # CNN encoder with BatchNorm (same as before)
         self.encoder = nn.Sequential(
             # First Convolutional Block
-            nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1),  # Increased filters from 32 to 64
+            nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),  # Added an additional convolutional layer
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.MaxPool2d(2, 2),
 
             # Second Convolutional Block
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),  # Increased filters from 64 to 128
+            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(128),
             nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),  # Added an additional convolutional layer
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.MaxPool2d(2, 2),
 
             # Third Convolutional Block with Dilated Convolutions
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=2, dilation=2),  # Introduced dilated convolution
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=2, dilation=2),
             nn.BatchNorm2d(128),
             nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=2, dilation=2),  # Added an additional dilated convolutional layer
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=2, dilation=2),
             nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.MaxPool2d(2, 2),
 
             # Final Convolutional Block
-            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),  # Added a new block with 256 filters
+            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU(),
-            nn.AdaptiveAvgPool2d((1, 1)),  # Adaptive pooling to fixed size
-            nn.Flatten(),  # Flatten the output
+            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.Flatten(),
         )
 
-        
         # Calculate the size of the encoder output
         with torch.no_grad():
             dummy_input = torch.zeros(1, 3, obs_shape[-2], obs_shape[-1])
@@ -67,6 +66,13 @@ class PredictiveModelV6(nn.Module):
         # BatchNorm for LSTM output
         self.lstm_bn = nn.BatchNorm1d(self.hidden_dim)
         
+        # Frame predictor (converts LSTM hidden state to next frame)
+        self.frame_predictor = nn.Sequential(
+            nn.Linear(self.hidden_dim, self.hidden_dim),
+            nn.ReLU(),
+            nn.Linear(self.hidden_dim, self.hidden_dim),
+        )
+        
         # Decoder with BatchNorm
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(self.hidden_dim, 128, kernel_size=4, stride=1, padding=0, bias=False),
@@ -82,7 +88,7 @@ class PredictiveModelV6(nn.Module):
             nn.BatchNorm2d(16),
             nn.ReLU(inplace=True),
             nn.ConvTranspose2d(16, 3, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(3),  # Additional BatchNorm before final output
+            nn.BatchNorm2d(3),
         )
         
         self._initialize_weights()
@@ -125,14 +131,25 @@ class PredictiveModelV6(nn.Module):
 
         # Process through LSTM
         _, (h_n, _) = self.lstm(encoded)
+        h_t = h_n[-1]
         
-        # Apply BatchNorm to LSTM output
-        x = self.lstm_bn(h_n[-1])
+        # Generate multiple frames (vectorized)
+        h_t = h_t.unsqueeze(1).expand(-1, self.num_frames_to_predict, -1)
+        h_t = h_t.reshape(-1, self.hidden_dim)
+        
+        # Apply frame predictor to all time steps at once
+        h_t = self.frame_predictor(h_t)
+        
+        # Apply BatchNorm
+        h_t = self.lstm_bn(h_t)
         
         # Reshape for decoder
-        x = x.view(batch_size, self.hidden_dim, 1, 1)
+        x = h_t.view(-1, self.hidden_dim, 1, 1)
         
-        # Generate prediction using the decoder
-        prediction = self.decoder(x)
+        # Generate predictions using the decoder
+        predictions = self.decoder(x)
         
-        return prediction
+        # Reshape predictions to (batch_size, num_frames_to_predict, channels, height, width)
+        predictions = predictions.view(batch_size, self.num_frames_to_predict, channels, height, width)
+        
+        return predictions

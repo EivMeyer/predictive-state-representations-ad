@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 
 class PredictiveModelV5(nn.Module):
-    def __init__(self, obs_shape, action_dim, ego_state_dim, hidden_dim=64):
+    def __init__(self, obs_shape, action_dim, ego_state_dim, hidden_dim=64, *args, **kwargs):
         super().__init__()
         
         self.obs_shape = obs_shape

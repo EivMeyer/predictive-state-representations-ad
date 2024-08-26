@@ -29,9 +29,9 @@ dataset:
   # Number of episodes per batch
   batch_size: 64
   # Number of timesteps for observation
-  t_obs: 5
+  t_obs: 10
   # Number of timesteps for prediction
-  t_pred: 1
+  t_pred: 10
   # Number of processes for dataset generation
   num_workers: 1
 
@@ -43,6 +43,8 @@ wandb:
 
 # Training configuration
 training:
+  # Type of model to use for training
+  model_type: "PredictiveModelV7"
   # Number of training epochs
   epochs: 1000
   # Batch size for training
@@ -55,8 +57,6 @@ training:
   downsample_factor: 1
   # Maximum gradient norm for gradient clipping
   max_grad_norm: 10.0
-  # Type of model to use for training
-  model_type: "PredictiveModelV6"
   # Training set split size
   train_ratio: 0.9
   # Number of processes for fetching data in dataloader

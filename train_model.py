@@ -4,6 +4,7 @@ from utils.dataset_utils import EnvironmentDataset, get_data_dimensions, create_
 import torch
 from models.predictive_model_v5 import PredictiveModelV5
 from models.predictive_model_v6 import PredictiveModelV6
+from models.predictive_model_v7 import PredictiveModelV7
 from models.simple_reconstructive_model import SimpleReconstructiveModel
 from models.single_step_predictive_model import SingleStepPredictiveModel
 from loss_function import CombinedLoss
@@ -24,6 +25,7 @@ def get_model_class(model_type):
     model_classes = {
         "PredictiveModelV5": PredictiveModelV5,
         "PredictiveModelV6": PredictiveModelV6,
+        "PredictiveModelV7": PredictiveModelV7,
         "SimpleReconstructiveModel": SimpleReconstructiveModel,
         "SingleStepPredictiveModel": SingleStepPredictiveModel
     }
@@ -31,7 +33,7 @@ def get_model_class(model_type):
 
 
 def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, scheduler, max_grad_norm, device, wandb, create_plots, stdout_logging):
-    logger = AdaptiveLogger(base_batch_size=32, base_log_interval=50)
+    logger = AdaptiveLogger()
 
     model.train()
     
@@ -44,7 +46,8 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
     # Setup visualization
     if create_plots:
         seq_length = hold_out_obs.shape[1]
-        fig, axes = setup_visualization(seq_length)
+        num_predictions = hold_out_target.shape[1]
+        fig, axes = setup_visualization(seq_length, num_predictions)
 
     for epoch in range(epochs):
         epoch_stats = {
@@ -69,7 +72,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
 
             optimizer.zero_grad()
             
-            targets = batch['next_observations'][:, 0]
+            targets = batch['next_observations']
             
             predictions = model(batch)
             loss, loss_components = criterion(predictions, targets)
@@ -193,7 +196,7 @@ def main(cfg: DictConfig):
     if ModelClass is None:
         raise ValueError(f"Invalid model type: {cfg.training.model_type}")
     
-    model = ModelClass(obs_shape=obs_shape, action_dim=action_dim, ego_state_dim=ego_state_dim)
+    model = ModelClass(obs_shape=obs_shape, action_dim=action_dim, ego_state_dim=ego_state_dim, num_frames_to_predict=cfg.dataset.t_pred)
     model = model.to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=cfg.training.learning_rate, weight_decay=cfg.training.weight_decay)

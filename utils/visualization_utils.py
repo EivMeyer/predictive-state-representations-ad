@@ -18,108 +18,81 @@ def normalize(img):
     img_min, img_max = img.min(), img.max()
     return (img - img_min) / (img_max - img_min) if img_min != img_max else img
 
-def setup_visualization(seq_length):
-    plt.ion()  # Turn on interactive mode
+def setup_visualization(input_seq_len, pred_seq_len):
+    plt.ion()
     fig = plt.figure(figsize=(30, 20))
-    gs = GridSpec(8, seq_length + 3, figure=fig)
     
-    axes = []
+    # Calculate the number of columns and rows needed
+    total_cols = max(input_seq_len, pred_seq_len) + 3  # +3 for training grid
+    total_rows = 9  # 3 rows per sample (2 samples) + 3 rows for training grid
     
-    # Input sequence for first sample
-    for i in range(seq_length):
-        axes.append(fig.add_subplot(gs[0:2, i]))
+    gs = GridSpec(total_rows, total_cols, figure=fig)
     
-    # Ground truth and prediction for first sample
-    axes.append(fig.add_subplot(gs[2:4, :seq_length//2]))
-    axes.append(fig.add_subplot(gs[2:4, seq_length//2:seq_length]))
-    
-    # Input sequence for second sample
-    for i in range(seq_length):
-        axes.append(fig.add_subplot(gs[4:6, i]))
-    
-    # Ground truth and prediction for second sample
-    axes.append(fig.add_subplot(gs[6:8, :seq_length//2]))
-    axes.append(fig.add_subplot(gs[6:8, seq_length//2:seq_length]))
-    
-    # 3x3 grid for training predictions and ground truths
-    for i in range(3):
-        for j in range(3):
-            # Prediction
-            axes.append(fig.add_subplot(gs[i*2:(i+1)*2, seq_length + j]))
-            # Ground truth
-            axes.append(fig.add_subplot(gs[i*2+1:(i+1)*2+1, seq_length + j]))
+    axes = {
+        'input_1': [fig.add_subplot(gs[0, i]) for i in range(input_seq_len)],
+        'gt_1': [fig.add_subplot(gs[1, i]) for i in range(pred_seq_len)],
+        'pred_1': [fig.add_subplot(gs[2, i]) for i in range(pred_seq_len)],
+        'input_2': [fig.add_subplot(gs[3, i]) for i in range(input_seq_len)],
+        'gt_2': [fig.add_subplot(gs[4, i]) for i in range(pred_seq_len)],
+        'pred_2': [fig.add_subplot(gs[5, i]) for i in range(pred_seq_len)],
+        'train': [fig.add_subplot(gs[i:i+2, -3:]) for i in range(0, 6, 2)]
+    }
     
     plt.show()
     return fig, axes
 
 def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoch, train_predictions, train_ground_truth, metrics):
-    for ax in axes:
-        ax.clear()
-        ax.axis('off')
+    def clear_axes(ax_list):
+        for ax in ax_list:
+            ax.clear()
+            ax.axis('off')
+
+    for ax_list in axes.values():
+        clear_axes(ax_list)
     
-    seq_length = observations.shape[1]
+    input_seq_len = observations.shape[1]
+    pred_seq_len = prediction.shape[1]
     
-    def plot_sample(start_idx, sample_num):
+    def plot_sample(sample_num):
         # Display input sequence
-        for i in range(seq_length):
+        for i, ax in enumerate(axes[f'input_{sample_num}']):
             obs = normalize(prepare_image(observations[sample_num-1, i].cpu().numpy()))
-            axes[start_idx + i].imshow(obs, cmap='viridis' if obs.ndim == 2 else None)
-            axes[start_idx + i].set_title(f'Input {sample_num} (t-{seq_length-1-i})', fontsize=10)
+            ax.imshow(obs, cmap='viridis' if obs.ndim == 2 else None)
+            ax.set_title(f'Input {sample_num} (t-{input_seq_len-1-i})', fontsize=8)
         
-        # Display ground truth
-        gt_np = normalize(prepare_image(ground_truth[sample_num-1, 0].cpu().numpy()))
-        axes[start_idx + seq_length].imshow(gt_np, cmap='viridis' if gt_np.ndim == 2 else None)
-        axes[start_idx + seq_length].set_title(f'Ground Truth {sample_num} (Hold-out)', fontsize=12, fontweight='bold')
-        
-        # Display prediction
-        pred_np = normalize(prepare_image(prediction[sample_num-1].cpu().numpy()))
-        axes[start_idx + seq_length + 1].imshow(pred_np, cmap='viridis' if pred_np.ndim == 2 else None)
-        axes[start_idx + seq_length + 1].set_title(f'Prediction {sample_num} (Hold-out)', fontsize=12, fontweight='bold')
-        
-        # Add MSE for this prediction
-        mse = np.mean((gt_np - pred_np) ** 2)
-        axes[start_idx + seq_length + 1].text(0.5, -0.1, f'MSE: {mse:.4f}',
-                                              horizontalalignment='center',
-                                              transform=axes[start_idx + seq_length + 1].transAxes)
+        # Display ground truth and predictions
+        for i in range(pred_seq_len):
+            gt_np = normalize(prepare_image(ground_truth[sample_num-1, i].cpu().numpy()))
+            pred_np = normalize(prepare_image(prediction[sample_num-1, i].cpu().numpy()))
+            
+            axes[f'gt_{sample_num}'][i].imshow(gt_np, cmap='viridis' if gt_np.ndim == 2 else None)
+            axes[f'gt_{sample_num}'][i].set_title(f'GT {sample_num} (t+{i+1})', fontsize=8)
+            
+            axes[f'pred_{sample_num}'][i].imshow(pred_np, cmap='viridis' if pred_np.ndim == 2 else None)
+            axes[f'pred_{sample_num}'][i].set_title(f'Pred {sample_num} (t+{i+1})', fontsize=8)
     
-    # Plot first sample
-    plot_sample(0, 1)
-    
-    # Plot second sample
-    plot_sample(seq_length + 2, 2)
+    # Plot samples
+    plot_sample(1)
+    plot_sample(2)
     
     # Display 3x3 grid of training predictions and ground truths
     num_train_preds = min(9, len(train_predictions))
-    for i in range(9):
-        ax_pred = axes[-18 + 2*i]
-        ax_gt = axes[-17 + 2*i]
-        
+    for i in range(len(axes['train'])):
+        ax = axes['train'][i]
         if i < num_train_preds:
-            pred_np = normalize(prepare_image(train_predictions[i].cpu().numpy()))
-            gt_np = normalize(prepare_image(train_ground_truth[i].cpu().numpy()))
+            pred_np = normalize(prepare_image(train_predictions[i, 0].cpu().numpy()))
+            gt_np = normalize(prepare_image(train_ground_truth[i, 0].cpu().numpy()))
             
-            ax_pred.imshow(pred_np, cmap='viridis' if pred_np.ndim == 2 else None)
-            ax_pred.set_title(f'Train Pred {i+1}', fontsize=10)
-            
-            ax_gt.imshow(gt_np, cmap='viridis' if gt_np.ndim == 2 else None)
-            ax_gt.set_title(f'Train GT {i+1}', fontsize=10)
-            
-            # Add MSE for this training prediction
-            mse = np.mean((gt_np - pred_np) ** 2)
-            ax_pred.text(0.5, -0.1, f'MSE: {mse:.4f}',
-                         horizontalalignment='center',
-                         transform=ax_pred.transAxes,
-                         fontsize=8)
+            ax.imshow(np.hstack([gt_np, pred_np]), cmap='viridis' if gt_np.ndim == 2 else None)
+            ax.set_title(f'Train {i+1}: GT | Pred', fontsize=8)
         else:
-            ax_pred.imshow(np.zeros_like(pred_np), cmap='viridis')
-            ax_pred.set_title('N/A', fontsize=10)
-            ax_gt.imshow(np.zeros_like(pred_np), cmap='viridis')
-            ax_gt.set_title('N/A', fontsize=10)
+            ax.imshow(np.zeros_like(pred_np), cmap='viridis')
+            ax.set_title('N/A', fontsize=8)
     
     # Add overall metrics to suptitle
     metrics_text = "\n".join([f"{k}: {v:.4f}" for k, v in metrics.items()])
     fig.suptitle(f'Prediction Analysis - Epoch {epoch}\n\n{metrics_text}', fontsize=16, fontweight='bold')
-    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    # fig.tight_layout(rect=[0, 0.03, 1, 0.95])
     fig.canvas.draw()
     fig.canvas.flush_events()
     plt.pause(0.1)  # Pause to update the plot
