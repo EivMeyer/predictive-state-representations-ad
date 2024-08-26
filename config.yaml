@@ -44,7 +44,7 @@ wandb:
 # Training configuration
 training:
   # Type of model to use for training
-  model_type: "PredictiveModelV7"
+  model_type: "PredictiveModelV8"
   # Number of training epochs
   epochs: 1000
   # Batch size for training
