@@ -10,6 +10,8 @@ from commonroad_geometric.learning.reinforcement.termination_criteria.implementa
     ReachedGoalCriterion,
     TimeoutCriterion
 )
+from commonroad_geometric.learning.reinforcement.rewarder.reward_computer.implementations import *
+from commonroad_geometric.learning.reinforcement.rewarder.reward_computer.types import RewardLossMetric
 from commonroad_geometric.dataset.extraction.traffic.traffic_extractor import TrafficExtractorOptions, TrafficFeatureComputerOptions
 from commonroad_geometric.dataset.extraction.traffic.traffic_extractor_factory import TrafficExtractorFactory
 from commonroad_geometric.simulation.ego_simulation.control_space.implementations import PIDControlSpace, SteeringAccelerationSpace
@@ -32,9 +34,87 @@ from commonroad_geometric.simulation.ego_simulation.respawning.implementations i
 from commonroad_geometric.dataset.extraction.traffic.traffic_extractor import TrafficExtractorOptions
 from commonroad.common.solution import VehicleType, VehicleModel
 
+def create_rewarders():
+    rewarders = [
+        # AccelerationPenaltyRewardComputer(
+        #     weight=0.0,
+        #     loss_type=RewardLossMetric.L2
+        # ),
+        CollisionPenaltyRewardComputer(
+            penalty=-1.5,
+        ),
+        # FrictionViolationPenaltyRewardComputer(penalty=-0.01),
+        TrajectoryProgressionRewardComputer(
+            weight=0.1,
+            delta_threshold=0.08
+        ),
+        ConstantRewardComputer(reward=-0.001),
+        #
+        ReachedGoalRewardComputer(reward=3.5),
+        OvershotGoalRewardComputer(reward=0.0),
+        # SteeringAnglePenaltyRewardComputer(weight=0.0005, loss_type=RewardLossMetric.L1),
+        StillStandingPenaltyRewardComputer(penalty=-0.05, velocity_threshold=2.0),
+        # TimeToCollisionPenaltyRewardComputer(weight=0.1), # requires incoming edges
+        OffroadPenaltyRewardComputer(penalty=-3.5),
+        VelocityPenaltyRewardComputer(
+            reference_velocity=28.0,
+            weight=0.002,
+            loss_type=RewardLossMetric.L2,
+            only_upper=True
+        ),
+
+        LateralErrorPenaltyRewardComputer(weight=0.0001, loss_type=RewardLossMetric.L1),
+        YawratePenaltyRewardComputer(weight=0.01),
+        # HeadingErrorPenaltyRewardComputer(
+        #     weight=0.01,
+        #     loss_type=RewardLossMetric.L2,
+        #     wrong_direction_penalty=-0.01
+        # )
+    ]
+
+    return rewarders
+
+def create_renderer_options(view_range, window_size):
+    renderer_options = TrafficSceneRendererOptions(
+        camera=EgoVehicleCamera(
+            view_range=view_range,
+            camera_rotation_speed=None
+        ),
+        plugins=[
+            RenderLaneletNetworkPlugin(
+                lanelet_linewidth=0.0,
+                fill_color=Color("grey")
+            ),
+            RenderPlanningProblemSetPlugin(
+                render_trajectory=False,
+                render_start_waypoints=False,
+                render_goal_waypoints=True,
+                render_look_ahead_point=False
+            ),
+            RenderEgoVehiclePlugin(
+                render_trail=False,
+                ego_vehicle_linewidth=0.0,
+                ego_vehicle_color_collision=None,
+                ego_vehicle_fill_color=Color((0.1, 0.8, 0.1, 1.0))
+            ),
+            RenderObstaclePlugin(
+                from_graph=False,
+                obstacle_fill_color=Color("red"),
+                obstacle_color=Color("red"),
+                obstacle_line_width=0.0
+            ),
+        ],
+        viewer_options=GLViewerOptions(
+            window_height=window_size,
+            window_width=window_size,
+        )
+    )
+
+    return renderer_options
+
 def create_rl_experiment_config(config):
     """Create an RLExperimentConfig based on the provided configuration."""
-    rewarder = SumRewardAggregator([])  # Add reward computers as needed
+    rewarder = SumRewardAggregator(create_rewarders())  # Add reward computers as needed
 
     termination_criteria = [
         # CollisionCriterion(),
@@ -52,6 +132,16 @@ def create_rl_experiment_config(config):
         l2v=[]
     )
 
+    renderer_options_observer = create_renderer_options(
+        view_range=config["viewer"]["view_range"],
+        window_size=config["viewer"]["window_size"]
+    )
+
+    renderer_options_render = create_renderer_options(
+        view_range=150,
+        window_size=1200
+    )
+    
     rl_experiment_config = RLExperimentConfig(
         control_space_cls=SteeringAccelerationSpace,
         control_space_options=config['control_space'],
@@ -62,41 +152,9 @@ def create_rl_experiment_config(config):
         env_options={
             'disable_graph_extraction': True,
             'raise_exceptions': True,
+            'renderer_options': renderer_options_render,
             'observer': RenderObserver(
-                renderer_options=TrafficSceneRendererOptions(
-                    camera=EgoVehicleCamera(
-                        view_range=config["viewer"]["view_range"],
-                        camera_rotation_speed=None
-                    ),
-                    plugins=[
-                        RenderLaneletNetworkPlugin(
-                            lanelet_linewidth=0.0,
-                            fill_color=Color("grey")
-                        ),
-                        RenderPlanningProblemSetPlugin(
-                            render_trajectory=False,
-                            render_start_waypoints=False,
-                            render_goal_waypoints=True,
-                            render_look_ahead_point=False
-                        ),
-                        RenderEgoVehiclePlugin(
-                            render_trail=False,
-                            ego_vehicle_linewidth=0.0,
-                            ego_vehicle_color_collision=None,
-                            ego_vehicle_fill_color=Color((0.1, 0.8, 0.1, 1.0))
-                        ),
-                        RenderObstaclePlugin(
-                            from_graph=False,
-                            obstacle_fill_color=Color("red"),
-                            obstacle_color=Color("red"),
-                            obstacle_line_width=0.0
-                        ),
-                    ],
-                    viewer_options=GLViewerOptions(
-                        window_height=config["viewer"]["window_size"],
-                        window_width=config["viewer"]["window_size"],
-                    )
-                )
+                renderer_options=renderer_options_observer
             )
         },
         respawner_cls=RandomRespawner,
