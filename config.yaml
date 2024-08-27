@@ -69,6 +69,10 @@ training:
   create_plots: true
   # Whether to log training metrics to stdout
   stdout_logging: true
+  # Interval for saving model checkpoints
+  save_interval: 1
+  # Whether to overwrite existing model checkpoints
+  overwrite_checkpoints: false
 
 # Simulation options
 simulation:

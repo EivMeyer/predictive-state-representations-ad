@@ -34,11 +34,11 @@ def get_model_class(model_type):
     return model_classes.get(model_type)
 
 
-def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, scheduler, max_grad_norm, device, wandb, create_plots, stdout_logging):
+def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, scheduler, max_grad_norm, device, wandb, create_plots, stdout_logging, model_save_dir, save_interval, overwrite_checkpoints):
     logger = AdaptiveLogger()
 
     model.train()
-    
+
     # Get two hold-out samples for visualization
     hold_out_batch = next(iter(val_loader))
     hold_out_batch = move_batch_to_device(hold_out_batch, device)
@@ -152,12 +152,40 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
                 # Add any other metrics you're tracking
             }
             visualize_prediction(fig, axes, hold_out_obs, hold_out_target, hold_out_pred, epoch, train_predictions, train_ground_truth, metrics)
+
+        # Save model at specified interval
+        if (epoch + 1) % save_interval == 0:
+            if overwrite_checkpoints:
+                model_path = model_save_dir / "checkpoint.pth"
+            else:
+                model_path = model_save_dir / f"model_epoch_{epoch+1}.pth"
+                
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss,
+            }, model_path)
+            
+            print(f"Model saved to {model_path}")
+            wandb.save(str(model_path))  # Log the saved model to wandb
         
         model.train()
 
     if create_plots:
         plt.ioff()  # Turn off interactive mode
         plt.show()  # Keep the final plot open
+
+    # Save the final model after training
+    final_model_path = model_save_dir / "final_model.pth"
+    torch.save({
+        'epoch': epochs,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'loss': loss,
+    }, final_model_path)
+    print(f"Final model saved to {final_model_path}")
+    wandb.save(str(final_model_path))  # Log the final model to wandb
 
     # Finish wandb run
     wandb.finish()
@@ -171,6 +199,8 @@ def main(cfg: DictConfig):
     wandb = init_wandb(cfg)
 
     dataset_path = Path(cfg.project_dir) / "dataset"
+    model_save_dir = Path(cfg.project_dir) / "models"
+    model_save_dir.mkdir(parents=True, exist_ok=True)
     
     # Load the full dataset
     full_dataset = EnvironmentDataset(dataset_path, downsample_factor=cfg.training.downsample_factor)
@@ -206,7 +236,23 @@ def main(cfg: DictConfig):
 
     criterion = CombinedLoss(alpha=1.0, beta=0.0, gamma=0.0, delta=0.0, device=device)
     
-    train_model(model, train_loader, val_loader, optimizer, criterion, epochs=cfg.training.epochs, scheduler=scheduler, max_grad_norm=cfg.training.max_grad_norm, device=device, wandb=wandb, create_plots=cfg.training.create_plots, stdout_logging=cfg.training.stdout_logging)
+    train_model(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        optimizer=optimizer,
+        criterion=criterion,
+        epochs=cfg.training.epochs,
+        scheduler=scheduler,
+        max_grad_norm=cfg.training.max_grad_norm,
+        device=device,
+        wandb=wandb,
+        create_plots=cfg.training.create_plots,
+        stdout_logging=cfg.training.stdout_logging,
+        model_save_dir=model_save_dir,
+        save_interval=cfg.training.save_interval,
+        overwrite_checkpoints=cfg.training.overwrite_checkpoints
+    )
 
 if __name__ == "__main__":
     main()
