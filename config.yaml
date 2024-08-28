@@ -45,7 +45,7 @@ wandb:
   project: PredictiveStateRepresentations-AD
 
 representation:
-  model_path: "./models/model_epoch_1.pth"
+  model_path: "./models/checkpoint.pth"
 
 # Training configuration
 training:
@@ -89,37 +89,37 @@ rl_training:
   # Path to save training logs
   log_path: "./rl/logs"
   # Frequency of evaluation during training
-  eval_freq: 2000
+  eval_freq: 20000
   # Frequency of video recording (in steps)
-  video_freq: 10000  
+  video_freq: 20000  
   # Length of each video (in steps)
   video_length: 500 
   # Folder to save videos (relative to project_dir)
   video_folder: "./rl/videos"  
   # Number of parallel environments for training
-  num_envs: 1
+  num_envs: 16
   # Total number of timesteps for training
   total_timesteps: 1000000
   # Learning rate for the optimizer
   learning_rate: 3e-4
   # Number of steps to collect samples for each update
-  n_steps: 2048
+  n_steps: 256
   # Batch size for each update
-  batch_size: 64
+  batch_size: 32
   # Number of epochs to train the model
-  n_epochs: 10
+  n_epochs: 8
   # Discount factor for future rewards
   gamma: 0.99
   # Lambda parameter for Generalized Advantage Estimation
-  gae_lambda: 0.95
+  gae_lambda: 0.8
   # Clipping range for the surrogate objective
   clip_range: 0.2
   # Coefficient for the entropy loss
-  ent_coef: 0.0
+  ent_coef: 0.01
   # Coefficient for the value function loss
   vf_coef: 0.5
   # Maximum norm for gradient clipping
-  max_grad_norm: 0.5
+  max_grad_norm: 10.0
 
 # Simulation options
 simulation:
