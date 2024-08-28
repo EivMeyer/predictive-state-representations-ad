@@ -211,8 +211,7 @@ def create_representation_model(cfg):
 def main(cfg: DictConfig):
     # Initialize wandb if enabled
     if cfg.wandb.enabled:
-        wandb.init(project=cfg.wandb.project, config=OmegaConf.to_container(cfg, resolve=True))
-
+        wandb.init(project=cfg.wandb.project + '-RL', config=OmegaConf.to_container(cfg, resolve=True))
 
     representation_model = create_representation_model(cfg)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
