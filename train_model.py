@@ -20,6 +20,7 @@ import time
 from utils.visualization_utils import setup_visualization, visualize_prediction
 import torch.multiprocessing as mp
 from utils.training_utils import AdaptiveLogger, analyze_predictions, init_wandb
+from datetime import datetime
 
 
 def get_model_class(model_type):
@@ -199,8 +200,16 @@ def main(cfg: DictConfig):
     wandb = init_wandb(cfg)
 
     dataset_path = Path(cfg.project_dir) / "dataset"
-    model_save_dir = Path(cfg.project_dir) / "models"
-    model_save_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create a unique run directory
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if wandb.run is not None:
+        run_name = f"{timestamp}_{wandb.run.name}"
+    else:
+        run_name = timestamp
+
+    run_dir = Path(cfg.project_dir) / "models" / run_name
+    run_dir.mkdir(parents=True, exist_ok=True)
     
     # Load the full dataset
     full_dataset = EnvironmentDataset(dataset_path, downsample_factor=cfg.training.downsample_factor)
@@ -249,7 +258,7 @@ def main(cfg: DictConfig):
         wandb=wandb,
         create_plots=cfg.training.create_plots,
         stdout_logging=cfg.training.stdout_logging,
-        model_save_dir=model_save_dir,
+        model_save_dir=run_dir,
         save_interval=cfg.training.save_interval,
         overwrite_checkpoints=cfg.training.overwrite_checkpoints
     )
