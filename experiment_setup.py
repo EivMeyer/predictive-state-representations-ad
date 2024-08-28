@@ -112,6 +112,15 @@ def create_renderer_options(view_range, window_size):
 
     return renderer_options
 
+def create_render_observer(config):
+    renderer_options = create_renderer_options(
+        view_range=config["view_range"],
+        window_size=config["window_size"]
+    )
+    return RenderObserver(
+        renderer_options=renderer_options
+    )
+
 def create_rl_experiment_config(config):
     """Create an RLExperimentConfig based on the provided configuration."""
     rewarder = SumRewardAggregator(create_rewarders())  # Add reward computers as needed
@@ -132,11 +141,6 @@ def create_rl_experiment_config(config):
         l2v=[]
     )
 
-    renderer_options_observer = create_renderer_options(
-        view_range=config["viewer"]["view_range"],
-        window_size=config["viewer"]["window_size"]
-    )
-
     renderer_options_render = create_renderer_options(
         view_range=150,
         window_size=1200
@@ -153,9 +157,7 @@ def create_rl_experiment_config(config):
             'disable_graph_extraction': True,
             'raise_exceptions': True,
             'renderer_options': renderer_options_render,
-            'observer': RenderObserver(
-                renderer_options=renderer_options_observer
-            )
+            'observer': create_render_observer(config['viewer']),
         },
         respawner_cls=RandomRespawner,
         respawner_options=config['respawner'],

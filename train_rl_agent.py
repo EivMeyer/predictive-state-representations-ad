@@ -2,8 +2,9 @@ import torch
 from pathlib import Path
 import hydra
 from omegaconf import DictConfig, OmegaConf
-from experiment_setup import setup_experiment, create_rl_experiment_config
+from experiment_setup import setup_experiment, create_rl_experiment_config, create_render_observer
 from models.predictive_model_v8 import PredictiveModelV8  # Or whichever model you used
+from commonroad_geometric.learning.reinforcement.experiment import RLExperiment, RLExperimentConfig
 from stable_baselines3 import PPO
 import os
 from stable_baselines3.common.vec_env import VecEnvWrapper
@@ -13,6 +14,18 @@ from stable_baselines3.common.callbacks import EvalCallback, BaseCallback
 from utils.dataset_utils import EnvironmentDataset, get_data_dimensions, create_data_loaders, move_batch_to_device
 import numpy as np
 import wandb
+import gymnasium
+import numpy as np
+import torch
+from typing import Optional
+from collections import deque
+
+from commonroad_geometric.dataset.commonroad_data import CommonRoadData
+from commonroad_geometric.learning.reinforcement.observer.base_observer import BaseObserver, T_Observation
+from commonroad_geometric.learning.reinforcement.observer.implementations.render_observer import RenderObserver
+from commonroad_geometric.simulation.ego_simulation.ego_vehicle_simulation import EgoVehicleSimulation
+from commonroad_geometric.rendering.traffic_scene_renderer import TrafficSceneRenderer, TrafficSceneRendererOptions
+
 
 class VideoRecorderEvalCallback(EvalCallback):
     def __init__(self, eval_env, video_folder, video_freq, video_length, *args, **kwargs):
@@ -99,22 +112,84 @@ class DebugCallback(BaseCallback):
             print(f"Step {self.n_calls}, Reward: {avg_reward:.2f}")
         return True
 
-class RepresentationObserver:
-    def __init__(self, representation_model, device, debug=False):
+class RepresentationObserver(BaseObserver):
+    def __init__(self, representation_model, device, render_observer: RenderObserver, sequence_length: int, debug=False):
+        super().__init__()
         self.representation_model = representation_model
         self.device = device
-        self.representation_model.eval()
+        self.render_observer = render_observer
+        self.sequence_length = sequence_length
         self.debug = debug
+        self.representation_model.eval()
+        from collections import deque
+        self.obs_buffer = deque(maxlen=sequence_length)
+        self.ego_state_buffer = deque(maxlen=sequence_length)
+        self.is_first_observation = True
 
-    def __call__(self, obs):
+    def setup(self, dummy_data: Optional[CommonRoadData] = None) -> gymnasium.Space:
+        render_space = self.render_observer.setup(dummy_data)
+        
+        dummy_obs = np.zeros((self.sequence_length, *render_space.shape), dtype=np.float32)
+        dummy_ego_state = np.zeros((self.sequence_length, 4), dtype=np.float32)  # Assuming 4 ego state variables
+        
         with torch.no_grad():
-            obs_tensor = torch.from_numpy(obs).float().to(self.device)
-            if len(obs_tensor.shape) == 3:  # If single observation
-                obs_tensor = obs_tensor.unsqueeze(0)
-            rep = self.representation_model.encode(obs_tensor)
+            dummy_obs_tensor = torch.from_numpy(dummy_obs).float().unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.device)
+            dummy_ego_state_tensor = torch.from_numpy(dummy_ego_state).float().unsqueeze(0).to(self.device)
+            dummy_rep = self.representation_model.encode(dummy_obs_tensor, dummy_ego_state_tensor)
+        
+        rep_shape = dummy_rep.cpu().numpy().shape[1:]
+        
+        return gymnasium.spaces.Box(low=-np.inf, high=np.inf, shape=rep_shape, dtype=np.float32)
+
+    def observe(
+        self,
+        data: CommonRoadData,
+        ego_vehicle_simulation: EgoVehicleSimulation
+    ) -> T_Observation:
+        render_obs = self.render_observer.observe(data, ego_vehicle_simulation)
+        
+        ego_state = np.array([
+            ego_vehicle_simulation.ego_vehicle.state.velocity,
+            0.0,
+            ego_vehicle_simulation.ego_vehicle.state.steering_angle,
+            ego_vehicle_simulation.ego_vehicle.state.yaw_rate
+        ])
+        
+        self.obs_buffer.append(render_obs)
+        self.ego_state_buffer.append(ego_state)
+        
+        # If it's the first observation of an episode, fill the buffer with the current observation
+        if self.is_first_observation:
+            while len(self.obs_buffer) < self.sequence_length:
+                self.obs_buffer.appendleft(render_obs)
+                self.ego_state_buffer.appendleft(ego_state)
+            self.is_first_observation = False
+        
+        obs_sequence = np.array(self.obs_buffer)
+        ego_state_sequence = np.array(self.ego_state_buffer)
+        
+        with torch.no_grad():
+            obs_tensor = torch.from_numpy(obs_sequence).float().unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.device)
+            ego_state_tensor = torch.from_numpy(ego_state_sequence).float().unsqueeze(0).to(self.device)
+            rep = self.representation_model.encode(obs_tensor, ego_state_tensor)
+        
+        representation = rep.cpu().numpy().squeeze()
+        
         if self.debug:
-            print(f"Observation shape: {obs.shape}, Representation shape: {rep.shape}")
-        return rep.cpu().numpy()
+            print(f"Observation sequence shape: {obs_sequence.shape}")
+            print(f"Ego state sequence shape: {ego_state_sequence.shape}")
+            print(f"Representation shape: {representation.shape}")
+        
+        return representation
+
+    def reset(self) -> None:
+        """Reset the observer when a new episode starts."""
+        self.obs_buffer.clear()
+        self.ego_state_buffer.clear()
+        self.is_first_observation = True
+        if self.debug:
+            print("RepresentationObserver reset: Cleared observation and ego state buffers.")
+
 
 def create_representation_model(cfg):
     dataset_path = Path(cfg.project_dir) / "dataset"
@@ -138,26 +213,27 @@ def main(cfg: DictConfig):
     if cfg.wandb.enabled:
         wandb.init(project=cfg.wandb.project, config=OmegaConf.to_container(cfg, resolve=True))
 
-    # Setup the experiment and environment
-    experiment, env = setup_experiment(OmegaConf.to_container(cfg, resolve=True))
 
     representation_model = create_representation_model(cfg)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     representation_model.to(device)
 
-    # Create a new observer that uses the representation model
-    representation_observer = RepresentationObserver(representation_model, device, debug=cfg.debug_mode)
+    render_observer = create_render_observer(OmegaConf.to_container(cfg, resolve=True)['viewer'])
 
-    # Modify the environment to use the new observer
+    # Create a new observer that uses the representation model
+    representation_observer = RepresentationObserver(representation_model, device, debug=cfg.debug_mode, render_observer=render_observer, sequence_length=cfg.dataset.t_obs)
+
+    """Set up the RL experiment using the provided configuration."""
     rl_experiment_config = create_rl_experiment_config(OmegaConf.to_container(cfg, resolve=True))
     rl_experiment_config.env_options['observer'] = representation_observer
 
-    # Recreate the environment with the new config
+    experiment = RLExperiment(config=rl_experiment_config)
+
+    # Create the environment
     env = experiment.make_env(
-        scenario_dir=cfg.scenario_dir,
-        n_envs=cfg.rl_training.num_envs,
-        seed=cfg.seed,
-        config=rl_experiment_config
+        scenario_dir=Path(cfg.scenario_dir),
+        n_envs=cfg.dataset.num_workers,
+        seed=cfg.seed
     )
 
     # Normalize the environment
@@ -182,7 +258,7 @@ def main(cfg: DictConfig):
         scenario_dir=cfg.scenario_dir,
         n_envs=1,
         seed=cfg.seed + 1000,  # Different seed for eval env
-        config=rl_experiment_config
+        observer=representation_observer
     )
     
     # Use the same normalization stats as the training environment
