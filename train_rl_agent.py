@@ -202,7 +202,7 @@ def create_representation_model(cfg):
     # Get data dimensions
     obs_shape, action_dim, ego_state_dim = get_data_dimensions(full_dataset)
 
-    model = PredictiveModelV8(obs_shape=obs_shape, action_dim=action_dim, ego_state_dim=ego_state_dim)
+    model = PredictiveModelV8(obs_shape=obs_shape, action_dim=action_dim, ego_state_dim=ego_state_dim, num_frames_to_predict=cfg.dataset.t_pred)
     model_path = Path(cfg.project_dir) / cfg.representation.model_path
     model.load_state_dict(torch.load(model_path)['model_state_dict'])
     return model

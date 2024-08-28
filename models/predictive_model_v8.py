@@ -11,7 +11,7 @@ class PositionalEncoding(nn.Module):
         return x + self.pe[:x.size(0)]
 
 class PredictiveModelV8(nn.Module):
-    def __init__(self, obs_shape, action_dim, ego_state_dim, hidden_dim=256, nhead=16, num_encoder_layers=8, num_decoder_layers=8, num_frames_to_predict=5):
+    def __init__(self, obs_shape, action_dim, ego_state_dim, num_frames_to_predict, hidden_dim=256, nhead=16, num_encoder_layers=8, num_decoder_layers=8):
         super().__init__()
         
         self.obs_shape = obs_shape
