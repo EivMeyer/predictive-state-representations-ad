@@ -228,13 +228,13 @@ class RepresentationObserver(BaseObserver):
             obs_tensor = torch.from_numpy(obs_sequence).float().unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.device)
             ego_state_tensor = torch.from_numpy(ego_state_sequence).float().unsqueeze(0).to(self.device)
             rep = self.representation_model.encode(obs_tensor, ego_state_tensor)
-            decoding = self.representation_model.decode(rep)
             
-            predictions = decoding[0].permute(0, 2, 3, 1).cpu().detach().numpy()
-
         representation = rep.cpu().numpy().squeeze()
 
         if self.debug:
+            decoding = self.representation_model.decode(rep)
+            predictions = decoding[0].permute(0, 2, 3, 1).cpu().detach().numpy()
+
             print(f"Observation sequence shape: {obs_sequence.shape}")
             print(f"Ego state sequence shape: {ego_state_sequence.shape}")
             print(f"Representation shape: {representation.shape}")
