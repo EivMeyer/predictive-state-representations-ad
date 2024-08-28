@@ -108,42 +108,48 @@ class PredictiveModelV8(nn.Module):
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
 
-    def forward(self, batch):
-        observations = batch['observations']
-        ego_states = batch['ego_states']
+    def encode(self, observations, ego_states):
         batch_size, seq_len, channels, height, width = observations.shape
-        
+
         # Process observations
         observations_reshaped = observations.view(-1, channels, height, width)
         encoder_features = self.encoder(observations_reshaped)
         encoder_features = self.encoder_projector(encoder_features)
         encoder_features = encoder_features.view(batch_size, seq_len, self.hidden_dim)
-        
+
         # Process ego states
         ego_features = self.ego_state_projector(ego_states)
-        
+
         # Combine encoder features and ego features
         combined_features = encoder_features + ego_features
-        
+
         # Add positional encoding and apply transformer encoder
         src = self.pos_encoder(combined_features.permute(1, 0, 2))
         memory = self.transformer_encoder(src)
-        
+
+        # Return only the last memory state
+        return memory[-1]
+
+    def forward(self, batch):
+        observations = batch['observations']
+        ego_states = batch['ego_states']
+
+        last_memory = self.encode(observations, ego_states)
+
         # Prepare decoder input
-        decoder_input = torch.zeros(self.num_frames_to_predict, batch_size, self.hidden_dim, device=memory.device)
-        decoder_input = self.pos_encoder(decoder_input)
-        
-        # Generate future frame predictions
-        output = self.transformer_decoder(decoder_input, memory)
-        
+        decoder_input = self.pos_encoder(last_memory.unsqueeze(0).repeat(self.num_frames_to_predict, 1, 1))
+
+        # Generate future frame predictions using only the last memory state
+        output = self.transformer_decoder(decoder_input, last_memory.unsqueeze(0))
+
         # Reshape for convolutional decoder
         output = output.permute(1, 0, 2).contiguous()
-        output = output.view(batch_size * self.num_frames_to_predict, self.hidden_dim, 1, 1)
-        
+        output = output.view(-1, self.hidden_dim, 1, 1)
+
         # Apply convolutional decoder
         predictions = self.decoder(output)
-        
+
         # Reshape to [batch_size, num_frames_to_predict, channels, height, width]
-        predictions = predictions.view(batch_size, self.num_frames_to_predict, channels, height, width)
-        
+        predictions = predictions.view(observations.shape[0], self.num_frames_to_predict, self.obs_shape[-3], self.obs_shape[-2], self.obs_shape[-1])
+
         return predictions
