@@ -155,9 +155,9 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
             visualize_prediction(fig, axes, hold_out_obs, hold_out_target, hold_out_pred, epoch, train_predictions, train_ground_truth, metrics)
 
         # Save model at specified interval
-        if (epoch + 1) % save_interval == 0:
+        if epoch % save_interval == 0:
             if overwrite_checkpoints:
-                model_path = model_save_dir / "checkpoint.pth"
+                model_path = model_save_dir / "model_latest.pth"
             else:
                 model_path = model_save_dir / f"model_epoch_{epoch+1}.pth"
                 
