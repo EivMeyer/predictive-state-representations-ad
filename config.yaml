@@ -32,9 +32,9 @@ dataset:
   # Number of episodes per batch
   batch_size: 32
   # Number of timesteps for observation
-  t_obs: 5
+  t_obs: 10
   # Number of timesteps for prediction
-  t_pred: 5
+  t_pred: 10
   # Number of processes for dataset generation
   num_workers: 1
 
