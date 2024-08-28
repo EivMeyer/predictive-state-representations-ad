@@ -19,6 +19,8 @@ import numpy as np
 import torch
 from typing import Optional
 from collections import deque
+import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
 
 from commonroad_geometric.dataset.commonroad_data import CommonRoadData
 from commonroad_geometric.learning.reinforcement.observer.base_observer import BaseObserver, T_Observation
@@ -112,6 +114,19 @@ class DebugCallback(BaseCallback):
             print(f"Step {self.n_calls}, Reward: {avg_reward:.2f}")
         return True
 
+import numpy as np
+import torch
+import gymnasium
+from collections import deque
+from typing import Optional
+import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
+
+from commonroad_geometric.dataset.commonroad_data import CommonRoadData
+from commonroad_geometric.learning.reinforcement.observer.base_observer import BaseObserver, T_Observation
+from commonroad_geometric.learning.reinforcement.observer.implementations.render_observer import RenderObserver
+from commonroad_geometric.simulation.ego_simulation.ego_vehicle_simulation import EgoVehicleSimulation
+
 class RepresentationObserver(BaseObserver):
     def __init__(self, representation_model, device, render_observer: RenderObserver, sequence_length: int, debug=False):
         super().__init__()
@@ -121,24 +136,66 @@ class RepresentationObserver(BaseObserver):
         self.sequence_length = sequence_length
         self.debug = debug
         self.representation_model.eval()
-        from collections import deque
         self.obs_buffer = deque(maxlen=sequence_length)
         self.ego_state_buffer = deque(maxlen=sequence_length)
         self.is_first_observation = True
+        
+        if self.debug:
+            self.setup_debug_plot()
+
+    def setup_debug_plot(self):
+        self.fig = plt.figure(figsize=(20, 6))
+        gs = self.fig.add_gridspec(1, 3, width_ratios=[1, 2, 1])
+
+        # Current observation
+        self.ax_obs = self.fig.add_subplot(gs[0, 0])
+        self.im_obs = self.ax_obs.imshow(np.zeros((64, 64, 3)))
+        self.ax_obs.set_title('Current Observation', fontsize=12, pad=10)
+        self.ax_obs.axis('off')
+
+        # Predictions grid
+        self.ax_pred = self.fig.add_subplot(gs[0, 1])
+        self.ax_pred.axis('off')
+        self.im_preds = []
+
+        for i in range(3):
+            for j in range(3):
+                # Adjust inset axes positions and ensure adequate spacing
+                ax = self.ax_pred.inset_axes([j/3 + 0.01, (2-i)/3 + 0.04, 0.28, 0.28])  # Reduced size and shifted positions
+                im = ax.imshow(np.zeros((64, 64, 3)))
+                self.im_preds.append(im)
+                ax.axis('off')
+                step = i * 3 + j
+                label = 't' if step == 0 else f't+{step}'
+                ax.set_title(label, fontsize=10, pad=8)  # Increased pad to separate labels from images
+
+        self.ax_pred.set_title('Predictions', fontsize=14, pad=20)  # Increased pad for main title to avoid overlap with top row
+
+        # Latent representation
+        self.ax_rep = self.fig.add_subplot(gs[0, 2])
+        self.im_rep = self.ax_rep.imshow(np.zeros((1, 1)), cmap='viridis', aspect='equal')
+        self.ax_rep.set_title('Latent Representation', fontsize=12, pad=10)
+        self.fig.colorbar(self.im_rep, ax=self.ax_rep)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.95])  # Adjust layout to reduce space taken by tight_layout
+        plt.ion()
+        plt.show()
+
+
 
     def setup(self, dummy_data: Optional[CommonRoadData] = None) -> gymnasium.Space:
         render_space = self.render_observer.setup(dummy_data)
-        
+
         dummy_obs = np.zeros((self.sequence_length, *render_space.shape), dtype=np.float32)
         dummy_ego_state = np.zeros((self.sequence_length, 4), dtype=np.float32)  # Assuming 4 ego state variables
-        
+
         with torch.no_grad():
             dummy_obs_tensor = torch.from_numpy(dummy_obs).float().unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.device)
             dummy_ego_state_tensor = torch.from_numpy(dummy_ego_state).float().unsqueeze(0).to(self.device)
             dummy_rep = self.representation_model.encode(dummy_obs_tensor, dummy_ego_state_tensor)
-        
+
         rep_shape = dummy_rep.cpu().numpy().shape[1:]
-        
+
         return gymnasium.spaces.Box(low=-np.inf, high=np.inf, shape=rep_shape, dtype=np.float32)
 
     def observe(
@@ -146,50 +203,79 @@ class RepresentationObserver(BaseObserver):
         data: CommonRoadData,
         ego_vehicle_simulation: EgoVehicleSimulation
     ) -> T_Observation:
-        render_obs = self.render_observer.observe(data, ego_vehicle_simulation)
-        
+        render_obs = self.render_observer.observe(data, ego_vehicle_simulation) / 255.0
+
         ego_state = np.array([
             ego_vehicle_simulation.ego_vehicle.state.velocity,
             0.0,
             ego_vehicle_simulation.ego_vehicle.state.steering_angle,
             ego_vehicle_simulation.ego_vehicle.state.yaw_rate
         ])
-        
+
         self.obs_buffer.append(render_obs)
         self.ego_state_buffer.append(ego_state)
-        
-        # If it's the first observation of an episode, fill the buffer with the current observation
+
         if self.is_first_observation:
             while len(self.obs_buffer) < self.sequence_length:
                 self.obs_buffer.appendleft(render_obs)
                 self.ego_state_buffer.appendleft(ego_state)
             self.is_first_observation = False
-        
+
         obs_sequence = np.array(self.obs_buffer)
         ego_state_sequence = np.array(self.ego_state_buffer)
-        
+
         with torch.no_grad():
             obs_tensor = torch.from_numpy(obs_sequence).float().unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.device)
             ego_state_tensor = torch.from_numpy(ego_state_sequence).float().unsqueeze(0).to(self.device)
             rep = self.representation_model.encode(obs_tensor, ego_state_tensor)
-        
+            decoding = self.representation_model.decode(rep)
+            
+            predictions = decoding[0].permute(0, 2, 3, 1).cpu().detach().numpy()
+
         representation = rep.cpu().numpy().squeeze()
-        
+
         if self.debug:
             print(f"Observation sequence shape: {obs_sequence.shape}")
             print(f"Ego state sequence shape: {ego_state_sequence.shape}")
             print(f"Representation shape: {representation.shape}")
-        
+            print(f"Predictions shape: {predictions.shape}")
+
+            self.update_debug_plot(render_obs, predictions, representation)
+
         return representation
 
-    def reset(self) -> None:
-        """Reset the observer when a new episode starts."""
+    def update_debug_plot(self, current_obs, predictions, representation):
+        # Update current observation
+        self.im_obs.set_data(current_obs)
+
+        # Update predictions
+        for i, im in enumerate(self.im_preds):
+            if i < len(predictions):
+                # Ensure the prediction is in the same orientation as the current observation
+                pred = predictions[i]
+                im.set_data(pred)
+            else:
+                im.set_data(np.zeros_like(current_obs))
+
+            # Ensure aspect ratio matches the current observation
+            im.set_extent([0, current_obs.shape[1], current_obs.shape[0], 0])
+
+        # Update latent representation
+        rep_dim = int(np.sqrt(representation.shape[0]))
+        rep_reshaped = representation.reshape(rep_dim, rep_dim)
+        self.im_rep.set_data(rep_reshaped)
+        self.im_rep.autoscale()
+
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+
+
+    def reset(self, ego_vehicle_simulation: EgoVehicleSimulation) -> None:
         self.obs_buffer.clear()
         self.ego_state_buffer.clear()
         self.is_first_observation = True
         if self.debug:
             print("RepresentationObserver reset: Cleared observation and ego state buffers.")
-
 
 def create_representation_model(cfg):
     dataset_path = Path(cfg.project_dir) / "dataset"
