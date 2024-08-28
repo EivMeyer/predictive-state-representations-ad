@@ -237,7 +237,13 @@ def main(cfg: DictConfig):
     if ModelClass is None:
         raise ValueError(f"Invalid model type: {cfg.training.model_type}")
     
-    model = ModelClass(obs_shape=obs_shape, action_dim=action_dim, ego_state_dim=ego_state_dim, num_frames_to_predict=cfg.dataset.t_pred)
+    model = ModelClass(
+        obs_shape=obs_shape, 
+        action_dim=action_dim, 
+        ego_state_dim=ego_state_dim, 
+        num_frames_to_predict=cfg.dataset.t_pred,
+        hidden_dim=cfg.training.hidden_dim,
+    )
     model = model.to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=cfg.training.learning_rate, weight_decay=cfg.training.weight_decay)

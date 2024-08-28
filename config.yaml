@@ -51,6 +51,8 @@ representation:
 training:
   # Type of model to use for training
   model_type: "PredictiveModelV8"
+  # Latent representation size
+  hidden_dim: 64
   # Number of training epochs
   epochs: 1000
   # Batch size for training
