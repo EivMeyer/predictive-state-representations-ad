@@ -119,12 +119,21 @@ class DebugCallback(BaseCallback):
 
 
 class RepresentationObserver(BaseObserver):
-    def __init__(self, representation_model, device, render_observer: RenderObserver, sequence_length: int, debug=False):
+    def __init__(
+        self, 
+        representation_model, 
+        device, 
+        render_observer: RenderObserver, 
+        sequence_length: int, 
+        include_ego_state: bool = True,
+        debug: bool = False
+    ):
         super().__init__()
         self.representation_model = representation_model
         self.device = device
         self.render_observer = render_observer
         self.sequence_length = sequence_length
+        self.include_ego_state = include_ego_state
         self.debug = debug
         self.representation_model.eval()
         self.obs_buffer = deque(maxlen=sequence_length)
@@ -185,7 +194,9 @@ class RepresentationObserver(BaseObserver):
 
         rep_shape = dummy_rep.cpu().numpy().shape[1:]
 
-        return gymnasium.spaces.Box(low=-np.inf, high=np.inf, shape=rep_shape, dtype=np.float32)
+        obs_shape = rep_shape if not self.include_ego_state else (rep_shape[0] + dummy_ego_state.shape[-1],)
+
+        return gymnasium.spaces.Box(low=-np.inf, high=np.inf, shape=obs_shape, dtype=np.float32)
 
     def observe(
         self,
@@ -225,6 +236,9 @@ class RepresentationObserver(BaseObserver):
             predictions = decoding[0].permute(0, 2, 3, 1).cpu().detach().numpy()
 
             self.update_debug_plot(render_obs, predictions, representation)
+
+        if self.include_ego_state:
+            representation = np.concatenate([representation, ego_state])
 
         return representation
 
