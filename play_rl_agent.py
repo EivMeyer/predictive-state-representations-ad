@@ -1,14 +1,11 @@
 import hydra
-from omegaconf import DictConfig, OmegaConf
-import torch
+from omegaconf import DictConfig
 from pathlib import Path
 import numpy as np
-from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import VecNormalize
 
 from utils.rl_utils import setup_rl_experiment
 from commonroad_geometric.simulation.ego_simulation.control_space.keyboard_input import UserAdvanceScenarioInterrupt, UserQuitInterrupt, UserResetInterrupt, get_keyboard_action
-from commonroad_geometric.learning.reinforcement.experiment import RLExperiment
 
 @hydra.main(version_base=None, config_path=".", config_name="config")
 def main(cfg: DictConfig):

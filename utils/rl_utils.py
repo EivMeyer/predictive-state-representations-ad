@@ -413,6 +413,10 @@ def setup_rl_experiment(cfg):
     experiment_config.respawner_options['init_steering_angle'] = 0.0
     experiment_config.respawner_options['init_orientation_noise'] = 0.0
     experiment_config.respawner_options['init_position_noise'] = 0.0
+    experiment_config.respawner_options['min_goal_distance_l2'] = 400.0
+    experiment_config.respawner_options['init_speed'] = 'auto'
+    experiment_config.control_space_options['lower_bound_acceleration'] = -10.0
+    experiment_config.control_space_options['upper_bound_acceleration'] = 10.0
     experiment_config.rewarder = SumRewardAggregator(create_rewarders())
     experiment_config.termination_criteria = create_termination_criteria()
 
