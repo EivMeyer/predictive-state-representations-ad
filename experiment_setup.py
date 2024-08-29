@@ -8,6 +8,7 @@ from commonroad_geometric.dataset.extraction.traffic.traffic_extractor import Tr
 from commonroad_geometric.dataset.extraction.traffic.traffic_extractor_factory import TrafficExtractorFactory
 from commonroad_geometric.simulation.ego_simulation.control_space.implementations import PIDControlSpace, SteeringAccelerationSpace
 from commonroad_geometric.dataset.scenario.preprocessing.preprocessors.implementations import *
+from commonroad_geometric.learning.reinforcement.termination_criteria.implementations import *
 from commonroad_geometric.dataset.scenario.preprocessing.wrappers.chain_preprocessors import chain_preprocessors
 from commonroad_geometric.simulation.ego_simulation.ego_vehicle_simulation import EgoVehicleSimulationOptions
 from commonroad_geometric.learning.reinforcement.observer.implementations import RenderObserver
@@ -91,7 +92,7 @@ def create_base_experiment_config(config):
     """Create an RLExperimentConfig based on the provided configuration."""
     rewarder = SumRewardAggregator([])  # Add reward computers as needed
 
-    termination_criteria = []
+    termination_criteria = [TimeoutCriterion(500)]
 
     feature_computers = TrafficFeatureComputerOptions(
         v=[],
