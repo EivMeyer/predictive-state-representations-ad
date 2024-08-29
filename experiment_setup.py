@@ -2,19 +2,13 @@
 
 import yaml
 from pathlib import Path
-from commonroad_geometric.learning.reinforcement.experiment import RLExperiment, RLExperimentConfig
+from commonroad_geometric.learning.reinforcement.experiment import RLExperiment, RLExperimentConfig, RLEnvironmentOptions, RLEnvironmentParams
 from commonroad_geometric.learning.reinforcement.rewarder.reward_aggregator.implementations import SumRewardAggregator
-from commonroad_geometric.learning.reinforcement.termination_criteria.implementations import (
-    CollisionCriterion,
-    OffroadCriterion,
-    ReachedGoalCriterion,
-    TimeoutCriterion
-)
-from commonroad_geometric.learning.reinforcement.rewarder.reward_computer.implementations import *
-from commonroad_geometric.learning.reinforcement.rewarder.reward_computer.types import RewardLossMetric
 from commonroad_geometric.dataset.extraction.traffic.traffic_extractor import TrafficExtractorOptions, TrafficFeatureComputerOptions
 from commonroad_geometric.dataset.extraction.traffic.traffic_extractor_factory import TrafficExtractorFactory
 from commonroad_geometric.simulation.ego_simulation.control_space.implementations import PIDControlSpace, SteeringAccelerationSpace
+from commonroad_geometric.dataset.scenario.preprocessing.preprocessors.implementations import *
+from commonroad_geometric.dataset.scenario.preprocessing.wrappers.chain_preprocessors import chain_preprocessors
 from commonroad_geometric.simulation.ego_simulation.ego_vehicle_simulation import EgoVehicleSimulationOptions
 from commonroad_geometric.learning.reinforcement.observer.implementations import RenderObserver
 from commonroad_geometric.rendering.traffic_scene_renderer import TrafficSceneRenderer, TrafficSceneRendererOptions
@@ -34,45 +28,7 @@ from commonroad_geometric.simulation.ego_simulation.respawning.implementations i
 from commonroad_geometric.dataset.extraction.traffic.traffic_extractor import TrafficExtractorOptions
 from commonroad.common.solution import VehicleType, VehicleModel
 
-def create_rewarders():
-    rewarders = [
-        # AccelerationPenaltyRewardComputer(
-        #     weight=0.0,
-        #     loss_type=RewardLossMetric.L2
-        # ),
-        CollisionPenaltyRewardComputer(
-            penalty=-1.5,
-        ),
-        # FrictionViolationPenaltyRewardComputer(penalty=-0.01),
-        TrajectoryProgressionRewardComputer(
-            weight=0.1,
-            delta_threshold=0.08
-        ),
-        ConstantRewardComputer(reward=-0.001),
-        #
-        ReachedGoalRewardComputer(reward=3.5),
-        OvershotGoalRewardComputer(reward=0.0),
-        # SteeringAnglePenaltyRewardComputer(weight=0.0005, loss_type=RewardLossMetric.L1),
-        StillStandingPenaltyRewardComputer(penalty=-0.05, velocity_threshold=2.0),
-        # TimeToCollisionPenaltyRewardComputer(weight=0.1), # requires incoming edges
-        OffroadPenaltyRewardComputer(penalty=-3.5),
-        VelocityPenaltyRewardComputer(
-            reference_velocity=28.0,
-            weight=0.002,
-            loss_type=RewardLossMetric.L2,
-            only_upper=True
-        ),
 
-        LateralErrorPenaltyRewardComputer(weight=0.0001, loss_type=RewardLossMetric.L1),
-        YawratePenaltyRewardComputer(weight=0.01),
-        # HeadingErrorPenaltyRewardComputer(
-        #     weight=0.01,
-        #     loss_type=RewardLossMetric.L2,
-        #     wrong_direction_penalty=-0.01
-        # )
-    ]
-
-    return rewarders
 
 def create_renderer_options(view_range, window_size):
     renderer_options = TrafficSceneRendererOptions(
@@ -85,12 +41,12 @@ def create_renderer_options(view_range, window_size):
                 lanelet_linewidth=0.0,
                 fill_color=Color("grey")
             ),
-            RenderPlanningProblemSetPlugin(
-                render_trajectory=False,
-                render_start_waypoints=False,
-                render_goal_waypoints=True,
-                render_look_ahead_point=False
-            ),
+            # RenderPlanningProblemSetPlugin(
+            #     render_trajectory=False,
+            #     render_start_waypoints=False,
+            #     render_goal_waypoints=True,
+            #     render_look_ahead_point=False
+            # ),
             RenderEgoVehiclePlugin(
                 render_trail=False,
                 ego_vehicle_linewidth=0.0,
@@ -121,16 +77,21 @@ def create_render_observer(config):
         renderer_options=renderer_options
     )
 
-def create_rl_experiment_config(config):
-    """Create an RLExperimentConfig based on the provided configuration."""
-    rewarder = SumRewardAggregator(create_rewarders())  # Add reward computers as needed
-
-    termination_criteria = [
-        # CollisionCriterion(),
-        # OffroadCriterion(),
-        # ReachedGoalCriterion()
-        TimeoutCriterion(max_timesteps=500)
+def create_scenario_preprocessors():
+    scenario_preprocessors = [
+        # VehicleFilterPreprocessor(),
+        # RemoveIslandsPreprocessor()
+        # SegmentLaneletsPreprocessor(100.0),
+        # ComputeVehicleVelocitiesPreprocessor(),
+        # (DepopulateScenarioPreprocessor(1), 1),
     ]
+    return scenario_preprocessors
+
+def create_base_experiment_config(config):
+    """Create an RLExperimentConfig based on the provided configuration."""
+    rewarder = SumRewardAggregator([])  # Add reward computers as needed
+
+    termination_criteria = []
 
     feature_computers = TrafficFeatureComputerOptions(
         v=[],
@@ -143,22 +104,23 @@ def create_rl_experiment_config(config):
 
     renderer_options_render = create_renderer_options(
         view_range=150,
-        window_size=1200
+        window_size=800
     )
     
-    rl_experiment_config = RLExperimentConfig(
+    experiment_config = RLExperimentConfig(
         control_space_cls=SteeringAccelerationSpace,
         control_space_options=config['control_space'],
         ego_vehicle_simulation_options=EgoVehicleSimulationOptions(
             vehicle_model=VehicleModel.KS,
             vehicle_type=VehicleType.BMW_320i
         ),
-        env_options={
-            'disable_graph_extraction': True,
-            'raise_exceptions': True,
-            'renderer_options': renderer_options_render,
-            'observer': create_render_observer(config['viewer']),
-        },
+        env_options=RLEnvironmentOptions(
+            disable_graph_extraction=True,
+            raise_exceptions=True,
+            renderer_options=renderer_options_render,
+            observer=create_render_observer(config['viewer']),
+            preprocessor=chain_preprocessors(*create_scenario_preprocessors()),
+        ),
         respawner_cls=RandomRespawner,
         respawner_options=config['respawner'],
         rewarder=rewarder,
@@ -176,12 +138,12 @@ def create_rl_experiment_config(config):
         ))
     )
 
-    return rl_experiment_config
+    return experiment_config
 
-def setup_experiment(config):
+def setup_base_experiment(config):
     """Set up the RL experiment using the provided configuration."""
-    rl_experiment_config = create_rl_experiment_config(config)
-    experiment = RLExperiment(config=rl_experiment_config)
+    experiment_config = create_base_experiment_config(config)
+    experiment = RLExperiment(config=experiment_config)
 
     # Create the environment
     environment = experiment.make_env(

@@ -167,7 +167,7 @@ respawner:
   # Initial speed distribution
   init_speed: "uniform_random"
   # Minimum initial arclength
-  min_init_arclength: 100.0
+  min_init_arclength: 50.0
   # Range for random speed
   random_speed_range: [0.0, 50.0]
   # Initial steering angle distribution

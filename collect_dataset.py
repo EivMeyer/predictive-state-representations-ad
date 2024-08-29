@@ -1,7 +1,7 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import numpy as np
-from experiment_setup import setup_experiment
+from experiment_setup import setup_base_experiment
 from utils.dataset_utils import EnvironmentDataset
 from pathlib import Path
 from tqdm import tqdm
@@ -76,7 +76,7 @@ def collect_episodes(cfg_dict, env, num_episodes):
 @hydra.main(version_base=None, config_path=".", config_name="config")
 def main(cfg: DictConfig):
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
-    experiment, env = setup_experiment(cfg_dict)
+    experiment, env = setup_base_experiment(cfg_dict)
     
     dataset = collect_episodes(cfg_dict, env, cfg.dataset.num_episodes)
     

@@ -1,6 +1,6 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
-from experiment_setup import setup_experiment
+from experiment_setup import setup_base_experiment
 import time
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,7 +31,7 @@ def instrument_env(env):
 @hydra.main(version_base=None, config_path=".", config_name="config")
 def main(cfg: DictConfig):
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
-    experiment, env = setup_experiment(cfg_dict)
+    experiment, env = setup_base_experiment(cfg_dict)
     
     env = instrument_env(env)
     
