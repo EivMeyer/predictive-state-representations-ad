@@ -9,7 +9,7 @@ from tqdm import tqdm
 def collect_episodes(cfg_dict, env, num_episodes):
     dataset = EnvironmentDataset(
         data_dir=Path(cfg_dict["project_dir"]) / "dataset",
-        batch_size=cfg_dict["dataset"]["batch_size"],
+        batch_size=cfg_dict["dataset"]["batch_size"]
     )
     
     episodes_collected = 0
@@ -20,7 +20,8 @@ def collect_episodes(cfg_dict, env, num_episodes):
             
             obs = env.reset()
             
-            for t in range(cfg_dict['dataset']['t_obs']):
+            # Collect observations
+            for t in range(cfg_dict['dataset']['t_obs'] * (cfg_dict['dataset']['obs_skip_frames'] + 1)):
                 actions = [env.action_space.sample() for _ in range(env.num_envs)]
                 new_obs, rewards, dones, infos = env.step(actions)
                 
@@ -30,31 +31,34 @@ def collect_episodes(cfg_dict, env, num_episodes):
                                         e.ego_vehicle.state.steering_angle, 
                                         e.ego_vehicle.state.yaw_rate]) for e in ego_states]
                 
-                for i in range(env.num_envs):
-                    if len(obs_sequences) <= i:
-                        obs_sequences.append([])
-                        action_sequences.append([])
-                        ego_state_sequences.append([])
-                    
-                    obs_sequences[i].append(obs[i])
-                    action_sequences[i].append(actions[i])
-                    ego_state_sequences[i].append(ego_states[i])
+                if t % (cfg_dict['dataset']['obs_skip_frames'] + 1) == 0:
+                    for i in range(env.num_envs):
+                        if len(obs_sequences) <= i:
+                            obs_sequences.append([])
+                            action_sequences.append([])
+                            ego_state_sequences.append([])
+                        
+                        obs_sequences[i].append(obs[i])
+                        action_sequences[i].append(actions[i])
+                        ego_state_sequences[i].append(ego_states[i])
                 
                 obs = new_obs
             
-            for t in range(cfg_dict['dataset']['t_pred']):
+            # Collect predictions
+            for t in range(cfg_dict['dataset']['t_pred'] * (cfg_dict['dataset']['pred_skip_frames'] + 1)):
                 actions = [[0.0, 0.0] for _ in range(env.num_envs)]
                 new_obs, rewards, dones, infos = env.step(actions)
                 
-                for i in range(env.num_envs):
-                    if len(next_obs_sequences) <= i:
-                        next_obs_sequences.append([])
-                        next_action_sequences.append([])
-                        done_sequences.append([])
-                    
-                    next_obs_sequences[i].append(new_obs[i])
-                    next_action_sequences[i].append(actions[i])
-                    done_sequences[i].append(dones[i])
+                if t % (cfg_dict['dataset']['pred_skip_frames'] + 1) == 0:
+                    for i in range(env.num_envs):
+                        if len(next_obs_sequences) <= i:
+                            next_obs_sequences.append([])
+                            next_action_sequences.append([])
+                            done_sequences.append([])
+                        
+                        next_obs_sequences[i].append(new_obs[i])
+                        next_action_sequences[i].append(actions[i])
+                        done_sequences[i].append(dones[i])
             
             for i in range(env.num_envs):
                 dataset.add_episode(

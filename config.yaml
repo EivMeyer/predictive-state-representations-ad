@@ -29,14 +29,18 @@ debug_mode: false
 dataset:
   # Number of episodes to collect for the dataset
   num_episodes: 1000
+  # Number of processes for dataset generation
+  num_workers: 1
   # Number of episodes per batch
-  batch_size: 32
+  batch_size: 32 
   # Number of timesteps for observation
   t_obs: 10
   # Number of timesteps for prediction
   t_pred: 10
-  # Number of processes for dataset generation
-  num_workers: 1
+  # Number of frames to skip between each recorded observation frame
+  obs_skip_frames: 0
+  # Number of frames to skip between each recorded prediction frame
+  pred_skip_frames: 4
 
 wandb:
   # Enable Weights & Biases logging
