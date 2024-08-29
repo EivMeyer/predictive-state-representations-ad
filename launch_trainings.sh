@@ -2,10 +2,7 @@
 
 # Array of model types
 MODEL_TYPES=(
-    "PredictiveModelV5"
-    "PredictiveModelV6"
-    "SimpleReconstructiveModel"
-    "SingleStepPredictiveModel"
+    "PredictiveModelV8"
 )
 
 # Directory to store log files

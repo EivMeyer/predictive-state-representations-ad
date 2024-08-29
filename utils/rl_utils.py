@@ -224,11 +224,6 @@ class RepresentationObserver(BaseObserver):
             decoding = self.representation_model.decode(rep)
             predictions = decoding[0].permute(0, 2, 3, 1).cpu().detach().numpy()
 
-            print(f"Observation sequence shape: {obs_sequence.shape}")
-            print(f"Ego state sequence shape: {ego_state_sequence.shape}")
-            print(f"Representation shape: {representation.shape}")
-            print(f"Predictions shape: {predictions.shape}")
-
             self.update_debug_plot(render_obs, predictions, representation)
 
         return representation

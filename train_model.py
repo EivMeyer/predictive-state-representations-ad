@@ -2,12 +2,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 from utils.dataset_utils import EnvironmentDataset, get_data_dimensions, create_data_loaders, move_batch_to_device
 import torch
-from models.predictive_model_v5 import PredictiveModelV5
-from models.predictive_model_v6 import PredictiveModelV6
-from models.predictive_model_v7 import PredictiveModelV7
 from models.predictive_model_v8 import PredictiveModelV8
-from models.simple_reconstructive_model import SimpleReconstructiveModel
-from models.single_step_predictive_model import SingleStepPredictiveModel
 from loss_function import CombinedLoss
 from torch import nn, optim
 from tqdm import tqdm
@@ -25,12 +20,7 @@ from datetime import datetime
 
 def get_model_class(model_type):
     model_classes = {
-        "PredictiveModelV5": PredictiveModelV5,
-        "PredictiveModelV6": PredictiveModelV6,
-        "PredictiveModelV7": PredictiveModelV7,
         "PredictiveModelV8": PredictiveModelV8,
-        "SimpleReconstructiveModel": SimpleReconstructiveModel,
-        "SingleStepPredictiveModel": SingleStepPredictiveModel
     }
     return model_classes.get(model_type)
 
