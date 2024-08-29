@@ -2,14 +2,14 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 from utils.dataset_utils import EnvironmentDataset, get_data_dimensions, create_data_loaders, move_batch_to_device
 import torch
+from models.base_predictive_model import BasePredictiveModel
 from models.predictive_model_v8 import PredictiveModelV8
 from loss_function import CombinedLoss
 from torch import nn, optim
 from tqdm import tqdm
 from pathlib import Path
 import numpy as np
-import torch
-import numpy as np
+from typing import Type
 import matplotlib.pyplot as plt
 import time
 from utils.visualization_utils import setup_visualization, visualize_prediction
@@ -18,14 +18,20 @@ from utils.training_utils import AdaptiveLogger, analyze_predictions, init_wandb
 from datetime import datetime
 
 
-def get_model_class(model_type):
+def get_model_class(model_type) -> Type[BasePredictiveModel]:
     model_classes = {
         "PredictiveModelV8": PredictiveModelV8,
     }
     return model_classes.get(model_type)
 
 
-def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, scheduler, max_grad_norm, device, wandb, create_plots, stdout_logging, model_save_dir, save_interval, overwrite_checkpoints):
+def train_model(
+    model: BasePredictiveModel, 
+    train_loader, 
+    val_loader, 
+    optimizer, 
+    criterion: CombinedLoss, 
+    epochs, scheduler, max_grad_norm, device, wandb, create_plots, stdout_logging, model_save_dir, save_interval, overwrite_checkpoints):
     logger = AdaptiveLogger()
 
     model.train()
@@ -43,19 +49,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
         fig, axes = setup_visualization(seq_length, num_predictions)
 
     for epoch in range(epochs):
-        epoch_stats = {
-            "total_loss": [],
-            "mse_loss": [],
-            "ssim_loss": [],
-            "perceptual_loss": [],
-            "diversity_loss": [],
-            "prediction_diversity": [],
-            "target_diversity": [],
-            "pred_mean": [],
-            "pred_std": [],
-            "target_mean": [],
-            "target_std": []
-        }
+        epoch_stats = {}
 
         start_time = time.time()
         total_iterations = 0
@@ -63,34 +57,48 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
         for iteration, batch in tqdm(enumerate(train_loader), leave=False, total=len(train_loader)):
             batch = move_batch_to_device(batch, device)
 
+            # Zero gradients
             optimizer.zero_grad()
             
+            # Forward pass
             targets = batch['next_observations']
+            observations = batch['observations']
+            ego_states = batch['ego_states']
+            representations = model.encode(observations, ego_states)
+            predictions = model.decode(representations)
+
+            # Calculate loss
+            loss, loss_components = criterion(predictions, targets, representations)
             
-            predictions = model(batch)
-            loss, loss_components = criterion(predictions, targets)
-            
+            # Backward pass
             loss.backward()
 
             # Apply gradient clipping
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
 
+            # Update weights
             optimizer.step()
 
-            # Collect loss statistics
+            # Automatically collect all loss components
+            for key, value in loss_components.items():
+                if key not in epoch_stats:
+                    epoch_stats[key] = []
+                epoch_stats[key].append(value)
+
+            # Add overall loss to epoch_stats
+            if "total_loss" not in epoch_stats:
+                epoch_stats["total_loss"] = []
             epoch_stats["total_loss"].append(loss.item())
-            epoch_stats["mse_loss"].append(loss_components['mse'])
-            epoch_stats["ssim_loss"].append(loss_components['ssim'])
-            epoch_stats["perceptual_loss"].append(loss_components['perceptual'])
-            epoch_stats["diversity_loss"].append(loss_components['diversity'])
             
             # Collect statistics
             with torch.no_grad():
                 stats = analyze_predictions(predictions, targets)
                 for key, value in stats.items():
+                    if key not in epoch_stats:
+                        epoch_stats[key] = []
                     epoch_stats[key].append(value)
             
-            total_iterations += 1
+            # Intermediate logging
             if stdout_logging and logger.should_log(iteration, len(batch)):
                 logger.log(epoch, iteration, loss, len(batch))
             
@@ -98,6 +106,8 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
             if create_plots and iteration == len(train_loader) - 1:
                 train_predictions = predictions[:9].detach()
                 train_ground_truth = targets[:9].detach()
+
+            total_iterations += 1
 
         # Calculate and print mean statistics for the epoch
         print(f"Epoch {epoch} completed:")
@@ -138,8 +148,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, s
         
             # Visualization
             metrics = {
-                'MSE (train)': epoch_averages['mse_loss']["mean"],
-                'Diversity (train)': epoch_averages['prediction_diversity']["mean"],
+                'MSE (train)': epoch_averages['mse']["mean"],
                 # Add any other metrics you're tracking
             }
             visualize_prediction(fig, axes, hold_out_obs, hold_out_target, hold_out_pred, epoch, train_predictions, train_ground_truth, metrics)
@@ -243,7 +252,9 @@ def main(cfg: DictConfig):
         mse_weight=cfg.training.loss.mse_weight,
         l1_weight=cfg.training.loss.l1_weight,
         diversity_weight=cfg.training.loss.diversity_weight,
-        temporal_decay=cfg.training.loss.temporal_decay
+        latent_l1_weight=cfg.training.loss.latent_l1_weight,
+        latent_l2_weight=cfg.training.loss.latent_l2_weight,
+        temporal_decay=cfg.training.loss.temporal_decay,
     )
     
     train_model(

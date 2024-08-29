@@ -78,30 +78,34 @@ def calculate_prediction_diversity(tensor):
     return diversity.item()
 
 
-def analyze_predictions(predictions, targets):
+def analyze_predictions(predictions, targets, calculate_diversity=False):
     """
     Analyze predictions for potential mean collapse and other statistics.
     
     Args:
     predictions (torch.Tensor): Model predictions
     targets (torch.Tensor): Ground truth targets
+    calculate_diversity (bool): Flag indicating whether to calculate diversity
     
     Returns:
     dict: Dictionary containing various statistics
     """
-    pred_diversity = calculate_prediction_diversity(predictions)
-    target_diversity = calculate_prediction_diversity(targets)
+    result = {}
+    
+    if calculate_diversity:
+        pred_diversity = calculate_prediction_diversity(predictions)
+        target_diversity = calculate_prediction_diversity(targets)
+        result["prediction_diversity"] = pred_diversity
+        result["target_diversity"] = target_diversity
     
     pred_mean = torch.mean(predictions).item()
     pred_std = torch.std(predictions).item()
     target_mean = torch.mean(targets).item()
     target_std = torch.std(targets).item()
     
-    return {
-        "prediction_diversity": pred_diversity,
-        "target_diversity": target_diversity,
-        "pred_mean": pred_mean,
-        "pred_std": pred_std,
-        "target_mean": target_mean,
-        "target_std": target_std
-    }
+    result["pred_mean"] = pred_mean
+    result["pred_std"] = pred_std
+    result["target_mean"] = target_mean
+    result["target_std"] = target_std
+    
+    return result

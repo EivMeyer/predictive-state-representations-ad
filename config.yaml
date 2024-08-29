@@ -49,7 +49,7 @@ wandb:
   project: PredictiveStateRepresentations-AD
 
 representation:
-  model_path: "./models/checkpoint.pth"
+  model_path: "./models/model_64.pth"
 
 # Training configuration
 training:
@@ -90,6 +90,8 @@ training:
     mse_weight: 0.8
     l1_weight: 0.2
     diversity_weight: 0.0
+    latent_l1_weight: 0.05
+    latent_l2_weight: 0.05
     temporal_decay: 0.9
 
 # Reinforcement Learning Training options

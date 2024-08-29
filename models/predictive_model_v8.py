@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import math
+from models.base_predictive_model import BasePredictiveModel
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
@@ -10,14 +11,9 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         return x + self.pe[:x.size(0)]
 
-class PredictiveModelV8(nn.Module):
+class PredictiveModelV8(BasePredictiveModel):
     def __init__(self, obs_shape, action_dim, ego_state_dim, num_frames_to_predict, hidden_dim, nhead=16, num_encoder_layers=8, num_decoder_layers=8):
-        super().__init__()
-
-        self.obs_shape = obs_shape
-        self.hidden_dim = hidden_dim
-        self.num_frames_to_predict = num_frames_to_predict
-        self.ego_state_dim = ego_state_dim
+        super().__init__(obs_shape, action_dim, ego_state_dim, num_frames_to_predict, hidden_dim)
 
         # Wider CNN encoder
         self.encoder = nn.Sequential(
@@ -129,14 +125,5 @@ class PredictiveModelV8(nn.Module):
 
         # Reshape to [batch_size, num_frames_to_predict, channels, height, width]
         predictions = predictions.view(-1, self.num_frames_to_predict, self.obs_shape[-3], self.obs_shape[-2], self.obs_shape[-1])
-
-        return predictions
-
-    def forward(self, batch):
-        observations = batch['observations']
-        ego_states = batch['ego_states']
-
-        last_memory = self.encode(observations, ego_states)
-        predictions = self.decode(last_memory)
 
         return predictions
