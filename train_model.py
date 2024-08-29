@@ -239,7 +239,12 @@ def main(cfg: DictConfig):
     optimizer = optim.AdamW(model.parameters(), lr=cfg.training.learning_rate, weight_decay=cfg.training.weight_decay)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.training.epochs, eta_min=1e-4)
 
-    criterion = CombinedLoss(alpha=1.0, beta=0.0, gamma=0.0, delta=0.0, device=device)
+    criterion = CombinedLoss(
+        mse_weight=cfg.training.loss.mse_weight,
+        l1_weight=cfg.training.loss.l1_weight,
+        diversity_weight=cfg.training.loss.diversity_weight,
+        temporal_decay=cfg.training.loss.temporal_decay
+    )
     
     train_model(
         model=model,
