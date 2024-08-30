@@ -15,6 +15,7 @@ from utils.dataset_utils import EnvironmentDataset, get_data_dimensions
 import numpy as np
 import wandb
 import gymnasium
+from functools import partial
 import numpy as np
 import torch
 from typing import Optional, Tuple, Set, Dict
@@ -165,7 +166,8 @@ class RepresentationObserver(BaseObserver):
         representation = rep.cpu().numpy().squeeze()
 
         if self.debug:
-            decoding = self.representation_model.decode(rep)
+            with torch.no_grad():
+                decoding = self.representation_model.decode(rep)
             predictions = decoding[0].permute(0, 2, 3, 1).cpu().detach().numpy()
 
             self.update_debug_plot(render_obs, predictions, representation)
@@ -545,10 +547,10 @@ def setup_rl_experiment(cfg):
     """
     Configures the downstream RL experiment by modifying the base experiment.
     """
-    representation_observer = create_representation_observer(cfg)
+    representation_observer_constructor = partial(create_representation_observer, cfg=cfg)
 
     experiment_config = create_base_experiment_config(OmegaConf.to_container(cfg, resolve=True))
-    experiment_config.env_options.observer = representation_observer
+    experiment_config.env_options.observer = representation_observer_constructor
     experiment_config.respawner_options['init_steering_angle'] = 0.0
     experiment_config.respawner_options['init_orientation_noise'] = 0.0
     experiment_config.respawner_options['init_position_noise'] = 0.0
