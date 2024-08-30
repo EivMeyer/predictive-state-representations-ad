@@ -210,6 +210,23 @@ class RepresentationObserver(BaseObserver):
         if self.debug:
             print("RepresentationObserver reset: Cleared observation and ego state buffers.")
 
+
+def find_model_path(cfg):
+    possible_paths = [
+        Path(cfg.representation.model_path),
+        Path(cfg.project_dir) / cfg.representation.model_path,
+        Path(cfg.project_dir) / 'output' / cfg.representation.model_path,
+        Path(cfg.project_dir) / 'models' / cfg.representation.model_path,
+        Path(cfg.project_dir) / 'output' / 'models' / cfg.representation.model_path,
+    ]
+    
+    for path in possible_paths:
+        if path.is_file():
+            return path
+    
+    # If no file is found, return None
+    return None
+
 def create_representation_model(cfg):
     dataset_path = Path(cfg.project_dir) / "dataset"
     model_save_dir = Path(cfg.project_dir) / "models"
@@ -222,7 +239,15 @@ def create_representation_model(cfg):
     obs_shape, action_dim, ego_state_dim = get_data_dimensions(full_dataset)
 
     model = PredictiveModelV8(obs_shape=obs_shape, action_dim=action_dim, ego_state_dim=ego_state_dim, num_frames_to_predict=cfg.dataset.t_pred, hidden_dim=cfg.training.hidden_dim)
-    model_path = Path(cfg.project_dir) / cfg.representation.model_path
+
+    # Find the correct model path
+    model_path = find_model_path(cfg)
+    if model_path is None:
+        raise FileNotFoundError(f"Model file not found: {cfg.representation.model_path}. "
+                                f"Searched in {cfg.project_dir} and its subdirectories.")
+    
+    print(f"Using model file: {model_path}")
+
     model.load_state_dict(torch.load(model_path)['model_state_dict'])
     return model
 

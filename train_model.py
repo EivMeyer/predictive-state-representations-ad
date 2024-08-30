@@ -172,10 +172,6 @@ def train_model(
         
         model.train()
 
-    if create_plots:
-        plt.ioff()  # Turn off interactive mode
-        plt.show()  # Keep the final plot open
-
     # Save the final model after training
     final_model_path = model_save_dir / "final_model.pth"
     torch.save({

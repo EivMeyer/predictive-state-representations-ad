@@ -20,14 +20,16 @@ get_integer_input() {
 num_workers=""
 total_episodes=""
 episodes_per_restart=""
+config_overrides=""
 
 # Parse command line options
-while getopts "w:e:r:" opt; do
-    case "$opt" in
-        w) num_workers=$OPTARG ;;
-        e) total_episodes=$OPTARG ;;
-        r) episodes_per_restart=$OPTARG ;;
-        *) echo "Usage: $0 [-w num_workers] [-e total_episodes] [-r episodes_per_restart]" >&2
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -w) num_workers="$2"; shift 2 ;;
+        -e) total_episodes="$2"; shift 2 ;;
+        -r) episodes_per_restart="$2"; shift 2 ;;
+        *=*) config_overrides="$config_overrides $1"; shift ;;
+        *) echo "Usage: $0 [-w num_workers] [-e total_episodes] [-r episodes_per_restart] [CONFIG_OVERRIDES]" >&2
            exit 1 ;;
     esac
 done
@@ -51,7 +53,7 @@ echo "Number of workers: $num_workers"
 echo "Total number of episodes: $total_episodes"
 echo "Episodes per restart: $episodes_per_restart"
 
-base_dir="./output"
+base_dir="./output/dataset"
 
 # Delete existing dataset
 echo "Deleting existing dataset..."
@@ -71,7 +73,7 @@ collect_dataset() {
     run_id=$3
     project_dir="${base_dir}/worker_${worker_id}/run_${run_id}"
     mkdir -p "$project_dir"
-    python collect_dataset.py project_dir="${project_dir}" dataset.num_episodes=${episodes}
+    python3 collect_dataset.py project_dir="${project_dir}" dataset.num_episodes=${episodes} $config_overrides
 }
 
 # Function to manage a worker with periodic restarts
