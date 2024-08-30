@@ -9,6 +9,7 @@ from commonroad_geometric.dataset.extraction.traffic.traffic_extractor_factory i
 from commonroad_geometric.simulation.ego_simulation.control_space.implementations import PIDControlSpace, SteeringAccelerationSpace
 from commonroad_geometric.dataset.scenario.preprocessing.preprocessors.implementations import *
 from commonroad_geometric.learning.reinforcement.termination_criteria.implementations import *
+from commonroad_geometric.common.io_extensions.scenario import LaneletAssignmentStrategy
 from commonroad_geometric.dataset.scenario.preprocessing.wrappers.chain_preprocessors import chain_preprocessors
 from commonroad_geometric.simulation.ego_simulation.ego_vehicle_simulation import EgoVehicleSimulationOptions
 from commonroad_geometric.learning.reinforcement.observer.implementations import RenderObserver
@@ -138,6 +139,8 @@ def create_base_experiment_config(config):
             feature_computers=feature_computers
         ))
     )
+    
+    experiment_config.simulation_options['lanelet_assignment_order'] = LaneletAssignmentStrategy.ONLY_CENTER 
 
     return experiment_config
 
