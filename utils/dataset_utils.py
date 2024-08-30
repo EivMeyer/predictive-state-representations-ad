@@ -176,10 +176,6 @@ def get_data_dimensions(dataset):
     action_dim = actions.shape[-1]  # Dimension of the action space
     ego_state_dim = ego_states.shape[-1]  # Dimension of the ego state
     
-    print(f"Observation shape: {obs_shape}")
-    print(f"Action dimension: {action_dim}")
-    print(f"Ego state dimension: {ego_state_dim}")
-    
     return obs_shape, action_dim, ego_state_dim
 
 def move_batch_to_device(batch, device):

@@ -549,7 +549,7 @@ def create_rewarders():
             only_upper=True
         ),
 
-        LateralErrorPenaltyRewardComputer(weight=0.0001, loss_type=RewardLossMetric.L1),
+        # LateralErrorPenaltyRewardComputer(weight=0.0001, loss_type=RewardLossMetric.L1),
         YawratePenaltyRewardComputer(weight=0.01),
         # HeadingErrorPenaltyRewardComputer(
         #     weight=0.01,
