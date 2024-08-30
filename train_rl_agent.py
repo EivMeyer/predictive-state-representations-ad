@@ -5,7 +5,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import VecNormalize
 import wandb
 
-from utils.rl_utils import setup_rl_experiment, VideoRecorderEvalCallback, DebugCallback
+from utils.rl_utils import setup_rl_experiment, VideoRecorderEvalCallback, WandbLoggingCallback, DebugCallback
 
 @hydra.main(version_base=None, config_path=".", config_name="config")
 def main(cfg: DictConfig):
@@ -61,6 +61,7 @@ def main(cfg: DictConfig):
         video_folder=str(video_folder),
         video_freq=cfg.rl_training.video_freq,
         video_length=cfg.rl_training.video_length,
+        n_eval_episodes=cfg.rl_training.n_eval_episodes,
         best_model_save_path=Path(cfg.project_dir) / cfg.rl_training.save_path,
         log_path=Path(cfg.project_dir) / cfg.rl_training.log_path,
         eval_freq=cfg.rl_training.eval_freq,
@@ -70,6 +71,9 @@ def main(cfg: DictConfig):
 
     # Setup callbacks
     callbacks = [eval_callback]
+    if cfg.wandb.enabled:
+        wandb_callback = WandbLoggingCallback()
+        callbacks.append(wandb_callback)
     if cfg.debug_mode:
         debug_callback = DebugCallback()
         callbacks.append(debug_callback)

@@ -3,6 +3,7 @@ output/
 settings.json
 launch.json
 wandb/
+*.out
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

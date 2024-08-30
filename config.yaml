@@ -101,17 +101,19 @@ rl_training:
   # Path to save training logs
   log_path: "./rl/logs"
   # Frequency of evaluation during training
-  eval_freq: 20000
+  eval_freq: 10000
+  # Number of episodes for evaluation
+  n_eval_episodes: 20
   # Frequency of video recording (in steps)
-  video_freq: 20000  
+  video_freq: 30000  
   # Length of each video (in steps)
-  video_length: 500 
+  video_length: 2000 
   # Folder to save videos (relative to project_dir)
   video_folder: "./rl/videos"  
   # Number of parallel environments for training
   num_envs: 16
   # Total number of timesteps for training
-  total_timesteps: 1000000
+  total_timesteps: 10000000
   # Learning rate for the optimizer
   learning_rate: 3e-4
   # Number of steps to collect samples for each update
