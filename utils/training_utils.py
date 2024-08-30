@@ -15,6 +15,7 @@ def init_wandb(cfg: DictConfig):
                 return lambda *args, **kwargs: None
         print("WandB is disabled")
         return DummyWandB()
+    
 
 class AdaptiveLogger:
     def __init__(self, base_batch_size=32, base_log_interval=50):

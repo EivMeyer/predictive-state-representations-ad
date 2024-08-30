@@ -1,9 +1,7 @@
 import torch
 from pathlib import Path
-import hydra
 from omegaconf import DictConfig, OmegaConf
 from experiment_setup import setup_base_experiment, create_base_experiment_config, create_render_observer
-from models.predictive_model_v8 import PredictiveModelV8  # Or whichever model you used
 from commonroad_geometric.learning.reinforcement.experiment import RLExperiment, RLExperimentConfig
 from stable_baselines3 import PPO
 import os
@@ -31,7 +29,7 @@ from commonroad_geometric.learning.reinforcement.rewarder.reward_computer.implem
 from commonroad_geometric.learning.reinforcement.rewarder.reward_computer.base_reward_computer import BaseRewardComputer
 from commonroad_geometric.learning.reinforcement.rewarder.reward_computer.types import RewardLossMetric
 from commonroad_geometric.learning.reinforcement.rewarder.reward_aggregator.implementations import SumRewardAggregator
-
+from models import get_model_class
 
 
 
@@ -238,7 +236,12 @@ def create_representation_model(cfg):
     # Get data dimensions
     obs_shape, action_dim, ego_state_dim = get_data_dimensions(full_dataset)
 
-    model = PredictiveModelV8(obs_shape=obs_shape, action_dim=action_dim, ego_state_dim=ego_state_dim, num_frames_to_predict=cfg.dataset.t_pred, hidden_dim=cfg.training.hidden_dim)
+    # Get the model class based on the config
+    ModelClass = get_model_class(cfg.training.model_type)
+    if ModelClass is None:
+        raise ValueError(f"Invalid model type: {cfg.training.model_type}")
+
+    model = ModelClass(obs_shape=obs_shape, action_dim=action_dim, ego_state_dim=ego_state_dim, num_frames_to_predict=cfg.dataset.t_pred, hidden_dim=cfg.training.hidden_dim)
 
     # Find the correct model path
     model_path = find_model_path(cfg)

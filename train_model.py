@@ -1,28 +1,18 @@
 import hydra
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 from utils.dataset_utils import EnvironmentDataset, get_data_dimensions, create_data_loaders, move_batch_to_device
 import torch
-from models.base_predictive_model import BasePredictiveModel
-from models.predictive_model_v8 import PredictiveModelV8
+from models import BasePredictiveModel, get_model_class
 from loss_function import CombinedLoss
 from torch import nn, optim
 from tqdm import tqdm
 from pathlib import Path
 import numpy as np
-from typing import Type
-import matplotlib.pyplot as plt
 import time
 from utils.visualization_utils import setup_visualization, visualize_prediction
 import torch.multiprocessing as mp
 from utils.training_utils import AdaptiveLogger, analyze_predictions, init_wandb
 from datetime import datetime
-
-
-def get_model_class(model_type) -> Type[BasePredictiveModel]:
-    model_classes = {
-        "PredictiveModelV8": PredictiveModelV8,
-    }
-    return model_classes.get(model_type)
 
 
 def train_model(
