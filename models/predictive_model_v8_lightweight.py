@@ -155,8 +155,3 @@ class PredictiveModelV8Lightweight(BasePredictiveModel):
         predictions = predictions.view(batch_size, self.num_frames_to_predict, self.obs_shape[-3], self.obs_shape[-2], self.obs_shape[-1])
 
         return predictions
-
-    def forward(self, observations, ego_states):
-        encoded = self.encode(observations, ego_states)
-        predictions = self.decode(encoded)
-        return predictions
