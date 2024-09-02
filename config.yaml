@@ -49,20 +49,22 @@ wandb:
   project: PredictiveStateRepresentations-AD
 
 representation:
-  model_path: "./models/model_64.pth"
+  model_path: "./models/model_64_sparse.pth"
 
 # Training configuration
 training:
   # Type of model to use for training
   model_type: "PredictiveModelV8"
+  # Set this to the path of a checkpoint to resume training
+  warmstart_model: "./models/model_64_sparse.pth"
   # Latent representation size
   hidden_dim: 64
   # Number of training epochs
-  epochs: 1000
+  epochs: 2000
   # Batch size for training
   batch_size: 1
   # Learning rate for the optimizer
-  learning_rate: 0.001
+  learning_rate: 0.002
   # Weight decay for the optimizer
   weight_decay: 0.00001
   # Factor to downsample input images
@@ -72,11 +74,11 @@ training:
   # Training set split size
   train_ratio: 0.9
   # Number of processes for fetching data in dataloader
-  num_workers: 8
+  num_workers: 6
   # Whether to use pinned host memory for faster data copies
   pin_memory: true
   # Prefetch factor for dataloader. This is the number of batches to load in advance. Higher values can speed up training.
-  prefetch_factor: 2
+  prefetch_factor: 3
   # Whether to plot predictions during training
   create_plots: true
   # Whether to log training metrics to stdout

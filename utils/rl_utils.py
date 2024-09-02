@@ -514,7 +514,7 @@ def create_termination_criteria():
         # ReachedGoalCriterion(),
         # OvershotGoalCriterion(),
         TimeoutCriterion(max_timesteps=500),
-        CustomReachedEndCriterion(arclength_threshold=0.9)
+        CustomReachedEndCriterion(arclength_threshold=1.0)
     ]
     return termination_criteria
 
@@ -526,11 +526,11 @@ def create_rewarders():
         #     loss_type=RewardLossMetric.L2
         # ),
         CustomReachedEndRewardComputer(
-            arclength_threshold=0.9,
+            arclength_threshold=1.0,
             reward=3.5
         ),
         CollisionPenaltyRewardComputer(
-            penalty=-1.5,
+            penalty=-2.0,
         ),
         # FrictionViolationPenaltyRewardComputer(penalty=-0.01),
         TrajectoryProgressionRewardComputer(
