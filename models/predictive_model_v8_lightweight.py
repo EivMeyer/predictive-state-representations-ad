@@ -3,20 +3,20 @@ import torch.nn as nn
 import math
 from models.base_predictive_model import BasePredictiveModel
 
-class PositionalEncoding(nn.Module):
+class LearnablePositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
         super().__init__()
-        self.pe = nn.Parameter(torch.zeros(max_len, 1, d_model))
+        self.pe = nn.Parameter(torch.randn(1, max_len, d_model) * 0.1)
 
     def forward(self, x):
-        return x + self.pe[:x.size(0)]
+        return x + self.pe[:, :x.size(1)]
 
-class PredictiveModelV8(BasePredictiveModel):
-    def __init__(self, obs_shape, action_dim, ego_state_dim, num_frames_to_predict, hidden_dim, nhead=16, num_encoder_layers=8, num_decoder_layers=8):
+class PredictiveModelV8Lightweight(BasePredictiveModel):
+    def __init__(self, obs_shape, action_dim, ego_state_dim, num_frames_to_predict, hidden_dim, nhead=8, num_layers=4):
         super().__init__(obs_shape, action_dim, ego_state_dim, num_frames_to_predict, hidden_dim)
 
         self.encoder = self._make_encoder(obs_shape)
-
+        
         # Calculate the size of the encoder output
         with torch.no_grad():
             dummy_input = torch.zeros(1, obs_shape[-3], obs_shape[-2], obs_shape[-1])
@@ -25,14 +25,19 @@ class PredictiveModelV8(BasePredictiveModel):
         self.encoder_projector = nn.Linear(encoder_output_size, hidden_dim)
         self.ego_state_projector = nn.Linear(ego_state_dim, hidden_dim)
 
-        self.pos_encoder = PositionalEncoding(hidden_dim, max_len=num_frames_to_predict)
+        self.pos_encoder = LearnablePositionalEncoding(hidden_dim, max_len=num_frames_to_predict)
 
-        # Transformer encoder and decoder
-        encoder_layers = nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=nhead, dim_feedforward=1024, norm_first=True)
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers=num_encoder_layers)
-
-        decoder_layers = nn.TransformerDecoderLayer(d_model=hidden_dim, nhead=nhead, dim_feedforward=1024, norm_first=True)
-        self.transformer_decoder = nn.TransformerDecoder(decoder_layers, num_layers=num_decoder_layers)
+        # Lightweight Transformer
+        self.transformer = nn.Transformer(
+            d_model=hidden_dim,
+            nhead=nhead,
+            num_encoder_layers=num_layers,
+            num_decoder_layers=num_layers,
+            dim_feedforward=hidden_dim * 2,
+            dropout=0.1,
+            activation='gelu',
+            batch_first=True
+        )
 
         # Decoder
         self.decoder = self._make_decoder(obs_shape)
@@ -41,25 +46,23 @@ class PredictiveModelV8(BasePredictiveModel):
 
     def _make_encoder(self, obs_shape):
         return nn.Sequential(
-            self._make_encoder_block(obs_shape[-3], 64),
+            self._make_encoder_block(obs_shape[-3], 32),
+            self._make_encoder_block(32, 64),
             self._make_encoder_block(64, 128),
-            self._make_encoder_block(128, 256),
-            self._make_encoder_block(256, 512),
             nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten()
         )
 
     def _make_encoder_block(self, in_channels, out_channels):
         return nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=2, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
+            nn.GELU(),
             nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2, 2)
+            nn.GELU()
         )
-
+    
     def _make_decoder(self, obs_shape):
         if obs_shape[-2:] == (64, 64):
             return nn.Sequential(
@@ -101,19 +104,16 @@ class PredictiveModelV8(BasePredictiveModel):
         else:
             raise NotImplementedError(f"Decoder not implemented for shape {obs_shape[-2:]}. Only (64, 64) and (128, 128) are supported.")
 
+
     def _initialize_weights(self):
         for m in self.modules():
-            if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
+            if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d, nn.Linear)):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.Linear):
-                nn.init.xavier_uniform_(m.weight)
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
 
     def encode(self, observations, ego_states):
         batch_size, seq_len, channels, height, width = observations.shape
@@ -130,24 +130,22 @@ class PredictiveModelV8(BasePredictiveModel):
         # Combine encoder features and ego features
         combined_features = encoder_features + ego_features
 
-        # Add positional encoding and apply transformer encoder
-        src = self.pos_encoder(combined_features.permute(1, 0, 2))
-        memory = self.transformer_encoder(src)
+        # Add learnable positional encoding
+        src = self.pos_encoder(combined_features)
 
-        # Return only the last memory state
-        return memory[-1]
+        return src
 
     def decode(self, memory):
-        batch_size, hidden_dim = memory.shape
+        batch_size, seq_len, _ = memory.shape
 
-        # Prepare decoder input
-        decoder_input = self.pos_encoder(memory.unsqueeze(0).repeat(self.num_frames_to_predict, 1, 1))
+        # Prepare decoder input (use zeros as initial input)
+        decoder_input = torch.zeros(batch_size, self.num_frames_to_predict, self.hidden_dim, device=memory.device)
+        decoder_input = self.pos_encoder(decoder_input)
 
-        # Generate future frame predictions using only the last memory state
-        output = self.transformer_decoder(decoder_input, memory.unsqueeze(0))
+        # Generate future frame predictions
+        output = self.transformer(memory, decoder_input)
 
         # Reshape for convolutional decoder
-        output = output.permute(1, 0, 2).contiguous()
         output = output.view(-1, self.hidden_dim, 1, 1)
 
         # Apply convolutional decoder
@@ -156,4 +154,9 @@ class PredictiveModelV8(BasePredictiveModel):
         # Reshape to [batch_size, num_frames_to_predict, channels, height, width]
         predictions = predictions.view(batch_size, self.num_frames_to_predict, self.obs_shape[-3], self.obs_shape[-2], self.obs_shape[-1])
 
+        return predictions
+
+    def forward(self, observations, ego_states):
+        encoded = self.encode(observations, ego_states)
+        predictions = self.decode(encoded)
         return predictions

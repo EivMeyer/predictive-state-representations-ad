@@ -55,7 +55,7 @@ representation:
 # Training configuration
 training:
   # Type of model to use for training
-  model_type: "PredictiveModelV8"
+  model_type: "PredictiveModelV8Lightweight"
   # Set this to the path of a checkpoint to resume training
   warmstart_model: null # "./models/model_64_sparse.pth"
   # Latent representation size
@@ -165,7 +165,7 @@ control_space:
 # Viewer options
 viewer:
   # Range of view in the simulation
-  view_range: 110.0
+  view_range: 90.0
   # Size of the viewer window
   window_size: 64
 
