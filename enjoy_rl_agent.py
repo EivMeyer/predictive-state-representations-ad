@@ -3,7 +3,6 @@ from omegaconf import DictConfig
 from pathlib import Path
 import numpy as np
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import VecNormalize
 import argparse
 
 from utils.rl_utils import setup_rl_experiment
@@ -17,9 +16,6 @@ def main(cfg: DictConfig, model_path: str = None):
         n_envs=1,
         seed=cfg.seed
     )
-    
-    # Normalize the environment
-    env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=10.)
 
     # Load the model
     if model_path is None:

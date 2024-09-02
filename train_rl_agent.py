@@ -2,10 +2,10 @@ from pathlib import Path
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import VecNormalize
 import wandb
 
-from utils.rl_utils import setup_rl_experiment, VideoRecorderEvalCallback, WandbLoggingCallback, DebugCallback
+from utils.rl_utils import setup_rl_experiment, VideoRecorderEvalCallback, DebugCallback, WandbCallback
+from commonroad_geometric.learning.reinforcement.training.custom_callbacks import LogEpisodeMetricsCallback, LogPolicyMetricsCallback
 
 @hydra.main(version_base=None, config_path=".", config_name="config")
 def main(cfg: DictConfig):
@@ -21,9 +21,6 @@ def main(cfg: DictConfig):
         seed=cfg.seed
     )
     cfg.dataset.num_workers
-
-    # Normalize the environment
-    env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=10.)
 
     # Create the RL agent
     model = PPO("MlpPolicy", env, verbose=1, device=cfg.device,
@@ -46,11 +43,6 @@ def main(cfg: DictConfig):
         seed=cfg.seed + 1000,  # Different seed for eval env
     )
     
-    # Use the same normalization stats as the training environment
-    eval_env = VecNormalize(eval_env, norm_obs=True, norm_reward=False, clip_obs=10.)
-    eval_env.obs_rms = env.obs_rms
-    eval_env.ret_rms = env.ret_rms
-    
     # Setup video recording
     video_folder = Path(cfg.project_dir) / cfg.rl_training.video_folder
     video_folder.mkdir(parents=True, exist_ok=True)
@@ -72,8 +64,7 @@ def main(cfg: DictConfig):
     # Setup callbacks
     callbacks = [eval_callback]
     if cfg.wandb.enabled:
-        wandb_callback = WandbLoggingCallback()
-        callbacks.append(wandb_callback)
+        callbacks.append(WandbCallback())
     if cfg.debug_mode:
         debug_callback = DebugCallback()
         callbacks.append(debug_callback)

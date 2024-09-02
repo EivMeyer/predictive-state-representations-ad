@@ -3,13 +3,13 @@ from pathlib import Path
 from omegaconf import DictConfig, OmegaConf
 from experiment_setup import setup_base_experiment, create_base_experiment_config, create_render_observer
 from commonroad_geometric.learning.reinforcement.experiment import RLExperiment, RLExperimentConfig
-from stable_baselines3 import PPO
 import os
 from stable_baselines3.common.vec_env import VecEnvWrapper
 from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv, VecVideoRecorder, VecEnv
+from stable_baselines3.common.vec_env import VecVideoRecorder, VecEnv
 from stable_baselines3.common.callbacks import EvalCallback, BaseCallback
 from utils.dataset_utils import EnvironmentDataset, get_data_dimensions
+from utils.file_utils import find_model_path
 import numpy as np
 import wandb
 import gymnasium
@@ -31,6 +31,163 @@ from commonroad_geometric.learning.reinforcement.rewarder.reward_computer.types 
 from commonroad_geometric.learning.reinforcement.rewarder.reward_aggregator.implementations import SumRewardAggregator
 from models import get_model_class
 
+
+
+import numpy as np
+import torch
+import wandb
+from stable_baselines3.common.callbacks import BaseCallback
+
+EPS = 1e-5
+
+class WandbCallback(BaseCallback):
+    def __init__(self, verbose: int = 0):
+        super(WandbCallback, self).__init__(verbose)
+        self.n_episodes = 0
+        self.n_rollouts = 0
+        self._info_buffer = {}
+
+    def _on_training_start(self) -> None:
+        self._termination_reasons = self.training_env.get_attr('termination_reasons')[0]
+
+    def _on_rollout_start(self) -> None:
+        self._info_buffer = {}
+        self._log_policy_metrics()
+
+    def _on_step(self) -> bool:
+        assert self.logger is not None
+
+        n_steps = self.locals.get('n_steps')
+        if n_steps is None:
+            return True
+        
+        rollout_buffer = self.locals.get('rollout_buffer')
+        infos = self.locals.get('infos')
+
+        last_info = self._info_buffer.get(n_steps - 1, None)
+        last_done_array = np.array([info['done'] for info in last_info]) if last_info is not None else None
+
+        n_episodes_done_step = np.sum(last_done_array).item() if last_done_array is not None else 0
+        if n_episodes_done_step > 0:
+            self._log_episode_metrics(rollout_buffer, n_episodes_done_step, n_steps, last_done_array, last_info)
+
+        self._info_buffer[n_steps] = infos
+        self._info_buffer = {step: v for step, v in self._info_buffer.items() if step >= n_steps - 5}
+
+        return True
+
+    def _on_rollout_end(self) -> None:
+        rollout_buffer = self.locals.get('rollout_buffer')
+        if rollout_buffer is not None:
+            self._log_rollout_metrics(rollout_buffer)
+        self.n_rollouts += 1
+
+    def _log_episode_metrics(self, rollout_buffer, n_episodes_done_step, n_steps, last_done_array, last_info):
+        for attr in ['actions', 'log_probs', 'rewards', 'values']:
+            buffer_metrics = self._analyze_buffer_array_masked(
+                buffer=getattr(rollout_buffer, attr),
+                n_steps=n_steps,
+                done_array=last_done_array
+            )
+            for metric_name, value in buffer_metrics.items():
+                if isinstance(value, np.ndarray):
+                    for idx, idx_value in enumerate(value):
+                        wandb.log({f"train/{attr}_ep_{metric_name}_idx_{idx}": float(idx_value)}, step=self.num_timesteps)
+                else:
+                    wandb.log({f"train/{attr}_ep_{metric_name}": float(value)}, step=self.num_timesteps)
+
+        termination_criteria_flags = dict.fromkeys(self._termination_reasons, False)
+        done_indices = np.where(last_done_array)[0]
+        for env_index in done_indices:
+            env_info = last_info[env_index]
+            termination_reason = env_info.get('termination_reason')
+            termination_criteria_flags[termination_reason] = True
+
+            env_reward_component_info = env_info['reward_component_episode_info']
+            for reward_component, component_info in env_reward_component_info.items():
+                for component_metric, component_value in component_info.items():
+                    wandb.log({f"train/reward_{reward_component}_ep_{component_metric}": float(component_value)}, step=self.num_timesteps)
+
+            vehicle_aggregate_stats = env_info['vehicle_aggregate_stats']
+            for state, state_info in vehicle_aggregate_stats.items():
+                for state_metric, state_value in state_info.items():
+                    wandb.log({f"train/vehicle_{state}_ep_{state_metric}": float(state_value)}, step=self.num_timesteps)
+
+            wandb.log({
+                "train/ep_num_obstacles": float(env_info.get('total_num_obstacles', 0)),
+                "train/ep_cumulative_reward": float(env_info.get('cumulative_reward', 0)),
+                "train/next_reset_ready": float(env_info.get('next_reset_ready', False)),
+                "train/ep_length": float(env_info.get('time_step', 0))
+            }, step=self.num_timesteps)
+
+        for termination_criteria in self._termination_reasons:
+            wandb.log({
+                f"train/termination_{termination_criteria}": 
+                float(termination_criteria_flags[termination_criteria])
+            }, step=self.num_timesteps)
+
+        self.n_episodes += n_episodes_done_step
+        wandb.log({"info/n_episodes": float(self.n_episodes)}, step=self.num_timesteps)
+
+
+    def _log_rollout_metrics(self, rollout_buffer):
+        for attr in ['advantages', 'values']:
+            buffer_metrics = self._analyze_buffer_array(getattr(rollout_buffer, attr))
+            for metric_name, value in buffer_metrics.items():
+                if isinstance(value, np.ndarray):
+                    for idx, idx_value in enumerate(value):
+                        wandb.log({f"train/{attr}_ep_{metric_name}_idx_{idx}": idx_value}, step=self.num_timesteps)
+                else:
+                    wandb.log({f"train/{attr}_ep_{metric_name}": value}, step=self.num_timesteps)
+
+    def _log_policy_metrics(self):
+        if self.num_timesteps == 0:
+            return
+
+        for name, param in self.model.policy.named_parameters():
+            grad = param._grad
+            weights = param.data
+            if grad is None:
+                continue
+            absweights = torch.abs(weights)
+            absgrad = torch.abs(grad)
+
+            metrics = {
+                f"gradients/{name}_max": torch.max(grad).item(),
+                f"gradients/{name}_min": torch.min(grad).item(),
+                f"gradients/{name}_absmean": torch.mean(absgrad).item(),
+                f"gradients/{name}_absmax": torch.max(absgrad).item(),
+                f"gradients/{name}_vanished": torch.mean((absgrad < EPS).float()).item(),
+                f"weights/{name}_max": torch.max(weights).item(),
+                f"weights/{name}_min": torch.min(weights).item(),
+                f"weights/{name}_absmean": torch.mean(absweights).item(),
+                f"weights/{name}_absmax": torch.max(absweights).item(),
+                f"weights/{name}_dead": torch.mean((absweights < EPS).float()).item(),
+            }
+
+            if grad.numel() > 1:
+                metrics[f"gradients/{name}_std"] = torch.std(grad).item()
+            if weights.numel() > 1:
+                metrics[f"weights/{name}_std"] = torch.std(weights).item()
+
+            wandb.log(metrics, step=self.num_timesteps)
+
+        wandb.log({"info/n_rollouts": self.n_rollouts}, step=self.num_timesteps)
+
+    @staticmethod
+    def _analyze_buffer_array_masked(buffer: np.ndarray, n_steps: int, done_array: np.ndarray) -> dict:
+        masked_buffer = buffer[:n_steps, done_array, ...]
+        return WandbCallback._analyze_buffer_array(masked_buffer)
+
+    @staticmethod
+    def _analyze_buffer_array(buffer: np.ndarray) -> dict:
+        return {
+            "max": np.max(buffer, axis=(0, 1)),
+            "min": np.min(buffer, axis=(0, 1)),
+            "std": np.std(buffer, axis=(0, 1)),
+            "mean": np.mean(buffer, axis=(0, 1)),
+            "absmean": np.mean(np.abs(buffer), axis=(0, 1))
+        }
 
 
 class VecEnvWrapperWithReset(VecEnvWrapper):
@@ -208,23 +365,6 @@ class RepresentationObserver(BaseObserver):
         if self.debug:
             print("RepresentationObserver reset: Cleared observation and ego state buffers.")
 
-
-def find_model_path(cfg):
-    possible_paths = [
-        Path(cfg.representation.model_path),
-        Path(cfg.project_dir) / cfg.representation.model_path,
-        Path(cfg.project_dir) / 'output' / cfg.representation.model_path,
-        Path(cfg.project_dir) / 'models' / cfg.representation.model_path,
-        Path(cfg.project_dir) / 'output' / 'models' / cfg.representation.model_path,
-    ]
-    
-    for path in possible_paths:
-        if path.is_file():
-            return path
-    
-    # If no file is found, return None
-    return None
-
 def create_representation_model(cfg):
     dataset_path = Path(cfg.project_dir) / "dataset"
     model_save_dir = Path(cfg.project_dir) / "models"
@@ -244,7 +384,7 @@ def create_representation_model(cfg):
     model = ModelClass(obs_shape=obs_shape, action_dim=action_dim, ego_state_dim=ego_state_dim, num_frames_to_predict=cfg.dataset.t_pred, hidden_dim=cfg.training.hidden_dim)
 
     # Find the correct model path
-    model_path = find_model_path(cfg)
+    model_path = find_model_path(cfg.project_dir, cfg.representation.model_path)
     if model_path is None:
         raise FileNotFoundError(f"Model file not found: {cfg.representation.model_path}. "
                                 f"Searched in {cfg.project_dir} and its subdirectories.")
@@ -264,131 +404,6 @@ def has_reached_end(simulation: EgoVehicleSimulation, arclength_threshold: float
     )
     reached_end = arclength >= arclength_threshold
     return reached_end
-
-class WandbLoggingCallback(BaseCallback):
-    def __init__(self, verbose=0):
-        super(WandbLoggingCallback, self).__init__(verbose)
-        self.episode_rewards = []
-        self.episode_lengths = []
-        self.episode_count = 0
-        self.step_count = 0
-        self.update_count = 0
-
-    def _on_training_start(self) -> None:
-        # Log hyperparameters
-        wandb.config.update(self.model.get_parameters())
-
-    def _on_step(self) -> bool:
-        self.step_count += 1
-
-        # Log step-wise information
-        self._log_step_info()
-
-        # Check if episode has ended
-        if isinstance(self.training_env, VecEnv):
-            done = self.locals['dones'][0]
-            info = self.locals['infos'][0]
-        else:
-            done = self.locals['done']
-            info = self.locals['info']
-
-        if done:
-            self._log_episode_info(info)
-
-        # Log model update information (for on-policy algorithms like PPO)
-        if hasattr(self.model, 'n_updates') and self.model.n_updates > self.update_count:
-            self._log_model_update_info()
-            self.update_count = self.model.n_updates
-
-        return True
-
-    def _log_step_info(self):
-        # Log step-wise metrics
-        if isinstance(self.training_env, VecEnv):
-            reward = self.locals['rewards'][0]
-            value = self.locals['values'][0]
-        else:
-            reward = self.locals['reward']
-            value = self.locals['value']
-
-        log_dict = {
-            "train/timesteps": self.num_timesteps,
-            "train/reward": reward,
-            "train/value": value,
-            "train/learning_rate": self.locals['self'].learning_rate,
-        }
-
-        # Log action and observation information if available
-        if 'actions' in self.locals:
-            log_dict["train/action_mean"] = np.mean(self.locals['actions'])
-            log_dict["train/action_std"] = np.std(self.locals['actions'])
-
-        if 'observations' in self.locals:
-            log_dict["train/obs_mean"] = np.mean(self.locals['observations'])
-            log_dict["train/obs_std"] = np.std(self.locals['observations'])
-
-        wandb.log(log_dict, step=self.num_timesteps)
-
-    def _log_episode_info(self, info: Dict):
-        self.episode_count += 1
-        ep_reward = info['episode']['r']
-        ep_length = info['episode']['l']
-        self.episode_rewards.append(ep_reward)
-        self.episode_lengths.append(ep_length)
-
-        # Log episode-wise metrics
-        wandb.log({
-            "train/episode_reward": ep_reward,
-            "train/episode_length": ep_length,
-            "train/episode_reward_mean": np.mean(self.episode_rewards[-100:]),
-            "train/episode_length_mean": np.mean(self.episode_lengths[-100:]),
-            "train/episodes": self.episode_count,
-        }, step=self.num_timesteps)
-
-    def _log_model_update_info(self):
-        # Log metrics specific to PPO or similar algorithms
-        if hasattr(self.model, 'logger') and hasattr(self.model.logger, 'name_to_value'):
-            log_dict = {}
-            for key, value in self.model.logger.name_to_value.items():
-                log_dict[f"train/{key}"] = value
-
-            # Log explained variance
-            if hasattr(self.model, 'rollout_buffer'):
-                explained_var = explained_variance(self.model.rollout_buffer.values,
-                                                   self.model.rollout_buffer.returns)
-                log_dict["train/explained_variance"] = explained_var
-
-            wandb.log(log_dict, step=self.num_timesteps)
-
-        # Log policy and value network losses
-        if hasattr(self.model, 'policy') and hasattr(self.model.policy, 'optimizer'):
-            wandb.log({
-                "train/policy_loss": self.model.policy.loss.item(),
-                "train/value_loss": self.model.policy.value_loss.item(),
-            }, step=self.num_timesteps)
-
-    def _on_training_end(self) -> None:
-        # Log final model and training summary
-        wandb.log({
-            "train/total_timesteps": self.num_timesteps,
-            "train/total_episodes": self.episode_count,
-            "train/final_reward_mean": np.mean(self.episode_rewards[-100:]),
-            "train/final_length_mean": np.mean(self.episode_lengths[-100:]),
-        })
-
-        # Save the final model to wandb
-        self.model.save("final_model")
-        wandb.save("final_model.zip")
-
-# Helper function for explained variance
-def explained_variance(y_pred: np.ndarray, y_true: np.ndarray) -> np.ndarray:
-    """
-    Computes fraction of variance that ypred explains about y.
-    Returns 1 - Var[y-ypred] / Var[y]
-    """
-    assert y_true.ndim == 1 and y_pred.ndim == 1
-    var_y = np.var(y_true)
-    return np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
 class VideoRecorderEvalCallback(EvalCallback):
     def __init__(self, eval_env, video_folder, video_freq, video_length, n_eval_episodes, *args, **kwargs):

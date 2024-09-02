@@ -2,7 +2,6 @@ import hydra
 from omegaconf import DictConfig
 from pathlib import Path
 import numpy as np
-from stable_baselines3.common.vec_env import VecNormalize
 
 from utils.rl_utils import setup_rl_experiment
 from commonroad_geometric.simulation.ego_simulation.control_space.keyboard_input import UserAdvanceScenarioInterrupt, UserQuitInterrupt, UserResetInterrupt, get_keyboard_action
@@ -16,8 +15,6 @@ def main(cfg: DictConfig):
         n_envs=1,
         seed=cfg.seed
     )
-
-    env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=10.)
 
     obs = env.reset()
     total_reward = 0.0
@@ -39,7 +36,7 @@ def main(cfg: DictConfig):
         obs, reward, done, info = env.step([action])
         total_reward += reward.item()
 
-        msg = f"action: {action}, reward: {reward.item():.3f} ({total_reward:.3f}), low: {info[0]['lowest_reward_computer']} ({info[0]['lowest_reward']:.3f}), high: {info[0]['highest_reward_computer']} ({info[0]['highest_reward']:.3f}), t: {info[0]['time_step']}"
+        msg = f"scenario: {env.get_attr('current_scenario_id')[0]}, action: {action}, reward: {reward.item():.3f} ({total_reward:.3f}), low: {info[0]['lowest_reward_computer']} ({info[0]['lowest_reward']:.3f}), high: {info[0]['highest_reward_computer']} ({info[0]['highest_reward']:.3f}), t: {info[0]['time_step']}"
         print(msg)
 
         if not done:
