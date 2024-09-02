@@ -55,7 +55,7 @@ representation:
 # Training configuration
 training:
   # Type of model to use for training
-  model_type: "PredictiveModelV8Lightweight"
+  model_type: "PredictiveModelV8"
   # Set this to the path of a checkpoint to resume training
   warmstart_model: null # "./models/model_64_sparse.pth"
   # Latent representation size
@@ -137,6 +137,11 @@ rl_training:
   vf_coef: 0.5
   # Maximum norm for gradient clipping
   max_grad_norm: 10.0
+  # Network architecture for the policy and value function
+  ppo_model:
+    net_arch:
+      pi: [128, 128, 64]
+      vf: [128, 128, 64]
 
 # Simulation options
 simulation:
@@ -188,9 +193,11 @@ respawner:
   # Range for random speed
   random_speed_range: [0.0, 50.0]
   # Initial steering angle distribution
-  init_steering_angle: "uniform_random"
+  init_steering_angle: "normal_random"
   # Range for random steering angle
   random_steering_angle_range: [-0.08, 0.08]
+  # Params for normal distribution for steering angle
+  normal_steering_angle_params: [0.0, 0.02]
   # Noise in initial orientation
   init_orientation_noise: 0.4
   # Noise in initial position

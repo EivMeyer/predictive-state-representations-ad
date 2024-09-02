@@ -22,9 +22,16 @@ def main(cfg: DictConfig):
     )
     cfg.dataset.num_workers
 
+    # Extract the net_arch configuration
+    net_arch = {
+        "pi": cfg.rl_training.ppo_model.net_arch.pi,
+        "vf": cfg.rl_training.ppo_model.net_arch.vf
+    }
+
     # Create the RL agent
     model = PPO("MlpPolicy", env, verbose=1, device=cfg.device,
                 learning_rate=cfg.rl_training.learning_rate,
+                policy_kwargs={"net_arch": net_arch},
                 n_steps=cfg.rl_training.n_steps,
                 batch_size=cfg.rl_training.batch_size,
                 n_epochs=cfg.rl_training.n_epochs,
@@ -34,7 +41,8 @@ def main(cfg: DictConfig):
                 ent_coef=cfg.rl_training.ent_coef,
                 vf_coef=cfg.rl_training.vf_coef,
                 max_grad_norm=cfg.rl_training.max_grad_norm,
-                tensorboard_log=Path(cfg.project_dir) / "tensorboard_logs" if cfg.wandb.enabled else None)
+                tensorboard_log=Path(cfg.project_dir) / "tensorboard_logs" if cfg.wandb.enabled else None
+    )
 
     # Setup evaluation environment
     eval_env = experiment.make_env(
