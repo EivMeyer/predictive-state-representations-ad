@@ -124,8 +124,10 @@ class SingleStepPredictiveModel(BasePredictiveModel):
 
         return prediction
 
-    def compute_loss(self, batch, encoded_state, predictions):
+    def compute_loss(self, batch, model_output):
+        predictions = model_output['predictions']
         target_observations = batch['next_observations']
+        encoded_state = model_output['encoded_state']
 
         # Calculate loss
         loss, loss_components = self.loss_function(predictions, target_observations, encoded_state)
