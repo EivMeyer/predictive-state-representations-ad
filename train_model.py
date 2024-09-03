@@ -6,7 +6,6 @@ import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from models import BasePredictiveModel, get_model_class
-from loss_function import CombinedLoss
 from tqdm import tqdm
 from pathlib import Path
 import numpy as np
@@ -23,7 +22,6 @@ class Trainer:
                  model: BasePredictiveModel, 
                  train_loader: DataLoader, 
                  val_loader: DataLoader, 
-                 criterion: CombinedLoss, 
                  optimizer: optim.Optimizer, 
                  scheduler: optim.lr_scheduler._LRScheduler, 
                  device: torch.device, 
@@ -32,7 +30,6 @@ class Trainer:
         self.model = model
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.criterion = criterion
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.device = device
@@ -72,16 +69,13 @@ class Trainer:
         
         for iteration, batch in tqdm(enumerate(self.train_loader), leave=False, total=len(self.train_loader)):
             batch = move_batch_to_device(batch, self.device)
+            targets = batch['next_observations']
             
             self.optimizer.zero_grad()
             
-            targets = batch['next_observations']
-            observations = batch['observations']
-            ego_states = batch['ego_states']
-            representations = self.model.encode(observations, ego_states)
-            predictions = self.model.decode(representations)
-
-            loss, loss_components = self.criterion(predictions, targets, representations)
+            model_outputs = self.model.forward(batch)
+            predictions = model_outputs['predictions']
+            loss, loss_components = self.model.compute_loss(batch, model_outputs)
             
             loss.backward()
             nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.training.max_grad_norm)
@@ -109,13 +103,10 @@ class Trainer:
                 batch = move_batch_to_device(batch, self.device)
                 
                 targets = batch['next_observations']
-                observations = batch['observations']
-                ego_states = batch['ego_states']
-                
-                representations = self.model.encode(observations, ego_states)
-                predictions = self.model.decode(representations)
-                
-                loss, loss_components = self.criterion(predictions, targets, representations)
+
+                model_outputs = self.model.forward(batch)
+                predictions = model_outputs['predictions']
+                loss, loss_components = self.model.compute_loss(batch, model_outputs)
                 
                 self.update_stats(val_stats, loss_components, loss.item())
                 stats = analyze_predictions(predictions, targets)
@@ -208,7 +199,7 @@ class Trainer:
     def visualize_predictions(self) -> None:
         self.model.eval()
         with torch.no_grad():
-            hold_out_pred = self.model(self.hold_out_batch)
+            hold_out_pred = self.model(self.hold_out_batch)['predictions']
 
         self.wandb.log({
             "hold_out_prediction": self.wandb.Image(self.fig),
@@ -251,7 +242,7 @@ def main(cfg: DictConfig) -> None:
 
     dataset_path = Path(cfg.project_dir) / "dataset"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"{timestamp}_{wandb.run.name}" if wandb.run else timestamp
+    run_name = f"{timestamp}_{wandb.run.name}_{cfg.training.model_type}" if wandb.run else f"{timestamp}_{cfg.training.model_type}"
     run_dir = Path(cfg.project_dir) / "models" / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     
@@ -278,24 +269,14 @@ def main(cfg: DictConfig) -> None:
     model: BasePredictiveModel = ModelClass(
         obs_shape=obs_shape, 
         action_dim=action_dim, 
-        ego_state_dim=ego_state_dim, 
-        num_frames_to_predict=cfg.dataset.t_pred,
-        hidden_dim=cfg.training.hidden_dim,
+        ego_state_dim=ego_state_dim,
+        cfg=cfg
     ).to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=cfg.training.learning_rate, weight_decay=cfg.training.weight_decay)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.training.epochs, eta_min=1e-4)
 
-    criterion = CombinedLoss(
-        mse_weight=cfg.training.loss.mse_weight,
-        l1_weight=cfg.training.loss.l1_weight,
-        diversity_weight=cfg.training.loss.diversity_weight,
-        latent_l1_weight=cfg.training.loss.latent_l1_weight,
-        latent_l2_weight=cfg.training.loss.latent_l2_weight,
-        temporal_decay=cfg.training.loss.temporal_decay,
-    )
-
-    trainer = Trainer(cfg, model, train_loader, val_loader, criterion, optimizer, scheduler, device, wandb)
+    trainer = Trainer(cfg, model, train_loader, val_loader, optimizer, scheduler, device, wandb)
     trainer.run_name = run_name
 
     if cfg.training.warmstart_model:

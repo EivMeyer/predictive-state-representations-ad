@@ -279,7 +279,11 @@ class RepresentationObserver(BaseObserver):
         with torch.no_grad():
             dummy_obs_tensor = torch.from_numpy(dummy_obs).float().unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.device)
             dummy_ego_state_tensor = torch.from_numpy(dummy_ego_state).float().unsqueeze(0).to(self.device)
-            dummy_rep = self.representation_model.encode(dummy_obs_tensor, dummy_ego_state_tensor)
+            dummy_batch = {
+                'observations': dummy_obs_tensor,
+                'ego_states': dummy_ego_state_tensor
+            }
+            dummy_rep = self.representation_model.encode(dummy_batch)
 
         rep_shape = dummy_rep.cpu().numpy().shape[1:]
 
@@ -316,7 +320,11 @@ class RepresentationObserver(BaseObserver):
         with torch.no_grad():
             obs_tensor = torch.from_numpy(obs_sequence).float().unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.device)
             ego_state_tensor = torch.from_numpy(ego_state_sequence).float().unsqueeze(0).to(self.device)
-            rep = self.representation_model.encode(obs_tensor, ego_state_tensor)
+            batch = {
+                'observations': obs_tensor,
+                'ego_states': ego_state_tensor
+            }
+            rep = self.representation_model.encode(batch)
             
         representation = rep.cpu().numpy().squeeze()
 
@@ -381,7 +389,7 @@ def create_representation_model(cfg):
     if ModelClass is None:
         raise ValueError(f"Invalid model type: {cfg.training.model_type}")
 
-    model = ModelClass(obs_shape=obs_shape, action_dim=action_dim, ego_state_dim=ego_state_dim, num_frames_to_predict=cfg.dataset.t_pred, hidden_dim=cfg.training.hidden_dim)
+    model = ModelClass(obs_shape=obs_shape, action_dim=action_dim, ego_state_dim=ego_state_dim, cfg=cfg)
 
     # Find the correct model path
     model_path = find_model_path(cfg.project_dir, cfg.representation.model_path)

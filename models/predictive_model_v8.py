@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 from models.base_predictive_model import BasePredictiveModel
+from models.loss_functions import CombinedLoss
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
@@ -12,8 +13,8 @@ class PositionalEncoding(nn.Module):
         return x + self.pe[:x.size(0)]
 
 class PredictiveModelV8(BasePredictiveModel):
-    def __init__(self, obs_shape, action_dim, ego_state_dim, num_frames_to_predict, hidden_dim, nhead=16, num_encoder_layers=8, num_decoder_layers=8):
-        super().__init__(obs_shape, action_dim, ego_state_dim, num_frames_to_predict, hidden_dim)
+    def __init__(self, obs_shape, action_dim, ego_state_dim, cfg, nhead=16, num_encoder_layers=8, num_decoder_layers=8):
+        super().__init__(obs_shape, action_dim, ego_state_dim, cfg)
 
         self.encoder = self._make_encoder(obs_shape)
 
@@ -22,20 +23,30 @@ class PredictiveModelV8(BasePredictiveModel):
             dummy_input = torch.zeros(1, obs_shape[-3], obs_shape[-2], obs_shape[-1])
             encoder_output_size = self.encoder(dummy_input).shape[1]
 
-        self.encoder_projector = nn.Linear(encoder_output_size, hidden_dim)
-        self.ego_state_projector = nn.Linear(ego_state_dim, hidden_dim)
+        self.encoder_projector = nn.Linear(encoder_output_size, self.hidden_dim)
+        self.ego_state_projector = nn.Linear(ego_state_dim, self.hidden_dim)
 
-        self.pos_encoder = PositionalEncoding(hidden_dim, max_len=num_frames_to_predict)
+        self.pos_encoder = PositionalEncoding(self.hidden_dim, max_len=self.num_frames_to_predict)
 
         # Transformer encoder and decoder
-        encoder_layers = nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=nhead, dim_feedforward=1024, norm_first=True)
+        encoder_layers = nn.TransformerEncoderLayer(d_model=self.hidden_dim, nhead=nhead, dim_feedforward=1024, norm_first=True)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers=num_encoder_layers)
 
-        decoder_layers = nn.TransformerDecoderLayer(d_model=hidden_dim, nhead=nhead, dim_feedforward=1024, norm_first=True)
+        decoder_layers = nn.TransformerDecoderLayer(d_model=self.hidden_dim, nhead=nhead, dim_feedforward=1024, norm_first=True)
         self.transformer_decoder = nn.TransformerDecoder(decoder_layers, num_layers=num_decoder_layers)
 
         # Decoder
         self.decoder = self._make_decoder(obs_shape)
+
+        # Loss function
+        self.loss_function = CombinedLoss(
+            mse_weight=self.cfg.training.loss.mse_weight,
+            l1_weight=self.cfg.training.loss.l1_weight,
+            diversity_weight=self.cfg.training.loss.diversity_weight,
+            latent_l1_weight=self.cfg.training.loss.latent_l1_weight,
+            latent_l2_weight=self.cfg.training.loss.latent_l2_weight,
+            temporal_decay=self.cfg.training.loss.temporal_decay,
+        )
 
         self._initialize_weights()
 
@@ -115,7 +126,10 @@ class PredictiveModelV8(BasePredictiveModel):
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
 
-    def encode(self, observations, ego_states):
+    def encode(self, batch):
+        observations = batch['observations']
+        ego_states = batch['ego_states']
+
         batch_size, seq_len, channels, height, width = observations.shape
 
         # Process observations
@@ -137,7 +151,7 @@ class PredictiveModelV8(BasePredictiveModel):
         # Return only the last memory state
         return memory[-1]
 
-    def decode(self, memory):
+    def decode(self, batch, memory):
         batch_size, hidden_dim = memory.shape
 
         # Prepare decoder input
@@ -157,3 +171,13 @@ class PredictiveModelV8(BasePredictiveModel):
         predictions = predictions.view(batch_size, self.num_frames_to_predict, self.obs_shape[-3], self.obs_shape[-2], self.obs_shape[-1])
 
         return predictions
+    
+
+    def compute_loss(self, batch, encoded_state, predictions):
+        observations = batch['observations']
+        target_observations = batch['next_observations']
+
+        # Calculate loss
+        loss, loss_components = self.loss_function(predictions, target_observations, encoded_state)
+
+        return loss, loss_components
