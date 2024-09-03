@@ -66,3 +66,24 @@ class CombinedLoss(nn.Module):
         }
 
         return total_loss, loss_components
+
+class VQVAELoss(nn.Module):
+    def __init__(self, commitment_cost=0.25):
+        super(VQVAELoss, self).__init__()
+        self.commitment_cost = commitment_cost
+        self.mse_loss = nn.MSELoss(reduction='mean')
+
+    def forward(self, pred, target, latent, vq_loss):
+        # Compute MSE loss between predictions and targets
+        mse_loss = self.mse_loss(pred, target)
+
+        # Combine MSE loss with VQ-VAE loss
+        total_loss = mse_loss + vq_loss
+
+        loss_components = {
+            'mse': mse_loss.item(),
+            'vq_loss': vq_loss.item(),
+            'total': total_loss.item()
+        }
+
+        return total_loss, loss_components

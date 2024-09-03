@@ -52,10 +52,14 @@ wandb:
 representation:
   model_path: "./models/model_64_sparse.pth"
 
+models:
+  VQVAEPredictiveModel:
+    pretrained_model_path: "./models/reconstructive_model.pth"
+
 # Training configuration
 training:
   # Type of model to use for training
-  model_type: "PredictiveModelV8"
+  model_type: "PredictiveModelV8" # SingleStepPredictiveModel, PredictiveModelV8, VQVAEPredictiveModel
   # Set this to the path of a checkpoint to resume training
   warmstart_model: null # "./models/model_64_sparse.pth"
   # Latent representation size
