@@ -44,8 +44,8 @@ def create_renderer_options(view_range, window_size):
                 fill_color=Color("grey")
             ),
             # RenderPlanningProblemSetPlugin(
-            #     render_trajectory=False,
-            #     render_start_waypoints=False,
+            #     render_trajectory=True,
+            #     render_start_waypoints=True,
             #     render_goal_waypoints=True,
             #     render_look_ahead_point=False
             # ),
