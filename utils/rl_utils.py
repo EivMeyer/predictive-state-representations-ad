@@ -588,7 +588,7 @@ def create_rewarders():
 
 def create_representation_observer(cfg):
     representation_model = create_representation_model(cfg)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() and cfg.device == "auto" else cfg.device)
     representation_model.to(device)
     render_observer = create_render_observer(OmegaConf.to_container(cfg, resolve=True)['viewer'])
     representation_observer = RepresentationObserver(representation_model, device, debug=cfg.debug_mode, render_observer=render_observer, sequence_length=cfg.dataset.t_obs)

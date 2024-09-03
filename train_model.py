@@ -249,7 +249,7 @@ def main(cfg: DictConfig) -> None:
     full_dataset = EnvironmentDataset(dataset_path, downsample_factor=cfg.training.downsample_factor)
     obs_shape, action_dim, ego_state_dim = get_data_dimensions(full_dataset)
     
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() and cfg.device == "auto" else cfg.device)
     train_loader, val_loader = create_data_loaders(
         dataset=full_dataset, 
         batch_size=cfg.training.batch_size, 

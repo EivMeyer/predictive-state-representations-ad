@@ -25,5 +25,5 @@ logger = logging.getLogger(__name__)
 torch.manual_seed(config["seed"])
 
 # Determine the device to use for training
-device = torch.device("cuda" if torch.cuda.is_available() and config["device"] == "auto" else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() and config["device"] == "auto" else config["device"])
 logger.info(f"Using device: {device}")
