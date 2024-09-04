@@ -144,10 +144,9 @@ rl_training:
   # Maximum norm for gradient clipping
   max_grad_norm: 10.0
   # Network architecture for the policy and value function
-  ppo_model:
-    net_arch:
-      pi: [128, 128, 64]
-      vf: [128, 128, 64]
+  net_arch:
+    pi: [128, 128, 64]
+    vf: [128, 128, 64]
 
 # Simulation options
 simulation:
