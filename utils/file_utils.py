@@ -2,6 +2,8 @@ from pathlib import Path
 from typing import Optional
 
 def find_model_path(base_path: Path, model_path: Path) -> Optional[Path]:
+    base_path = Path(base_path)
+    model_path = Path(model_path)
     possible_paths = [
         Path(model_path),
         Path(base_path) / model_path,

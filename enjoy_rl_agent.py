@@ -20,6 +20,7 @@ def main(cfg: DictConfig, model_path: str = None):
     # Load the model
     if model_path is None:
         model_path = sorted(Path(cfg.project_dir).rglob('*.zip'), key=lambda x: x.stat().st_mtime, reverse=True)[0]
+    print("Loading model from:", model_path)
     model = PPO.load(model_path, env=env)
 
     obs = env.reset()
@@ -40,9 +41,4 @@ def main(cfg: DictConfig, model_path: str = None):
         env.render('rgb_array')
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model-path", help="Path to the .zip file containing the trained model", type=str)
-    args = parser.parse_args()
-    
-    # Directly call Hydra to initialize and pass the command-line arguments to the main function
     main()

@@ -2,10 +2,79 @@ from pathlib import Path
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from stable_baselines3 import PPO
+from stable_baselines3.common.utils import configure_logger
 import wandb
+import torch
+from typing import Optional
+from utils.file_utils import find_model_path
 
 from utils.rl_utils import setup_rl_experiment, VideoRecorderEvalCallback, DebugCallback, WandbCallback
-from commonroad_geometric.learning.reinforcement.training.custom_callbacks import LogEpisodeMetricsCallback, LogPolicyMetricsCallback
+
+
+def initialize_ppo_model(cfg, env, device):
+    model = None
+    tensorboard_log = None
+
+    # Set up tensorboard logging path
+    if cfg.wandb.enabled:
+        tensorboard_log = Path(cfg.project_dir) / "tensorboard_logs"
+        tensorboard_log.mkdir(parents=True, exist_ok=True)
+        tensorboard_log = str(tensorboard_log)
+
+    # Apply warmstart if specified
+    if cfg.rl_training.warmstart_model:
+        model = load_warmstart_ppo_model(cfg.project_dir, cfg.rl_training.warmstart_model, env, device)
+        if model:
+            print(f"Loaded warmstart model from {cfg.rl_training.warmstart_model}")
+            # Update the model's tensorboard log path
+            if tensorboard_log:
+                model.tensorboard_log = tensorboard_log
+                # Recreate the logger with the new path
+                model.set_logger(configure_logger(
+                    verbose=model.verbose,
+                    tensorboard_log=tensorboard_log,
+                    tb_log_name="PPO_warmstart"
+                ))
+        else:
+            print(f"Warning: Warmstart model not found at {cfg.rl_training.warmstart_model}")
+
+    if model is None:
+        print("No warmstart model loaded. Training from scratch")
+        
+        model = PPO(
+            "MlpPolicy",
+            env,
+            verbose=1,
+            device=device,
+            learning_rate=cfg.rl_training.learning_rate,
+            policy_kwargs={"net_arch": cfg.rl_training.net_arch},
+            n_steps=cfg.rl_training.n_steps,
+            batch_size=cfg.rl_training.batch_size,
+            n_epochs=cfg.rl_training.n_epochs,
+            gamma=cfg.rl_training.gamma,
+            gae_lambda=cfg.rl_training.gae_lambda,
+            clip_range=cfg.rl_training.clip_range,
+            ent_coef=cfg.rl_training.ent_coef,
+            vf_coef=cfg.rl_training.vf_coef,
+            max_grad_norm=cfg.rl_training.max_grad_norm,
+            tensorboard_log=tensorboard_log
+        )
+
+    return model
+
+def load_warmstart_ppo_model(project_dir, model_path, env, device):
+    """Load a pre-trained model for warmstarting."""
+    full_model_path = find_model_path(project_dir, model_path)
+    if full_model_path is None:
+        return None
+    try:
+        # Load the model without specifying tensorboard_log
+        model = PPO.load(full_model_path, env=env, device=device, tensorboard_log=None)
+        return model
+    except Exception as e:
+        print(f"Error loading warmstart model: {e}")
+        return None
+
 
 @hydra.main(version_base=None, config_path=".", config_name="config")
 def main(cfg: DictConfig):
@@ -14,6 +83,7 @@ def main(cfg: DictConfig):
         wandb.init(project=cfg.wandb.project + '-RL', config=OmegaConf.to_container(cfg, resolve=True))
 
     experiment = setup_rl_experiment(cfg)
+    device = torch.device("cuda" if torch.cuda.is_available() and cfg.device == "auto" else cfg.device)
 
     env = experiment.make_env(
         scenario_dir=cfg.scenario_dir,
@@ -22,27 +92,7 @@ def main(cfg: DictConfig):
     )
     cfg.dataset.num_workers
 
-    # Extract the net_arch configuration
-    net_arch = {
-        "pi": cfg.rl_training.ppo_model.net_arch.pi,
-        "vf": cfg.rl_training.ppo_model.net_arch.vf
-    }
-
-    # Create the RL agent
-    model = PPO("MlpPolicy", env, verbose=1, device=cfg.device,
-                learning_rate=cfg.rl_training.learning_rate,
-                policy_kwargs={"net_arch": net_arch},
-                n_steps=cfg.rl_training.n_steps,
-                batch_size=cfg.rl_training.batch_size,
-                n_epochs=cfg.rl_training.n_epochs,
-                gamma=cfg.rl_training.gamma,
-                gae_lambda=cfg.rl_training.gae_lambda,
-                clip_range=cfg.rl_training.clip_range,
-                ent_coef=cfg.rl_training.ent_coef,
-                vf_coef=cfg.rl_training.vf_coef,
-                max_grad_norm=cfg.rl_training.max_grad_norm,
-                tensorboard_log=Path(cfg.project_dir) / "tensorboard_logs" if cfg.wandb.enabled else None
-    )
+    model = initialize_ppo_model(cfg, env, device)
 
     # Setup evaluation environment
     eval_env = experiment.make_env(

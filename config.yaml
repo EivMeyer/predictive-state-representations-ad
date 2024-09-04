@@ -103,6 +103,8 @@ training:
 
 # Reinforcement Learning Training options
 rl_training:
+  # Warmstart model for training
+  warmstart_model: null # "./rl/models/final_model.zip"
   # Path to save trained models
   save_path: "./rl/models"
   # Path to save training logs

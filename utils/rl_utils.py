@@ -401,7 +401,7 @@ def create_representation_model(cfg, device):
 
     model.load_state_dict(torch.load(model_path, map_location=device)['model_state_dict'])
     model.to(device)
-    
+
     return model
 
 def has_reached_end(simulation: EgoVehicleSimulation, arclength_threshold: float) -> bool:
