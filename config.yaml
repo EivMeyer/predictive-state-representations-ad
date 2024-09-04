@@ -68,7 +68,7 @@ training:
   # Batch size for training
   batch_size: 1
   # Learning rate for the optimizer
-  learning_rate: 0.002
+  learning_rate: 0.0025
   # Weight decay for the optimizer
   weight_decay: 0.00001
   # Factor to downsample input images
@@ -123,7 +123,7 @@ rl_training:
   # Total number of timesteps for training
   total_timesteps: 10000000
   # Learning rate for the optimizer
-  learning_rate: 3e-4
+  learning_rate: 1.5e-4
   # Number of steps to collect samples for each update
   n_steps: 256
   # Batch size for each update
