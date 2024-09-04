@@ -1,6 +1,7 @@
 from pathlib import Path
 import hydra
 from omegaconf import DictConfig, OmegaConf
+
 from stable_baselines3 import PPO
 from stable_baselines3.common.utils import configure_logger
 import wandb
@@ -40,14 +41,14 @@ def initialize_ppo_model(cfg, env, device):
 
     if model is None:
         print("No warmstart model loaded. Training from scratch")
-        
+
         model = PPO(
             "MlpPolicy",
             env,
             verbose=1,
             device=device,
             learning_rate=cfg.rl_training.learning_rate,
-            policy_kwargs={"net_arch": cfg.rl_training.net_arch},
+            policy_kwargs={"net_arch": OmegaConf.to_container(cfg.rl_training.net_arch, resolve=True)},
             n_steps=cfg.rl_training.n_steps,
             batch_size=cfg.rl_training.batch_size,
             n_epochs=cfg.rl_training.n_epochs,
