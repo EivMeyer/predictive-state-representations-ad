@@ -15,7 +15,6 @@ project_dir: "./output"
 
 # Directory containing scenario files
 scenario_dir: "scenarios"
-# scenario_dir: "../../data/highd-dataset-converted"
 
 # Random seed for reproducibility
 seed: 123

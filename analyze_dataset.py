@@ -1,9 +1,9 @@
-import hydra
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 import matplotlib.pyplot as plt
 from utils.dataset_utils import EnvironmentDataset
 from pathlib import Path
 import numpy as np
+from utils.config_utils import config_wrapper
 
 
 def visualize_episode(episode):
@@ -35,8 +35,8 @@ def visualize_episode(episode):
 
     plt.show()
 
-@hydra.main(version_base=None, config_path=".", config_name="config")
-def main(cfg: DictConfig):
+@config_wrapper()
+def main(cfg: DictConfig) -> None:
     dataset_path = Path(cfg.project_dir) / "dataset"
     dataset = EnvironmentDataset(dataset_path)
 

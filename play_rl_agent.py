@@ -1,13 +1,13 @@
-import hydra
 from omegaconf import DictConfig
 from pathlib import Path
 import numpy as np
 
 from utils.rl_utils import setup_rl_experiment
+from utils.config_utils import config_wrapper
 from commonroad_geometric.simulation.ego_simulation.control_space.keyboard_input import UserAdvanceScenarioInterrupt, UserQuitInterrupt, UserResetInterrupt, get_keyboard_action
 
-@hydra.main(version_base=None, config_path=".", config_name="config")
-def main(cfg: DictConfig):
+@config_wrapper()
+def main(cfg: DictConfig) -> None:
 
     experiment = setup_rl_experiment(cfg)
     env = experiment.make_env(

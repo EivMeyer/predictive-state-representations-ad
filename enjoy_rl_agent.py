@@ -1,14 +1,12 @@
-import hydra
 from omegaconf import DictConfig
 from pathlib import Path
-import numpy as np
 from stable_baselines3 import PPO
-import argparse
-
+from utils.config_utils import config_wrapper
 from utils.rl_utils import setup_rl_experiment
 
-@hydra.main(version_base=None, config_path=".", config_name="config")
-def main(cfg: DictConfig, model_path: str = None):
+@config_wrapper()
+def main(cfg: DictConfig) -> None:
+
     # Setup the environment from configuration
     experiment = setup_rl_experiment(cfg)
     env = experiment.make_env(
@@ -18,8 +16,7 @@ def main(cfg: DictConfig, model_path: str = None):
     )
 
     # Load the model
-    if model_path is None:
-        model_path = sorted(Path(cfg.project_dir).rglob('*.zip'), key=lambda x: x.stat().st_mtime, reverse=True)[0]
+    model_path = sorted(Path(cfg.project_dir).rglob('*.zip'), key=lambda x: x.stat().st_mtime, reverse=True)[0]
     print("Loading model from:", model_path)
     model = PPO.load(model_path, env=env)
 

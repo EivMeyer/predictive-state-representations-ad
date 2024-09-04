@@ -1,7 +1,7 @@
-import hydra
 from omegaconf import DictConfig
 from utils.dataset_utils import EnvironmentDataset, get_data_dimensions, create_data_loaders, move_batch_to_device
 from utils.file_utils import find_model_path
+from utils.config_utils import config_wrapper
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
@@ -233,7 +233,7 @@ class Trainer:
         self.start_epoch = checkpoint['epoch'] + 1
         print(f"Resuming training from epoch {self.start_epoch}")
 
-@hydra.main(version_base=None, config_path=".", config_name="config")
+@config_wrapper()
 def main(cfg: DictConfig) -> None:
     if __name__ == '__main__':
         mp.set_start_method('spawn', force=True)

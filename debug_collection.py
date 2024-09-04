@@ -1,10 +1,10 @@
-import hydra
 from omegaconf import DictConfig, OmegaConf
 from experiment_setup import setup_base_experiment
 import time
 import matplotlib.pyplot as plt
 import numpy as np
 from functools import wraps
+from utils.config_utils import config_wrapper
 
 def time_function(func):
     @wraps(func)
@@ -28,8 +28,9 @@ def instrument_env(env):
     
     return env
 
-@hydra.main(version_base=None, config_path=".", config_name="config")
-def main(cfg: DictConfig):
+@config_wrapper()
+def main(cfg: DictConfig) -> None:
+
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     experiment, env = setup_base_experiment(cfg_dict)
     

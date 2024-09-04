@@ -23,3 +23,9 @@ This project develops and evaluates predictive models for autonomous vehicle nav
 
 Modify `config.yaml` to adjust simulation parameters and training settings.
 
+## Local Configuration
+
+For machine-specific settings, create a `config.local.yaml` file based on the `config.local.template.yaml`:
+
+```bash
+cp config.local.template.yaml config.local.yaml

@@ -1,13 +1,12 @@
 from pathlib import Path
-import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.utils import configure_logger
 import wandb
 import torch
-from typing import Optional
 from utils.file_utils import find_model_path
+from utils.config_utils import config_wrapper
 
 from utils.rl_utils import setup_rl_experiment, VideoRecorderEvalCallback, DebugCallback, WandbCallback
 
@@ -77,8 +76,8 @@ def load_warmstart_ppo_model(project_dir, model_path, env, device):
         return None
 
 
-@hydra.main(version_base=None, config_path=".", config_name="config")
-def main(cfg: DictConfig):
+@config_wrapper()
+def main(cfg: DictConfig) -> None:
     # Initialize wandb if enabled
     if cfg.wandb.enabled:
         wandb.init(project=cfg.wandb.project + '-RL', config=OmegaConf.to_container(cfg, resolve=True))

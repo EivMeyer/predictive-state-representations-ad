@@ -1,0 +1,24 @@
+# This is a template file, please make a copy and modify the values as needed
+# Rename the file to config.local.yaml to use it
+
+# Directory where the project output will be stored
+project_dir: "./output"
+
+# Directory containing scenario files
+# Place your scenario files in this directory
+scenario_dir: "scenarios"
+
+# Automatically select the device (CPU/GPU)
+# Set this to "auto" to let the system choose the device automatically
+device: "auto"
+
+# Set to false to disable debug output
+# Enable this for additional debug information
+debug_mode: true
+
+# Configuration for the viewer component
+viewer:
+  # Size of the viewer window
+  window_size: 64
+
+# ...
