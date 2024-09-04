@@ -59,7 +59,7 @@ models:
 # Training configuration
 training:
   # Type of model to use for training
-  model_type: "PredictiveModelV8" # SingleStepPredictiveModel, PredictiveModelV8, VQVAEPredictiveModel
+  model_type: "PredictiveModelV8" # AutoEncoderModelV0, PredictiveModelV8, VQVAEPredictiveModel
   # Set this to the path of a checkpoint to resume training
   warmstart_model: null # "./models/model_64_sparse.pth"
   # Latent representation size
@@ -97,8 +97,8 @@ training:
     mse_weight: 1.0
     l1_weight: 0.0
     diversity_weight: 0.0
-    latent_l1_weight: 0.01
-    latent_l2_weight: 0.01
+    latent_l1_weight: 0.005
+    latent_l2_weight: 0.002
     temporal_decay: 0.9
 
 # Reinforcement Learning Training options

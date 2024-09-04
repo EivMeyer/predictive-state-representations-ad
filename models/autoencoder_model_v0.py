@@ -1,31 +1,25 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from models.base_predictive_model import BasePredictiveModel
-from models.loss_functions import CombinedLoss
 
-class SingleStepPredictiveModel(BasePredictiveModel):
+class AutoEncoderModelV0(BasePredictiveModel):
     def __init__(self, obs_shape, action_dim, ego_state_dim, cfg):
         super().__init__(obs_shape, action_dim, ego_state_dim, cfg)
 
         self.encoder = self._make_encoder(obs_shape)
-        self.decoder = self._make_decoder(obs_shape)
 
         # Calculate the size of the encoder output
         with torch.no_grad():
             dummy_input = torch.zeros(1, obs_shape[-3], obs_shape[-2], obs_shape[-1])
             encoder_output_size = self.encoder(dummy_input).shape[1]
 
-        self.encoder_projector = nn.Linear(encoder_output_size, self.hidden_dim)
+        self.latent_dim = self.hidden_dim
+        self.fc_mu = nn.Linear(encoder_output_size, self.latent_dim)
+        self.fc_logvar = nn.Linear(encoder_output_size, self.latent_dim)
 
-        # Loss function
-        self.loss_function = CombinedLoss(
-            mse_weight=self.cfg.training.loss.mse_weight,
-            l1_weight=self.cfg.training.loss.l1_weight,
-            diversity_weight=self.cfg.training.loss.diversity_weight,
-            latent_l1_weight=self.cfg.training.loss.latent_l1_weight,
-            latent_l2_weight=self.cfg.training.loss.latent_l2_weight,
-            temporal_decay=self.cfg.training.loss.temporal_decay,
-        )
+        # Decoder
+        self.decoder = self._make_decoder(obs_shape)
 
         self._initialize_weights()
 
@@ -53,24 +47,27 @@ class SingleStepPredictiveModel(BasePredictiveModel):
     def _make_decoder(self, obs_shape):
         if obs_shape[-2:] == (64, 64):
             return nn.Sequential(
-                nn.ConvTranspose2d(self.hidden_dim, 128, kernel_size=4, stride=1, padding=0, bias=False),
+                nn.Linear(self.latent_dim, 512 * 4 * 4),
+                nn.ReLU(inplace=True),
+                nn.Unflatten(1, (512, 4, 4)),
+                nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1, bias=False),
+                nn.BatchNorm2d(256),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1, bias=False),
                 nn.BatchNorm2d(128),
                 nn.ReLU(inplace=True),
                 nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1, bias=False),
                 nn.BatchNorm2d(64),
                 nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1, bias=False),
-                nn.BatchNorm2d(32),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1, bias=False),
-                nn.BatchNorm2d(16),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(16, obs_shape[-3], kernel_size=4, stride=2, padding=1, bias=False),
+                nn.ConvTranspose2d(64, obs_shape[-3], kernel_size=4, stride=2, padding=1, bias=False),
                 nn.BatchNorm2d(obs_shape[-3]),
             )
         elif obs_shape[-2:] == (128, 128):
             return nn.Sequential(
-                nn.ConvTranspose2d(self.hidden_dim, 256, kernel_size=4, stride=1, padding=0, bias=False),
+                nn.Linear(self.latent_dim, 512 * 4 * 4),
+                nn.ReLU(inplace=True),
+                nn.Unflatten(1, (512, 4, 4)),
+                nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1, bias=False),
                 nn.BatchNorm2d(256),
                 nn.ReLU(inplace=True),
                 nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1, bias=False),
@@ -82,10 +79,7 @@ class SingleStepPredictiveModel(BasePredictiveModel):
                 nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1, bias=False),
                 nn.BatchNorm2d(32),
                 nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1, bias=False),
-                nn.BatchNorm2d(16),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(16, obs_shape[-3], kernel_size=4, stride=2, padding=1, bias=False),
+                nn.ConvTranspose2d(32, obs_shape[-3], kernel_size=4, stride=2, padding=1, bias=False),
                 nn.BatchNorm2d(obs_shape[-3]),
             )
         else:
@@ -93,7 +87,7 @@ class SingleStepPredictiveModel(BasePredictiveModel):
 
     def _initialize_weights(self):
         for m in self.modules():
-            if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
+            if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d, nn.Linear)):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
@@ -102,34 +96,44 @@ class SingleStepPredictiveModel(BasePredictiveModel):
                 nn.init.constant_(m.bias, 0)
 
     def encode(self, batch):
-        observations = batch['observations']
-        
-        # Take only the last observation from the sequence
-        last_obs = observations[:, -1, :, :, :]
-        
-        # Process observation through encoder
-        encoded_state = self.encoder_projector(self.encoder(last_obs))
-        
-        return encoded_state
+        observation = batch['observations'][:, -1]  # Take only the last observation
+        encoder_features = self.encoder(observation)
+        mu = self.fc_mu(encoder_features)
+        logvar = self.fc_logvar(encoder_features)
+        return mu, logvar
 
-    def decode(self, batch, encoded_state):
-        # Reshape for convolutional decoder
-        output = encoded_state.view(-1, self.hidden_dim, 1, 1)
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
 
-        # Apply convolutional decoder
-        prediction = self.decoder(output)
+    def decode(self, z):
+        return self.decoder(z)
 
-        # Add an extra dimension for num_frames_to_predict (which is 1 in this case)
-        prediction = prediction.unsqueeze(1)
-
-        return prediction
+    def forward(self, batch):
+        mu, logvar = self.encode(batch)
+        z = self.reparameterize(mu, logvar)
+        reconstruction = self.decode(z).unsqueeze(1)  # Add sequence length dimension
+        return {'predictions': reconstruction, 'encoded_state': mu, 'logvar': logvar}
 
     def compute_loss(self, batch, model_output):
-        predictions = model_output['predictions']
-        target_observations = batch['next_observations']
-        encoded_state = model_output['encoded_state']
+        reconstruction = model_output['predictions']
+        mu = model_output['encoded_state']
+        logvar = model_output['logvar']
+        target_observation = batch['observations'][:, (-1,)]  # Take only the last observation
 
-        # Calculate loss
-        loss, loss_components = self.loss_function(predictions, target_observations, encoded_state)
+        # Reconstruction loss (MSE)
+        mse_loss = F.mse_loss(reconstruction, target_observation, reduction='sum')
 
-        return loss, loss_components
+        # KL divergence loss
+        kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+
+        # Total loss
+        total_loss = mse_loss + kl_loss
+
+        loss_components = {
+            'mse': mse_loss.item(),
+            'kl_loss': kl_loss.item(),
+        }
+
+        return total_loss, loss_components

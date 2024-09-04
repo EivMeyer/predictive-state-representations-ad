@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from models.base_predictive_model import BasePredictiveModel
-from models.single_step_predictive_model import SingleStepPredictiveModel
+from models.autoencoder_model_v0 import AutoEncoderModelV0
 from models.loss_functions import VQVAELoss
 from utils.file_utils import find_model_path
 from typing import Dict, Any
@@ -52,11 +52,11 @@ class VQVAEPredictiveModel(BasePredictiveModel):
         
         pretrained_model_path = find_model_path(cfg.project_dir, cfg.models.VQVAEPredictiveModel.pretrained_model_path) if pretrained_model_path is None else pretrained_model_path
 
-        self.single_step_model = SingleStepPredictiveModel(obs_shape, action_dim, ego_state_dim, cfg)
-        self.single_step_model.load_state_dict(torch.load(pretrained_model_path)['model_state_dict'])
-        self.single_step_model.eval()
+        self.autoencoder = AutoEncoderModelV0(obs_shape, action_dim, ego_state_dim, cfg)
+        self.autoencoder.load_state_dict(torch.load(pretrained_model_path)['model_state_dict'])
+        self.autoencoder.eval()
         
-        for param in self.single_step_model.parameters():
+        for param in self.autoencoder.parameters():
             param.requires_grad = False
         
         self.vq_vae = VQVAE(num_embeddings, embedding_dim, commitment_cost)
@@ -86,7 +86,7 @@ class VQVAEPredictiveModel(BasePredictiveModel):
         flattened_temporal_batch['observations'] = observations.view(batch_size * seq_len, -1, channels, height, width)
         
         with torch.no_grad():
-            encoded_latents = self.single_step_model.encode(flattened_temporal_batch)
+            encoded_latents, _ = self.autoencoder.encode(flattened_temporal_batch)
         
         encoded_latents = encoded_latents.view(batch_size, seq_len, -1)
         encoded_latents = self.fc_encoder(encoded_latents)
@@ -122,7 +122,7 @@ class VQVAEPredictiveModel(BasePredictiveModel):
         vq_loss, quantized, perplexity = self.vq_vae(encoded_state)
         predicted_latents = self.decode(batch, quantized)
 
-        predictions = self.single_step_model.decode(batch, predicted_latents).view_as(observations)
+        predictions = self.autoencoder.decode(batch, predicted_latents).view_as(observations)
 
         return {
             "predicted_latents": predicted_latents,
@@ -149,7 +149,7 @@ class VQVAEPredictiveModel(BasePredictiveModel):
                 'observations': target_observations,
                 'ego_states': target_ego_states
             }
-            target_latents = self.single_step_model.encode(target_batch)
+            target_latents, _ = self.autoencoder.encode(target_batch)
             target_latents = target_latents.view(batch_size, seq_len, -1)
         
         loss, loss_components = self.loss_function(predicted_latents, target_latents, encoded_state, vq_loss)
