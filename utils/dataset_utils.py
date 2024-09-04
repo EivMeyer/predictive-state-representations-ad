@@ -21,19 +21,18 @@ class EnvironmentDataset(Dataset):
 
     def add_episode(self, observations, actions, ego_states, next_observations, next_actions, dones):
         # Preprocess images as uint8 for storage
-        observations = np.array([self._preprocess_image(obs) for obs in observations])
-        next_observations = np.array([self._preprocess_image(obs) for obs in next_observations])
+        observations = np.stack([self._preprocess_image(obs) for obs in observations])
+        next_observations = np.stack([self._preprocess_image(obs) for obs in next_observations])
 
         # Convert data to tensors at this stage
         episode_data = {
-            'observations': torch.tensor(observations, dtype=torch.uint8),  # Stored as uint8
-            'actions': torch.tensor(actions, dtype=torch.float32),
-            'ego_states': torch.tensor(ego_states, dtype=torch.float32),
-            'next_observations': torch.tensor(next_observations, dtype=torch.uint8),  # Stored as uint8
-            'next_actions': torch.tensor(next_actions, dtype=torch.float32),
-            'dones': torch.tensor(dones, dtype=torch.bool)
+            'observations': torch.from_numpy(observations).to(torch.uint8),
+            'actions': torch.from_numpy(np.array(actions)).to(torch.float32),
+            'ego_states': torch.from_numpy(np.array(ego_states)).to(torch.float32),
+            'next_observations': torch.from_numpy(next_observations).to(torch.uint8),
+            'next_actions': torch.from_numpy(np.array(next_actions)).to(torch.float32),
+            'dones': torch.from_numpy(np.array(dones)).to(torch.bool)
         }
-
         self.current_batch.append(episode_data)
 
         if len(self.current_batch) >= self.batch_size:
