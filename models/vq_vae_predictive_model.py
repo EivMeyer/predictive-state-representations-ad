@@ -17,28 +17,55 @@ class PositionalEncoding(nn.Module):
         return x + self.pe[:x.size(0)]
 
 class VQVAE(nn.Module):
-    def __init__(self, num_embeddings, embedding_dim, commitment_cost):
+    def __init__(self, num_embeddings, embedding_dim, commitment_cost, decay=0.99):
         super().__init__()
         self.embedding = nn.Embedding(num_embeddings, embedding_dim)
         self.embedding.weight.data.uniform_(-1/num_embeddings, 1/num_embeddings)
         self.commitment_cost = commitment_cost
+        self.register_buffer('ema_cluster_size', torch.zeros(num_embeddings))
+        self.ema_w = nn.Parameter(torch.Tensor(num_embeddings, embedding_dim))
+        self.ema_w.data.normal_()
+        self.decay = decay
 
     def forward(self, inputs):
-        distances = (torch.sum(inputs**2, dim=1, keepdim=True) 
-                    + torch.sum(self.embedding.weight**2, dim=1)
-                    - 2 * torch.matmul(inputs, self.embedding.weight.t()))
+        # Compute distances
+        distances = (torch.sum(inputs**2, dim=1, keepdim=True)
+                     + torch.sum(self.embedding.weight**2, dim=1)
+                     - 2 * torch.matmul(inputs, self.embedding.weight.t()))
         
+        # Encoding
         encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
         encodings = torch.zeros(encoding_indices.shape[0], self.embedding.num_embeddings, device=inputs.device)
         encodings.scatter_(1, encoding_indices, 1)
         
+        # Quantize and unflatten
         quantized = torch.matmul(encodings, self.embedding.weight)
         
+        # Loss
         e_latent_loss = F.mse_loss(quantized.detach(), inputs)
         q_latent_loss = F.mse_loss(quantized, inputs.detach())
         loss = q_latent_loss + self.commitment_cost * e_latent_loss
         
+        # Straight Through Estimator
         quantized = inputs + (quantized - inputs).detach()
+        
+        # Use EMA to update the embedding vectors
+        if self.training:
+            self.ema_cluster_size = self.ema_cluster_size * self.decay + \
+                                    (1 - self.decay) * torch.sum(encodings, 0)
+            
+            # Laplace smoothing of the cluster size
+            n = torch.sum(self.ema_cluster_size.data)
+            self.ema_cluster_size = (
+                (self.ema_cluster_size + 1e-5)
+                / (n + self.embedding.num_embeddings * 1e-5) * n)
+            
+            dw = torch.matmul(encodings.t(), inputs)
+            self.ema_w = nn.Parameter(self.ema_w * self.decay + (1 - self.decay) * dw)
+            
+            self.embedding.weight = nn.Parameter(self.ema_w / self.ema_cluster_size.unsqueeze(1))
+
+        # Perplexity
         avg_probs = torch.mean(encodings, dim=0)
         perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
         
@@ -51,6 +78,8 @@ class VQVAEPredictiveModel(BasePredictiveModel):
         super().__init__(obs_shape, action_dim, ego_state_dim, cfg)
         
         pretrained_model_path = find_model_path(cfg.project_dir, cfg.models.VQVAEPredictiveModel.pretrained_model_path) if pretrained_model_path is None else pretrained_model_path
+
+        assert pretrained_model_path is not None, "Pretrained model path must be provided"
 
         self.autoencoder = AutoEncoderModelV0(obs_shape, action_dim, ego_state_dim, cfg)
         self.autoencoder.load_state_dict(torch.load(pretrained_model_path)['model_state_dict'])
@@ -116,13 +145,11 @@ class VQVAEPredictiveModel(BasePredictiveModel):
     def forward(self, batch):
         observations = batch['observations']
 
-        batch_size, seq_len, channels, height, width = observations.shape
-
         encoded_state = self.encode(batch)
         vq_loss, quantized, perplexity = self.vq_vae(encoded_state)
         predicted_latents = self.decode(batch, quantized)
 
-        predictions = self.autoencoder.decode(batch, predicted_latents).view_as(observations)
+        predictions = self.autoencoder.decode(predicted_latents.view(-1, self.hidden_dim)).view_as(observations)
 
         return {
             "predicted_latents": predicted_latents,
