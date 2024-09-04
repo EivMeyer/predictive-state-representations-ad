@@ -242,7 +242,7 @@ def main(cfg: DictConfig) -> None:
 
     dataset_path = Path(cfg.project_dir) / "dataset"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"{timestamp}_{wandb.run.name}_{cfg.training.model_type}" if wandb.run else f"{timestamp}_{cfg.training.model_type}"
+    run_name = f"{timestamp}_{wandb.run.name}_{cfg.training.model_type}" if cfg.wandb.enabled else f"{timestamp}_{cfg.training.model_type}"
     run_dir = Path(cfg.project_dir) / "models" / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     
