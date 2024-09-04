@@ -2,7 +2,6 @@
 output/
 outputs/
 settings.json
-launch.json
 wandb/
 *.out
 *.zip

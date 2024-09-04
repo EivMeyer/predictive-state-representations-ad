@@ -1,0 +1,110 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Train Model",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/train_model.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "args": "wandb.enabled=false"
+            }
+        },
+        {
+            "name": "Python: Train RL Agent",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/train_rl_agent.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": ["hydra.run.dir=.", "wandb.enabled=false", "debug_mode=true", "rl_training.num_envs=1"]
+        },
+        {
+            "name": "Python: Enjoy RL Agent",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/enjoy_rl_agent.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": []
+        },
+        {
+            "name": "Python: Enjoy RL Agent (Debug)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/enjoy_rl_agent.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": ["debug_mode=true"]
+        },
+        {
+            "name": "Python: Play RL Agent",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/play_rl_agent.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": ["hydra.run.dir=.", "debug_mode=false", "rl_training.num_envs=1"]
+        },
+        {
+            "name": "Python: Play RL Agent (Debug)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/play_rl_agent.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": ["hydra.run.dir=.", "debug_mode=true", "rl_training.num_envs=1"]
+        },
+        {
+            "name": "Python: Collect Dataset",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/collect_dataset.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Python: Analyze Dataset",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analyze_dataset.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Python: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        }
+    ]
+}
