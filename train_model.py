@@ -224,8 +224,8 @@ class Trainer:
         print(f"Final model saved to {final_model_path}")
         self.wandb.save(str(final_model_path))
 
-    def load_checkpoint(self, checkpoint_path: Path) -> None:
-        checkpoint = torch.load(checkpoint_path)
+    def load_checkpoint(self, checkpoint_path: Path, device) -> None:
+        checkpoint = torch.load(checkpoint_path, map_location=device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         if 'scheduler_state_dict' in checkpoint:
@@ -284,7 +284,7 @@ def main(cfg: DictConfig) -> None:
         if checkpoint_path is None:
             raise FileNotFoundError(f"Model file not found: {cfg.training.warmstart_model}. "
                                     f"Searched in {cfg.project_dir} and its subdirectories.")
-        trainer.load_checkpoint(checkpoint_path)
+        trainer.load_checkpoint(checkpoint_path, device)
     
     trainer.train()
 

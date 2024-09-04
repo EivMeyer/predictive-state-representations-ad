@@ -330,7 +330,7 @@ class RepresentationObserver(BaseObserver):
 
         if self.debug:
             with torch.no_grad():
-                decoding = self.representation_model.decode(rep)
+                decoding = self.representation_model.decode(batch, rep)
             predictions = decoding[0].permute(0, 2, 3, 1).cpu().detach().numpy()
 
             self.update_debug_plot(render_obs, predictions, representation)
@@ -373,7 +373,7 @@ class RepresentationObserver(BaseObserver):
         if self.debug:
             print("RepresentationObserver reset: Cleared observation and ego state buffers.")
 
-def create_representation_model(cfg):
+def create_representation_model(cfg, device):
     dataset_path = Path(cfg.project_dir) / "dataset"
     model_save_dir = Path(cfg.project_dir) / "models"
     model_save_dir.mkdir(parents=True, exist_ok=True)
@@ -399,7 +399,9 @@ def create_representation_model(cfg):
     
     print(f"Using model file: {model_path}")
 
-    model.load_state_dict(torch.load(model_path)['model_state_dict'])
+    model.load_state_dict(torch.load(model_path, map_location=device)['model_state_dict'])
+    model.to(device)
+    
     return model
 
 def has_reached_end(simulation: EgoVehicleSimulation, arclength_threshold: float) -> bool:
@@ -587,9 +589,8 @@ def create_rewarders():
     return rewarders
 
 def create_representation_observer(cfg):
-    representation_model = create_representation_model(cfg)
     device = torch.device("cuda" if torch.cuda.is_available() and cfg.device == "auto" else cfg.device)
-    representation_model.to(device)
+    representation_model = create_representation_model(cfg, device)
     render_observer = create_render_observer(OmegaConf.to_container(cfg, resolve=True)['viewer'])
     representation_observer = RepresentationObserver(representation_model, device, debug=cfg.debug_mode, render_observer=render_observer, sequence_length=cfg.dataset.t_obs)
     return representation_observer
