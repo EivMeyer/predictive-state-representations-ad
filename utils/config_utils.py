@@ -1,10 +1,6 @@
-# utils/config_utils.py
-
-import os
 from pathlib import Path
 from omegaconf import DictConfig, OmegaConf
-import hydra
-from hydra.core.config_store import ConfigStore
+import sys
 
 def get_project_root():
     """Get the project root directory."""
@@ -28,18 +24,13 @@ def load_and_merge_config(config_name: str = "config") -> DictConfig:
 
 def config_wrapper(config_name: str = "config"):
     def decorator(func):
-        @hydra.main(version_base=None, config_path=None)
-        def wrapper(_: DictConfig) -> None:
-            # Disable Hydra's output directory creation
-            os.environ['HYDRA_FULL_ERROR'] = '1'
-            hydra.core.global_hydra.GlobalHydra.instance().clear()
-            hydra.initialize(config_path=None, job_name="app")
-            
+        def wrapper():
             cfg = load_and_merge_config(config_name)
+
+            # Handle command-line arguments
+            cli_config = OmegaConf.from_dotlist(sys.argv[1:])
+            cfg = OmegaConf.merge(cfg, cli_config)
+
             return func(cfg)
         return wrapper
     return decorator
-
-# Register your config schema if you have one
-cs = ConfigStore.instance()
-cs.store(name="base_config", node=DictConfig({}))
