@@ -153,7 +153,7 @@ class Trainer:
 
         if is_best:
             path = Path(self.cfg.project_dir) / "models" / self.run_name / "best_model.pth"
-            path.mkdir(parents=True, exist_ok=True)
+            path.parent.mkdir(parents=True, exist_ok=True)
             torch.save(save_dict, path)
             print(f"New best model saved with validation loss: {save_dict['val_loss']:.4f}")
         elif self.current_epoch % self.cfg.training.save_interval == 0:
@@ -161,7 +161,7 @@ class Trainer:
                 path = Path(self.cfg.project_dir) / "models" / self.run_name / "model_latest.pth"
             else:
                 path = Path(self.cfg.project_dir) / "models" / self.run_name / f"model_epoch_{self.current_epoch+1}.pth"
-            path.mkdir(parents=True, exist_ok=True)
+            path.parent.mkdir(parents=True, exist_ok=True)
             torch.save(save_dict, path)
             print(f"Model saved to {path}")
             self.wandb.save(str(path))
