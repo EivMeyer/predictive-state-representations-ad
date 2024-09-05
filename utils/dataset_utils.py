@@ -14,21 +14,10 @@ class EnvironmentDataset(Dataset):
         self.batch_size = batch_size
         self.current_batch = []
         self.episode_files = []
-        self.load_existing_batches()
+        self.update_file_list()
 
-    def load_existing_batches(self):
-        self.episode_files = []
-        for f in sorted(os.listdir(self.data_dir)):
-            if f.startswith("batch_") and f.endswith(".pt"):
-                file_path = self.data_dir / f
-                try:
-                    # Try to load the file to check if it's valid
-                    torch.load(file_path)
-                    self.episode_files.append(f)
-                except Exception as e:
-                    logging.warning(f"Corrupted file detected: {f}. Deleting it.")
-                    os.remove(file_path)
-        
+    def update_file_list(self):
+        self.episode_files = sorted([f for f in os.listdir(self.data_dir) if f.startswith("batch_") and f.endswith(".pt")])
         self.batch_count = len(self.episode_files)
 
     def __getitem__(self, idx):
@@ -43,12 +32,15 @@ class EnvironmentDataset(Dataset):
             logging.error(f"Error loading file {file}: {str(e)}. Removing it from the dataset.")
             self._remove_corrupted_file(idx)
             
+            # Update the file list and batch count
+            self.update_file_list()
+            
             # Recursively try the next file
             if idx < self.batch_count:
                 return self.__getitem__(idx)
             else:
                 raise RuntimeError("No valid files found after the specified index.")
-            
+
     def _load_and_process_file(self, file):
         file_path = self.data_dir / file
         data = torch.load(file_path)
@@ -121,13 +113,42 @@ class EnvironmentDataset(Dataset):
             else:
                 batch_data[key] = torch.stack(batch_data[key])
 
-        batch_index = len(self.episode_files)
+        # Perform sanity checks
+        try:
+            self._sanity_check(batch_data)
+        except AssertionError as e:
+            logging.error(f"Sanity check failed: {str(e)}. Discarding this batch.")
+            self.current_batch = []
+            return
+
+        batch_index = self.batch_count
         batch_filename = f"batch_{batch_index}.pt"
-        torch.save(batch_data, self.data_dir / batch_filename)
+        temp_filename = f"temp_{batch_filename}"
+
+        # Save to a temporary file first
+        torch.save(batch_data, self.data_dir / temp_filename)
+
+        # Verify the saved file
+        try:
+            loaded_data = torch.load(self.data_dir / temp_filename)
+            self._sanity_check(loaded_data)
+        except Exception as e:
+            logging.error(f"Failed to verify saved batch: {str(e)}. Discarding this batch.")
+            os.remove(self.data_dir / temp_filename)
+            self.current_batch = []
+            return
+
+        # If verification passes, rename the file
+        os.rename(self.data_dir / temp_filename, self.data_dir / batch_filename)
         
         self.episode_files.append(batch_filename)
         self.batch_count += 1
         self.current_batch = []
+
+    def _sanity_check(self, batch_data):
+        assert all(key in batch_data for key in ['observations', 'actions', 'ego_states', 'next_observations', 'next_actions', 'dones']), "Missing keys in batch data"
+        assert all(len(batch_data[key]) == len(batch_data['observations']) for key in batch_data), "Inconsistent batch sizes"
+        assert batch_data['observations'].shape[0] == self.batch_size, f"Incorrect batch size: {batch_data['observations'].shape[0]} vs {self.batch_size}"
 
     def __len__(self):
         return self.batch_count
