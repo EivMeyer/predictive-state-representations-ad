@@ -58,7 +58,7 @@ models:
 # Training configuration
 training:
   # Type of model to use for training
-  model_type: "PredictiveModelV8" # AutoEncoderModelV0, PredictiveModelV8, VQVAEPredictiveModel
+  model_type: "PredictiveModelV8" # AutoEncoderModelV0, AutoEncoderModelV1, PredictiveModelV8, VQVAEPredictiveModel
   # Set this to the path of a checkpoint to resume training
   warmstart_model: null # "./models/model_64_sparse.pth"
   # Latent representation size
