@@ -17,8 +17,58 @@ class EnvironmentDataset(Dataset):
         self.load_existing_batches()
 
     def load_existing_batches(self):
-        self.episode_files = sorted([f for f in os.listdir(self.data_dir) if f.startswith("batch_") and f.endswith(".pt")])
+        self.episode_files = []
+        for f in sorted(os.listdir(self.data_dir)):
+            if f.startswith("batch_") and f.endswith(".pt"):
+                file_path = self.data_dir / f
+                try:
+                    # Try to load the file to check if it's valid
+                    torch.load(file_path)
+                    self.episode_files.append(f)
+                except Exception as e:
+                    logging.warning(f"Corrupted file detected: {f}. Deleting it.")
+                    os.remove(file_path)
+        
         self.batch_count = len(self.episode_files)
+
+    def __getitem__(self, idx):
+        if idx < 0 or idx >= self.batch_count:
+            raise IndexError("Batch index out of range")
+        
+        file = self.episode_files[idx]
+        try:
+            data = self._load_and_process_file(file)
+            return data
+        except Exception as e:
+            logging.error(f"Error loading file {file}: {str(e)}. Removing it from the dataset.")
+            self._remove_corrupted_file(idx)
+            
+            # Recursively try the next file
+            if idx < self.batch_count:
+                return self.__getitem__(idx)
+            else:
+                raise RuntimeError("No valid files found after the specified index.")
+            
+    def _load_and_process_file(self, file):
+        file_path = self.data_dir / file
+        data = torch.load(file_path)
+
+        # Convert images from uint8 to float32 and normalize
+        data['observations'] = torch.tensor(data['observations']).float() / 255.0
+        data['next_observations'] = torch.tensor(data['next_observations']).float() / 255.0
+
+        return data
+
+    def _remove_corrupted_file(self, idx):
+        file_to_remove = self.episode_files[idx]
+        file_path = self.data_dir / file_to_remove
+        try:
+            os.remove(file_path)
+        except OSError as e:
+            logging.error(f"Error removing file {file_to_remove}: {str(e)}")
+        
+        del self.episode_files[idx]
+        self.batch_count -= 1
 
     def add_episode(self, observations, actions, ego_states, next_observations, next_actions, dones):
         # Preprocess images as uint8 for storage
@@ -81,32 +131,6 @@ class EnvironmentDataset(Dataset):
 
     def __len__(self):
         return self.batch_count
-
-    def __getitem__(self, idx):
-        if idx < 0 or idx >= self.batch_count:
-            raise IndexError("Batch index out of range")
-        
-        # Try loading files until a valid one is found or we run out of files
-        for i in range(idx, self.batch_count):
-            file = self.episode_files[i]
-            try:
-                data = self._load_and_process_file(file)
-                return data
-            except Exception as e:
-                logging.warning(f"Error loading file {file}: {str(e)}. Skipping to next file.")
-        
-        # If we've gone through all files without success, raise an exception
-        raise RuntimeError("No valid files found after the specified index.")
-    
-    def _load_and_process_file(self, file):
-        file_path = self.data_dir / file
-        data = torch.load(file_path)
-
-        # Convert images from uint8 to float32 and normalize
-        data['observations'] = torch.tensor(data['observations']).float() / 255.0
-        data['next_observations'] = torch.tensor(data['next_observations']).float() / 255.0
-
-        return data
 
     @staticmethod
     def collate_fn(batch):
