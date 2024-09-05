@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import os
 import cv2
+import logging
 
 class EnvironmentDataset(Dataset):
     def __init__(self, data_dir, downsample_factor=1, batch_size=32):
@@ -85,8 +86,21 @@ class EnvironmentDataset(Dataset):
         if idx < 0 or idx >= self.batch_count:
             raise IndexError("Batch index out of range")
         
-        file = self.episode_files[idx]
-        data = torch.load(self.data_dir / file)
+        # Try loading files until a valid one is found or we run out of files
+        for i in range(idx, self.batch_count):
+            file = self.episode_files[i]
+            try:
+                data = self._load_and_process_file(file)
+                return data
+            except Exception as e:
+                logging.warning(f"Error loading file {file}: {str(e)}. Skipping to next file.")
+        
+        # If we've gone through all files without success, raise an exception
+        raise RuntimeError("No valid files found after the specified index.")
+    
+    def _load_and_process_file(self, file):
+        file_path = self.data_dir / file
+        data = torch.load(file_path)
 
         # Convert images from uint8 to float32 and normalize
         data['observations'] = torch.tensor(data['observations']).float() / 255.0
