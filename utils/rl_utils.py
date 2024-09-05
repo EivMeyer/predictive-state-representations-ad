@@ -331,7 +331,9 @@ class RepresentationObserver(BaseObserver):
         if self.debug:
             with torch.no_grad():
                 decoding = self.representation_model.decode(batch, rep)
-            predictions = decoding[0].permute(0, 2, 3, 1).cpu().detach().numpy()
+                if decoding.ndim == 5: # If the model returns a sequence of predictions
+                    decoding = decoding[0]
+            predictions = decoding.permute(0, 2, 3, 1).cpu().detach().numpy()
 
             self.update_debug_plot(render_obs, predictions, representation)
 

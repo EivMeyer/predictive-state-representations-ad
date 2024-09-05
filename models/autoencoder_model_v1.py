@@ -100,12 +100,12 @@ class AutoEncoderModelV1(BasePredictiveModel):
         latent = self.fc_latent(encoder_features)
         return latent
 
-    def decode(self, latent):
+    def decode(self, batch, latent):
         return self.decoder(latent)
 
     def forward(self, batch):
         latent = self.encode(batch)
-        reconstruction = self.decode(latent).unsqueeze(1)  # Add sequence length dimension
+        reconstruction = self.decode(batch, latent).unsqueeze(1)  # Add sequence length dimension
         return {'predictions': reconstruction, 'encoded_state': latent}
 
     def compute_loss(self, batch, model_output):

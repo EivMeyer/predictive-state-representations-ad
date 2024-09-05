@@ -149,7 +149,7 @@ class VQVAEPredictiveModel(BasePredictiveModel):
         vq_loss, quantized, perplexity = self.vq_vae(encoded_state)
         predicted_latents = self.decode(batch, quantized)
 
-        predictions = self.autoencoder.decode(predicted_latents.view(-1, self.hidden_dim)).view_as(observations)
+        predictions = self.autoencoder.decode(batch, predicted_latents.view(-1, self.hidden_dim)).view_as(observations)
 
         return {
             "predicted_latents": predicted_latents,

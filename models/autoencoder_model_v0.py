@@ -107,13 +107,13 @@ class AutoEncoderModelV0(BasePredictiveModel):
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def decode(self, z):
+    def decode(self, batch, z):
         return self.decoder(z)
 
     def forward(self, batch):
         mu, logvar = self.encode(batch)
         z = self.reparameterize(mu, logvar)
-        reconstruction = self.decode(z).unsqueeze(1)  # Add sequence length dimension
+        reconstruction = self.decode(batch, z).unsqueeze(1)  # Add sequence length dimension
         return {'predictions': reconstruction, 'encoded_state': mu, 'logvar': logvar}
 
     def compute_loss(self, batch, model_output):
