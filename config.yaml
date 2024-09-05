@@ -53,7 +53,7 @@ representation:
 
 models:
   VQVAEPredictiveModel:
-    pretrained_model_path: "./models/autoencoder.pth"
+    pretrained_model_path: "../models/pretrained/autoencoder_model_v1.pth"
 
 # Training configuration
 training:
