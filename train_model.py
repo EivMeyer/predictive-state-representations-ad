@@ -14,6 +14,7 @@ from utils.visualization_utils import setup_visualization, visualize_prediction
 import torch.multiprocessing as mp
 from utils.training_utils import AdaptiveLogger, analyze_predictions, init_wandb
 from datetime import datetime
+from torch.cuda.amp import autocast, GradScaler
 from typing import Dict, List, Tuple, Any, Optional
 
 class Trainer:
@@ -51,6 +52,7 @@ class Trainer:
         self.axes: Optional[Any] = None
         
         self.setup_visualization()
+        self.scaler = GradScaler()
 
     def setup_visualization(self) -> None:
         if self.cfg.training.create_plots:
@@ -69,17 +71,21 @@ class Trainer:
         
         for iteration, batch in tqdm(enumerate(self.train_loader), leave=False, total=len(self.train_loader)):
             batch = move_batch_to_device(batch, self.device)
-            targets = batch['next_observations']
             
             self.optimizer.zero_grad()
             
-            model_outputs = self.model.forward(batch)
-            predictions = model_outputs['predictions']
-            loss, loss_components = self.model.compute_loss(batch, model_outputs)
+            with autocast():
+                model_outputs = self.model.forward(batch)
+                loss, loss_components = self.model.compute_loss(batch, model_outputs)
             
-            loss.backward()
+            self.scaler.scale(loss).backward()
+            self.scaler.unscale_(self.optimizer)
             nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.training.max_grad_norm)
-            self.optimizer.step()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+
+            predictions = model_outputs['predictions']
+            targets = batch['next_observations']
 
             self.update_stats(epoch_stats, loss_components, loss.item())
             stats = analyze_predictions(predictions, targets)
