@@ -19,14 +19,14 @@ from typing import Dict, List, Tuple, Any, Optional
 
 class Trainer:
     def __init__(self, 
-                 cfg: DictConfig, 
-                 model: BasePredictiveModel, 
-                 train_loader: DataLoader, 
-                 val_loader: DataLoader, 
-                 optimizer: optim.Optimizer, 
-                 scheduler: optim.lr_scheduler._LRScheduler, 
-                 device: torch.device, 
-                 wandb: Any):
+                cfg: DictConfig, 
+                model: BasePredictiveModel, 
+                train_loader: DataLoader, 
+                val_loader: DataLoader, 
+                optimizer: optim.Optimizer, 
+                scheduler: optim.lr_scheduler._LRScheduler, 
+                device: torch.device, 
+                wandb: Any):
         self.cfg = cfg
         self.model = model
         self.train_loader = train_loader
@@ -52,18 +52,9 @@ class Trainer:
         self.axes: Optional[Any] = None
         
         self.setup_visualization()
-        self.scaler = GradScaler()
 
-    def setup_visualization(self) -> None:
-        if self.cfg.training.create_plots:
-            hold_out_batch = next(iter(self.val_loader))
-            hold_out_batch = move_batch_to_device(hold_out_batch, self.device)
-            self.hold_out_batch = hold_out_batch
-            self.hold_out_obs = hold_out_batch['observations'][:2]
-            self.hold_out_target = hold_out_batch['next_observations'][:2]
-            seq_length = self.hold_out_obs.shape[1]
-            num_predictions = self.hold_out_target.shape[1]
-            self.fig, self.axes = setup_visualization(seq_length, num_predictions)
+        self.use_amp = cfg.training.use_amp if hasattr(cfg.training, 'use_amp') else False
+        self.scaler = GradScaler(init_scale=2**10, growth_factor=2**(1/4), backoff_factor=0.5, growth_interval=100)  if self.use_amp else None
 
     def train_epoch(self) -> Dict[str, List[float]]:
         self.model.train()
@@ -74,15 +65,23 @@ class Trainer:
             
             self.optimizer.zero_grad()
             
-            with autocast():
+            if self.use_amp:
+                with autocast():
+                    model_outputs = self.model.forward(batch)
+                    loss, loss_components = self.model.compute_loss(batch, model_outputs)
+                
+                self.scaler.scale(loss).backward()
+                self.scaler.unscale_(self.optimizer)
+                nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.training.max_grad_norm)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
                 model_outputs = self.model.forward(batch)
                 loss, loss_components = self.model.compute_loss(batch, model_outputs)
-            
-            self.scaler.scale(loss).backward()
-            self.scaler.unscale_(self.optimizer)
-            nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.training.max_grad_norm)
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
+                
+                loss.backward()
+                nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.training.max_grad_norm)
+                self.optimizer.step()
 
             predictions = model_outputs['predictions']
             targets = batch['next_observations']
@@ -108,17 +107,33 @@ class Trainer:
             for batch in self.val_loader:
                 batch = move_batch_to_device(batch, self.device)
                 
-                targets = batch['next_observations']
-
-                model_outputs = self.model.forward(batch)
+                if self.use_amp:
+                    with autocast():
+                        model_outputs = self.model.forward(batch)
+                        loss, loss_components = self.model.compute_loss(batch, model_outputs)
+                else:
+                    model_outputs = self.model.forward(batch)
+                    loss, loss_components = self.model.compute_loss(batch, model_outputs)
+                
                 predictions = model_outputs['predictions']
-                loss, loss_components = self.model.compute_loss(batch, model_outputs)
+                targets = batch['next_observations']
                 
                 self.update_stats(val_stats, loss_components, loss.item())
                 stats = analyze_predictions(predictions, targets)
                 self.update_stats(val_stats, stats)
         
         return val_stats
+
+    def setup_visualization(self) -> None:
+        if self.cfg.training.create_plots:
+            hold_out_batch = next(iter(self.val_loader))
+            hold_out_batch = move_batch_to_device(hold_out_batch, self.device)
+            self.hold_out_batch = hold_out_batch
+            self.hold_out_obs = hold_out_batch['observations'][:2]
+            self.hold_out_target = hold_out_batch['next_observations'][:2]
+            seq_length = self.hold_out_obs.shape[1]
+            num_predictions = self.hold_out_target.shape[1]
+            self.fig, self.axes = setup_visualization(seq_length, num_predictions)
 
     def update_stats(self, stats_dict: Dict[str, List[float]], new_stats: Dict[str, float], total_loss: Optional[float] = None) -> None:
         for key, value in new_stats.items():
@@ -218,7 +233,7 @@ class Trainer:
             'MSE (val)': np.mean(self.val_stats['mse']),
         }
         visualize_prediction(self.fig, self.axes, self.hold_out_obs, self.hold_out_target, hold_out_pred, 
-                             self.current_epoch, self.train_predictions, self.train_ground_truth, metrics)
+                            self.current_epoch, self.train_predictions, self.train_ground_truth, metrics)
 
     def save_final_model(self) -> None:
         final_model_path = Path(self.cfg.project_dir) / "models" / self.run_name / "final_model.pth"
