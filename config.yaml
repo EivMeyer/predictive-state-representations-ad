@@ -76,7 +76,7 @@ training:
   # Factor to downsample input images
   downsample_factor: 1
   # Maximum gradient norm for gradient clipping
-  max_grad_norm: 0.5
+  max_grad_norm: 1.0
   # Set to true to enable automatic mixed precision
   use_amp: false 
   # Training set split size
