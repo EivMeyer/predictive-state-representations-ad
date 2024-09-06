@@ -36,12 +36,14 @@ class CombinedLoss(nn.Module):
         batch_size, seq_len = pred.shape[:2]
         
         temporal_weights = self.compute_temporal_weights(seq_len, device=device)
-        temporal_weights = temporal_weights.view(1, -1, 1, 1, 1)
+        temporal_weights = temporal_weights.view(*([1, -1] + [1] * (pred.dim() - 2)))
 
-        mse_loss = ((pred - target) ** 2).mean(dim=(2, 3, 4))
+        # Calculate MSE loss
+        mse_loss = ((pred - target) ** 2).mean(dim=tuple(range(2, pred.dim())))
         weighted_mse_loss = (mse_loss * temporal_weights.squeeze()).sum(dim=1).mean()
 
-        l1_loss = torch.abs(pred - target).mean(dim=(2, 3, 4))
+        # Calculate L1 loss
+        l1_loss = torch.abs(pred - target).mean(dim=tuple(range(2, pred.dim())))
         weighted_l1_loss = (l1_loss * temporal_weights.squeeze()).sum(dim=1).mean()
 
         diversity_loss = self.diversity_loss(pred)

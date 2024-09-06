@@ -54,11 +54,13 @@ representation:
 models:
   VQVAEPredictiveModel:
     pretrained_model_path: "../models/pretrained/autoencoder_model_v1.pth"
+  PredictiveModelV9:
+    pretrained_model_path: "../models/pretrained/autoencoder_model_v1.pth"
 
 # Training configuration
 training:
   # Type of model to use for training
-  model_type: "PredictiveModelV8" # AutoEncoderModelV0, AutoEncoderModelV1, PredictiveModelV8, VQVAEPredictiveModel
+  model_type: "PredictiveModelV8" # AutoEncoderModelV0, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, VQVAEPredictiveModel
   # Set this to the path of a checkpoint to resume training
   warmstart_model: null # "./models/model_64_sparse.pth"
   # Latent representation size

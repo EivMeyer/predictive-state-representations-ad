@@ -95,7 +95,7 @@ class AutoEncoderModelV1(BasePredictiveModel):
                 nn.init.constant_(m.bias, 0)
 
     def encode(self, batch):
-        observation = batch['observations'][:, -1]  # Take only the last observation
+        observation = batch['observations'][:, -1] if batch['observations'].ndim == 5 else batch['observations']
         encoder_features = self.encoder(observation)
         latent = self.fc_latent(encoder_features)
         return latent
