@@ -25,6 +25,9 @@ device: "auto"
 # Set to false to disable debug output
 debug_mode: false
 
+# Whether to log outputs to terminal
+verbose: false
+
 # Dataset generation options
 dataset:
   # Number of episodes to collect for the dataset

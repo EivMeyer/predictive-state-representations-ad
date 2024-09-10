@@ -66,7 +66,7 @@ class Trainer:
         running_avg_loss = 0.0
         alpha = 0.1  # Smoothing factor for running average
 
-        pbar = tqdm(enumerate(self.train_loader), total=len(self.train_loader), leave=False)
+        pbar = tqdm(enumerate(self.train_loader), total=len(self.train_loader), leave=False, disable=not self.cfg.verbose)
         for iteration, full_batch in pbar:
             full_batch = move_batch_to_device(full_batch, self.device)
             batch_size = full_batch['observations'].shape[0]
@@ -112,12 +112,13 @@ class Trainer:
                             val_outputs = self.model.forward(val_batch)
                             val_loss, _ = self.model.compute_loss(val_batch, val_outputs)
                     
-                    # Get current learning rate
-                    current_lr = self.optimizer.param_groups[0]['lr']
-                    
-                    # Update progress bar
-                    pbar.set_description(f"Train Loss: {loss.item():.6f}, Avg Loss: {running_avg_loss:.6f}, LR: {current_lr:.6f}" + 
-                                        (f", Val Loss: {val_loss.item():.6f}" if self.cfg.training.track_val_error else ""))
+                    if self.cfg.verbose:
+                        # Get current learning rate
+                        current_lr = self.optimizer.param_groups[0]['lr']
+                        
+                        # Update progress bar
+                        pbar.set_description(f"Train Loss: {loss.item():.6f}, Avg Loss: {running_avg_loss:.6f}, LR: {current_lr:.6f}" + 
+                                            (f", Val Loss: {val_loss.item():.6f}" if self.cfg.training.track_val_error else ""))
             
             if self.cfg.training.create_plots and iteration == len(self.train_loader) - 1:
                 self.train_predictions = predictions[:9].detach()

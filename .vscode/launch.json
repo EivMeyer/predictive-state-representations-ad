@@ -10,8 +10,8 @@
             "justMyCode": true,
             "env": {
                 "PYTHONPATH": "${workspaceFolder}",
-                "args": "wandb.enabled=false"
-            }
+            },
+            "args": ["hydra.run.dir=.", "verbose=true", "wandb.enabled=false"]
         },
         {
             "name": "Python: Train RL Agent",
@@ -23,7 +23,7 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             },
-            "args": ["hydra.run.dir=.", "wandb.enabled=false", "debug_mode=true", "rl_training.num_envs=1"]
+            "args": ["hydra.run.dir=.", "verbose=true", "wandb.enabled=false", "debug_mode=true", "rl_training.num_envs=1"]
         },
         {
             "name": "Python: Enjoy RL Agent",
