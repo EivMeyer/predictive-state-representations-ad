@@ -10,9 +10,16 @@ merge_datasets() {
     local file_counter=0
 
     echo "Merging datasets from all worker directories into $merge_dir..."
-    
-    # Create merge directory
+
+    # Create merge directory if it doesn't exist
     mkdir -p "${merge_dir}"
+
+    # Find the highest existing batch number
+    highest_batch=$(find "${merge_dir}" -name "batch_*.pt" | sed 's/.*batch_\([0-9]*\)\.pt/\1/' | sort -n | tail -n 1)
+    if [ -z "$highest_batch" ]; then
+        highest_batch=-1
+    fi
+    file_counter=$((highest_batch + 1))
 
     # Find all worker directories
     worker_dirs=$(find "$base_dir" -type d -name "worker_*" | sort)

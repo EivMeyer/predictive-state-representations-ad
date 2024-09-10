@@ -4,7 +4,7 @@
 get_integer_input() {
     local prompt="$1"
     local value
-
+    
     while true; do
         read -p "$prompt" value
         if [[ "$value" =~ ^[0-9]+$ ]]; then
@@ -21,6 +21,7 @@ num_workers=""
 total_episodes=""
 episodes_per_restart=""
 config_overrides=""
+append_mode=false
 
 # Parse command line options
 while [[ $# -gt 0 ]]; do
@@ -28,8 +29,9 @@ while [[ $# -gt 0 ]]; do
         -w) num_workers="$2"; shift 2 ;;
         -e) total_episodes="$2"; shift 2 ;;
         -r) episodes_per_restart="$2"; shift 2 ;;
+        --append) append_mode=true; shift ;;
         *=*) config_overrides="$config_overrides $1"; shift ;;
-        *) echo "Usage: $0 [-w num_workers] [-e total_episodes] [-r episodes_per_restart] [CONFIG_OVERRIDES]" >&2
+        *) echo "Usage: $0 [-w num_workers] [-e total_episodes] [-r episodes_per_restart] [--append] [CONFIG_OVERRIDES]" >&2
            exit 1 ;;
     esac
 done
@@ -52,13 +54,20 @@ fi
 echo "Number of workers: $num_workers"
 echo "Total number of episodes: $total_episodes"
 echo "Episodes per restart: $episodes_per_restart"
+echo "Append mode: $append_mode"
 
 base_dir="./output/dataset"
 
-# Delete existing dataset
-echo "Deleting existing dataset..."
-rm -rf "$base_dir"
+# Create base directory if it doesn't exist
 mkdir -p "$base_dir"
+
+# Delete existing dataset only if not in append mode
+if [ "$append_mode" = false ]; then
+    echo "Deleting existing dataset..."
+    rm -rf "$base_dir"/*
+else
+    echo "Appending to existing dataset..."
+fi
 
 # Calculate episodes per worker
 episodes_per_worker=$((total_episodes / num_workers))
@@ -73,7 +82,13 @@ collect_dataset() {
     run_id=$3
     project_dir="${base_dir}/worker_${worker_id}/run_${run_id}"
     mkdir -p "$project_dir"
-    python3 collect_dataset.py project_dir="${project_dir}" dataset.num_episodes=${episodes} $config_overrides
+    
+    append_flag=""
+    if [ "$append_mode" = true ]; then
+        append_flag="--append"
+    fi
+    
+    python3 collect_dataset.py project_dir="${project_dir}" dataset.num_episodes=${episodes} $append_flag $config_overrides
 }
 
 # Function to manage a worker with periodic restarts
