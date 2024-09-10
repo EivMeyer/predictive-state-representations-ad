@@ -9,7 +9,7 @@ from utils.config_utils import config_wrapper
 def collect_episodes(cfg_dict, env, num_episodes):
     dataset = EnvironmentDataset(
         data_dir=Path(cfg_dict["project_dir"]) / "dataset",
-        batch_size=cfg_dict["dataset"]["batch_size"]
+        storage_batch_size=cfg_dict["dataset"]["storage_batch_size"]
     )
     
     episodes_collected = 0

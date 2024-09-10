@@ -12,7 +12,7 @@ import numpy as np
 import time
 from utils.visualization_utils import setup_visualization, visualize_prediction
 import torch.multiprocessing as mp
-from utils.training_utils import AdaptiveLogger, analyze_predictions, init_wandb
+from utils.training_utils import analyze_predictions, init_wandb
 from datetime import datetime
 from torch.cuda.amp import autocast, GradScaler
 from typing import Dict, List, Tuple, Any, Optional
@@ -35,7 +35,6 @@ class Trainer:
         self.scheduler = scheduler
         self.device = device
         self.wandb = wandb
-        self.logger = AdaptiveLogger()
         self.best_val_loss: float = float('inf')
         self.start_epoch: int = 0
         self.current_epoch: int = 0
@@ -60,43 +59,70 @@ class Trainer:
         self.model.train()
         epoch_stats: Dict[str, List[float]] = {}
         
-        for iteration, batch in tqdm(enumerate(self.train_loader), leave=False, total=len(self.train_loader)):
-            batch = move_batch_to_device(batch, self.device)
-            
-            self.optimizer.zero_grad()
-            
-            if self.use_amp:
-                with autocast():
-                    model_outputs = self.model.forward(batch)
-                    loss, loss_components = self.model.compute_loss(batch, model_outputs)
-                
-                self.scaler.scale(loss).backward()
-                self.scaler.unscale_(self.optimizer)
-                nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.training.max_grad_norm)
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-            else:
-                model_outputs = self.model.forward(batch)
-                loss, loss_components = self.model.compute_loss(batch, model_outputs)
-                
-                loss.backward()
-                nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.training.max_grad_norm)
-                self.optimizer.step()
+        # Get a single validation batch for quick validation
+        val_batch = next(iter(self.val_loader))
+        val_batch = move_batch_to_device(val_batch, self.device)
+        
+        running_avg_loss = 0.0
+        alpha = 0.1  # Smoothing factor for running average
 
-            predictions = model_outputs['predictions']
-            targets = batch['next_observations']
-
-            self.update_stats(epoch_stats, loss_components, loss.item())
-            stats = analyze_predictions(predictions, targets)
-            self.update_stats(epoch_stats, stats)
+        pbar = tqdm(enumerate(self.train_loader), total=len(self.train_loader), leave=False)
+        for iteration, full_batch in pbar:
+            full_batch = move_batch_to_device(full_batch, self.device)
+            batch_size = full_batch['observations'].shape[0]
             
-            if self.cfg.training.stdout_logging and self.logger.should_log(iteration, len(batch)):
-                self.logger.log(self.current_epoch, iteration, loss, len(batch))
+            for _ in range(self.cfg.training.iterations_per_batch):
+                for start_idx in range(0, batch_size, self.cfg.training.minibatch_size):
+                    end_idx = min(start_idx + self.cfg.training.minibatch_size, batch_size)
+                    batch = {k: v[start_idx:end_idx] for k, v in full_batch.items()}
+                    
+                    self.optimizer.zero_grad()
+                    
+                    if self.use_amp:
+                        with autocast():
+                            model_outputs = self.model.forward(batch)
+                            loss, loss_components = self.model.compute_loss(batch, model_outputs)
+                        
+                        self.scaler.scale(loss).backward()
+                        self.scaler.unscale_(self.optimizer)
+                        nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.training.max_grad_norm)
+                        self.scaler.step(self.optimizer)
+                        self.scaler.update()
+                    else:
+                        model_outputs = self.model.forward(batch)
+                        loss, loss_components = self.model.compute_loss(batch, model_outputs)
+                        
+                        loss.backward()
+                        nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.training.max_grad_norm)
+                        self.optimizer.step()
+                    
+                    predictions = model_outputs['predictions']
+                    targets = batch['next_observations']
+                    
+                    self.update_stats(epoch_stats, loss_components, loss.item())
+                    stats = analyze_predictions(predictions, targets)
+                    self.update_stats(epoch_stats, stats)
+                    
+                    # Update running average loss
+                    running_avg_loss = alpha * loss.item() + (1 - alpha) * running_avg_loss
+                    
+                    # Compute validation error if configured
+                    if self.cfg.training.track_val_error:
+                        with torch.no_grad():
+                            val_outputs = self.model.forward(val_batch)
+                            val_loss, _ = self.model.compute_loss(val_batch, val_outputs)
+                    
+                    # Get current learning rate
+                    current_lr = self.optimizer.param_groups[0]['lr']
+                    
+                    # Update progress bar
+                    pbar.set_description(f"Train Loss: {loss.item():.6f}, Avg Loss: {running_avg_loss:.6f}, LR: {current_lr:.6f}" + 
+                                        (f", Val Loss: {val_loss.item():.6f}" if self.cfg.training.track_val_error else ""))
             
             if self.cfg.training.create_plots and iteration == len(self.train_loader) - 1:
                 self.train_predictions = predictions[:9].detach()
                 self.train_ground_truth = targets[:9].detach()
-
+        
         return epoch_stats
 
     def validate(self) -> Dict[str, List[float]]:
@@ -194,7 +220,6 @@ class Trainer:
 
             train_stats = self.train_epoch()
             self.val_stats = self.validate()
-
             self.log_epoch_stats(train_stats, self.val_stats)
 
             self.scheduler.step()
@@ -282,8 +307,8 @@ def main(cfg: DictConfig) -> None:
         prefetch_factor=cfg.training.prefetch_factor
     )
     print(f"Training on {device}")
-    print(f"Training minibatches: {len(train_loader)}")
-    print(f"Validation minibatches: {len(val_loader)}")
+    print(f"Train set: {len(train_loader)}")
+    print(f"Validation set: {len(val_loader)}")
     
     ModelClass = get_model_class(cfg.training.model_type)
     if ModelClass is None:

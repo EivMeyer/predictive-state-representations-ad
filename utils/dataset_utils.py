@@ -7,11 +7,11 @@ import cv2
 import logging
 
 class EnvironmentDataset(Dataset):
-    def __init__(self, data_dir, downsample_factor=1, batch_size=32):
+    def __init__(self, data_dir, downsample_factor=1, storage_batch_size=32):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.downsample_factor = downsample_factor
-        self.batch_size = batch_size
+        self.storage_batch_size = storage_batch_size
         self.current_batch = []
         self.episode_files = []
         self.update_file_list()
@@ -43,11 +43,15 @@ class EnvironmentDataset(Dataset):
 
     def _load_and_process_file(self, file):
         file_path = self.data_dir / file
-        data = torch.load(file_path)
+        data = torch.load(file_path, map_location='cpu')
 
-        # Convert images from uint8 to float32 and normalize
-        data['observations'] = torch.tensor(data['observations']).float() / 255.0
-        data['next_observations'] = torch.tensor(data['next_observations']).float() / 255.0
+        # Convert images from uint8 to float32 and normalize if they are numpy arrays
+        for key in ['observations', 'next_observations']:
+            if isinstance(data[key], np.ndarray):
+                data[key] = torch.from_numpy(data[key]).float().div(255.0)
+            elif isinstance(data[key], torch.Tensor):
+                if data[key].dtype == torch.uint8:
+                    data[key] = data[key].float().div(255.0)
 
         return data
 
@@ -78,7 +82,7 @@ class EnvironmentDataset(Dataset):
         }
         self.current_batch.append(episode_data)
 
-        if len(self.current_batch) >= self.batch_size:
+        if len(self.current_batch) >= self.storage_batch_size:
             self._save_current_batch()
 
     def _preprocess_image(self, image):
@@ -148,7 +152,7 @@ class EnvironmentDataset(Dataset):
     def _sanity_check(self, batch_data):
         assert all(key in batch_data for key in ['observations', 'actions', 'ego_states', 'next_observations', 'next_actions', 'dones']), "Missing keys in batch data"
         assert all(len(batch_data[key]) == len(batch_data['observations']) for key in batch_data), "Inconsistent batch sizes"
-        assert batch_data['observations'].shape[0] == self.batch_size, f"Incorrect batch size: {batch_data['observations'].shape[0]} vs {self.batch_size}"
+        assert batch_data['observations'].shape[0] == self.storage_batch_size, f"Incorrect batch size: {batch_data['observations'].shape[0]} vs {self.storage_batch_size}"
 
     def __len__(self):
         return self.batch_count

@@ -32,7 +32,7 @@ dataset:
   # Number of processes for dataset generation
   num_workers: 1
   # Number of episodes per batch
-  batch_size: 32 
+  storage_batch_size: 1024 
   # Number of timesteps for observation
   t_obs: 10
   # Number of timesteps for prediction
@@ -69,6 +69,12 @@ training:
   epochs: 2000
   # Batch size for training
   batch_size: 1
+  # Minibatch size
+  minibatch_size: 8
+  # Number of training iterations per batch
+  iterations_per_batch: 1
+  # Whether to compute and print a validation error at each minibatch (slow)
+  track_val_error: false
   # Learning rate for the optimizer
   learning_rate: 0.002
   # Weight decay for the optimizer
@@ -81,12 +87,12 @@ training:
   use_amp: false 
   # Training set split size
   train_ratio: 0.9
-  # Number of processes for fetching data in dataloader
-  num_workers: 6
   # Whether to use pinned host memory for faster data copies
   pin_memory: true
+  # Number of processes for fetching data in dataloader
+  num_workers: 0
   # Prefetch factor for dataloader. This is the number of batches to load in advance. Higher values can speed up training.
-  prefetch_factor: 3
+  prefetch_factor: null
   # Whether to plot predictions during training
   create_plots: true
   # Whether to log training metrics to stdout
