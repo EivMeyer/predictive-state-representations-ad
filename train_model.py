@@ -276,11 +276,11 @@ class Trainer:
         print(f"Final model saved to {final_model_path}")
         self.wandb.save(str(final_model_path))
 
-    def load_checkpoint(self, checkpoint_path: Path, device) -> None:
+    def load_checkpoint(self, checkpoint_path: Path, load_scheduler: bool, device) -> None:
         checkpoint = torch.load(checkpoint_path, map_location=device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        if 'scheduler_state_dict' in checkpoint:
+        if load_scheduler and 'scheduler_state_dict' in checkpoint:
             self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         self.start_epoch = checkpoint['epoch'] + 1
         print(f"Resuming training from epoch {self.start_epoch}")
@@ -336,7 +336,7 @@ def main(cfg: DictConfig) -> None:
         if checkpoint_path is None:
             raise FileNotFoundError(f"Model file not found: {cfg.training.warmstart_model}. "
                                     f"Searched in {cfg.project_dir} and its subdirectories.")
-        trainer.load_checkpoint(checkpoint_path, device)
+        trainer.load_checkpoint(checkpoint_path, cfg.training.warmstart_load_scheduler_state, device)
     
     trainer.train()
 

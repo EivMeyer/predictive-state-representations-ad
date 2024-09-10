@@ -66,6 +66,8 @@ training:
   model_type: "PredictiveModelV8" # AutoEncoderModelV0, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, VQVAEPredictiveModel
   # Set this to the path of a checkpoint to resume training
   warmstart_model: null # "./models/model_64_sparse.pth"
+  # Whether to continue from the last scheduler state
+  warmstart_load_scheduler_state: false
   # Latent representation size
   hidden_dim: 64
   # Number of training epochs
