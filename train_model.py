@@ -63,8 +63,8 @@ class Trainer:
         val_batch = next(iter(self.val_loader))
         val_batch = move_batch_to_device(val_batch, self.device)
         
-        running_avg_loss = 0.0
-        alpha = 0.1  # Smoothing factor for running average
+        running_avg_loss = None
+        alpha = 0.01  # Smoothing factor for running average
 
         pbar = tqdm(enumerate(self.train_loader), total=len(self.train_loader), leave=False, disable=not self.cfg.verbose)
         for iteration, full_batch in pbar:
@@ -104,7 +104,10 @@ class Trainer:
                     self.update_stats(epoch_stats, stats)
                     
                     # Update running average loss
-                    running_avg_loss = alpha * loss.item() + (1 - alpha) * running_avg_loss
+                    if running_avg_loss is None:
+                        running_avg_loss = loss.item()
+                    else:
+                        running_avg_loss = alpha * loss.item() + (1 - alpha) * running_avg_loss
                     
                     # Compute validation error if configured
                     if self.cfg.training.track_val_error:
