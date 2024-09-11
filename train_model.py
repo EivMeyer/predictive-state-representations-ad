@@ -216,30 +216,28 @@ class Trainer:
         for key, value in new_stats.items():
             if key not in stats_dict:
                 stats_dict[key] = []
-            stats_dict[key].append(value)
+            if isinstance(value, torch.Tensor):
+                stats_dict[key].append(value.detach().item())
+            else:
+                stats_dict[key].append(value)
         if total_loss is not None:
             if "total_loss" not in stats_dict:
                 stats_dict["total_loss"] = []
-            stats_dict["total_loss"].append(total_loss)
+            if isinstance(total_loss, torch.Tensor):
+                stats_dict["total_loss"].append(total_loss.detach().item())
+            else:
+                stats_dict["total_loss"].append(total_loss)
 
     def log_epoch_stats(self, train_stats: Dict[str, List[float]], val_stats: Dict[str, List[float]]) -> None:
         print(f"Epoch {self.current_epoch} completed:")
         epoch_averages: Dict[str, Any] = {}
 
         def process_values(values):
-            if isinstance(values, list):
-                if all(isinstance(v, torch.Tensor) for v in values):
-                    # List of tensors
-                    values_cpu = torch.stack(values).cpu().numpy()
-                elif all(isinstance(v, (int, float)) for v in values):
-                    # List of numbers
-                    values_cpu = np.array(values)
-                else:
-                    raise TypeError(f"Unsupported type in list: {type(values[0])}")
-            elif isinstance(values, torch.Tensor):
-                values_cpu = values.cpu().numpy()
+            if isinstance(values[0], torch.Tensor):
+                # Detach tensors and move to CPU before converting to NumPy
+                values_cpu = torch.stack([v.detach() for v in values]).cpu().numpy()
             else:
-                raise TypeError(f"Unsupported type: {type(values)}")
+                values_cpu = np.array(values)
             return values_cpu
 
         for key, values in train_stats.items():
