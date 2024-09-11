@@ -467,10 +467,21 @@ def main(cfg: DictConfig) -> None:
 
     if cfg.training.warmstart_model:
         if cfg.training.warmstart_model == "latest":
-            checkpoint_path = max(
-                (os.path.join(root, name) for root, _, files in os.walk("./output/models") for name in files if name == "model_latest.pth"),
-                key=os.path.getmtime
-            )
+            model_type = cfg.training.model_type
+            checkpoint_path = None
+            latest_time = 0
+            
+            for root, _, files in os.walk("./output/models"):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    if file.endswith(".pth") and model_type in file_path:
+                        file_time = os.path.getmtime(file_path)
+                        if file_time > latest_time:
+                            latest_time = file_time
+                            checkpoint_path = file_path
+            
+            if checkpoint_path is None:
+                raise FileNotFoundError(f"No model found for type: {model_type}")
         else:
             checkpoint_path = find_model_path(cfg.project_dir, cfg.training.warmstart_model)
         if checkpoint_path is None:
