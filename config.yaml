@@ -59,6 +59,8 @@ models:
     pretrained_model_path: "../models/pretrained/autoencoder_model_v1.pth"
   PredictiveModelV9:
     pretrained_model_path: "../models/pretrained/autoencoder_model_v1.pth"
+  AutoEncoderModelV0:
+    kl_weight: 0.001
 
 # Training configuration
 training:
