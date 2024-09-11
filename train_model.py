@@ -227,7 +227,10 @@ class Trainer:
         epoch_averages: Dict[str, Any] = {}
 
         for key, values in train_stats.items():
-            values_cpu = values.cpu() if isinstance(values, Tensor) else values
+            try:
+                values_cpu = values.cpu()
+            except AttributeError:
+                values_cpu = values
             mean_value = np.mean(values_cpu)
             std_value = np.std(values_cpu)
             epoch_averages[f"train/{key}"] = {"mean": mean_value, "std": std_value}
@@ -235,7 +238,10 @@ class Trainer:
 
         print("Validation results:")
         for key, values in val_stats.items():
-            values_cpu = values.cpu() if isinstance(values, Tensor) else values
+            try:
+                values_cpu = values.cpu()
+            except AttributeError:
+                values_cpu = values
             mean_value = np.mean(values)
             epoch_averages[f"val/{key}"] = mean_value
             print(f"  Val {key}: {mean_value:.4f}")
