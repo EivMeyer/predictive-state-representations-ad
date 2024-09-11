@@ -40,12 +40,14 @@ class PredictiveModelV8(BasePredictiveModel):
 
         # Loss function
         self.loss_function = CombinedLoss(
-            mse_weight=self.cfg.training.loss.mse_weight,
-            l1_weight=self.cfg.training.loss.l1_weight,
-            diversity_weight=self.cfg.training.loss.diversity_weight,
+            mse_weight=cfg.training.loss.mse_weight,
+            l1_weight=cfg.training.loss.l1_weight,
+            diversity_weight=cfg.training.loss.diversity_weight,
             latent_l1_weight=self.cfg.training.loss.latent_l1_weight,
             latent_l2_weight=self.cfg.training.loss.latent_l2_weight,
-            temporal_decay=self.cfg.training.loss.temporal_decay,
+            temporal_decay=cfg.training.loss.temporal_decay,
+            perceptual_weight=cfg.training.loss.perceptual_weight,
+            num_scales=cfg.training.loss.num_scales
         )
 
         self._initialize_weights()
