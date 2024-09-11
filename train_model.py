@@ -60,6 +60,28 @@ class Trainer:
         self.use_amp = cfg.training.use_amp if hasattr(cfg.training, 'use_amp') else False
         self.scaler = GradScaler(init_scale=2**10, growth_factor=2**(1/4), backoff_factor=0.5, growth_interval=100)  if self.use_amp else None
 
+        self.val_batch_size = self._calculate_val_batch_size()
+
+    def _calculate_val_batch_size(self) -> int:
+        if self.device.type == 'cuda':
+            total_memory = torch.cuda.get_device_properties(self.device).total_memory
+            current_memory = torch.cuda.memory_allocated(self.device)
+            available_memory = total_memory - current_memory
+            
+            # Use approximately 50% of available memory per batch
+            target_memory = available_memory * 0.50
+
+            # Estimate memory per sample (this is a rough estimate and might need adjustment)
+            sample_size = sum(p.numel() * p.element_size() for p in self.model.parameters())
+            estimated_size_per_sample = sample_size * 2  # Factor of 2 for forward and backward pass
+
+            val_batch_size = max(1, int(target_memory / estimated_size_per_sample))
+            print(f"Calculated validation batch size: {val_batch_size}")
+            return val_batch_size
+        else:
+            # For CPU, use a default batch size
+            return 32
+
     def train_epoch(self) -> Dict[str, List[float]]:
         self.model.train()
         epoch_stats: Dict[str, List[float]] = {}
@@ -155,21 +177,26 @@ class Trainer:
         with torch.no_grad():
             for batch in self.val_loader:
                 batch = move_batch_to_device(batch, self.device)
+                batch_size = batch['observations'].shape[0]
                 
-                if self.use_amp:
-                    with autocast():
-                        model_outputs = self.model.forward(batch)
-                        loss, loss_components = self.model.compute_loss(batch, model_outputs)
-                else:
-                    model_outputs = self.model.forward(batch)
-                    loss, loss_components = self.model.compute_loss(batch, model_outputs)
-                
-                predictions = model_outputs['predictions']
-                targets = batch['next_observations']
-                
-                self.update_stats(val_stats, loss_components, loss.item())
-                stats = analyze_predictions(predictions, targets)
-                self.update_stats(val_stats, stats)
+                for start_idx in range(0, batch_size, self.val_batch_size):
+                    end_idx = min(start_idx + self.val_batch_size, batch_size)
+                    minibatch = {k: v[start_idx:end_idx] for k, v in batch.items()}
+                    
+                    if self.use_amp:
+                        with autocast():
+                            model_outputs = self.model.forward(minibatch)
+                            loss, loss_components = self.model.compute_loss(minibatch, model_outputs)
+                    else:
+                        model_outputs = self.model.forward(minibatch)
+                        loss, loss_components = self.model.compute_loss(minibatch, model_outputs)
+                    
+                    predictions = model_outputs['predictions']
+                    targets = minibatch['next_observations']
+                    
+                    self.update_stats(val_stats, loss_components, loss.item())
+                    stats = analyze_predictions(predictions, targets)
+                    self.update_stats(val_stats, stats)
         
         return val_stats
 
@@ -199,13 +226,15 @@ class Trainer:
         epoch_averages: Dict[str, Any] = {}
 
         for key, values in train_stats.items():
-            mean_value = np.mean(values)
-            std_value = np.std(values)
+            values_cpu = values.cpu()
+            mean_value = np.mean(values_cpu)
+            std_value = np.std(values_cpu)
             epoch_averages[f"train/{key}"] = {"mean": mean_value, "std": std_value}
             print(f"  Mean train {key}: {mean_value:.4f} (±{std_value:.4f})")
 
         print("Validation results:")
         for key, values in val_stats.items():
+            values_cpu = values.cpu()
             mean_value = np.mean(values)
             epoch_averages[f"val/{key}"] = mean_value
             print(f"  Val {key}: {mean_value:.4f}")
