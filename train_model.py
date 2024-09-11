@@ -226,11 +226,24 @@ class Trainer:
         print(f"Epoch {self.current_epoch} completed:")
         epoch_averages: Dict[str, Any] = {}
 
+        def process_values(values):
+            if isinstance(values, list):
+                if all(isinstance(v, torch.Tensor) for v in values):
+                    # List of tensors
+                    values_cpu = torch.stack(values).cpu().numpy()
+                elif all(isinstance(v, (int, float)) for v in values):
+                    # List of numbers
+                    values_cpu = np.array(values)
+                else:
+                    raise TypeError(f"Unsupported type in list: {type(values[0])}")
+            elif isinstance(values, torch.Tensor):
+                values_cpu = values.cpu().numpy()
+            else:
+                raise TypeError(f"Unsupported type: {type(values)}")
+            return values_cpu
+
         for key, values in train_stats.items():
-            try:
-                values_cpu = values.cpu()
-            except AttributeError:
-                values_cpu = values
+            values_cpu =  process_values(values)
             mean_value = np.mean(values_cpu)
             std_value = np.std(values_cpu)
             epoch_averages[f"train/{key}"] = {"mean": mean_value, "std": std_value}
@@ -238,10 +251,7 @@ class Trainer:
 
         print("Validation results:")
         for key, values in val_stats.items():
-            try:
-                values_cpu = values.cpu()
-            except AttributeError:
-                values_cpu = values
+            values_cpu =  process_values(values)
             mean_value = np.mean(values)
             epoch_averages[f"val/{key}"] = mean_value
             print(f"  Val {key}: {mean_value:.4f}")
