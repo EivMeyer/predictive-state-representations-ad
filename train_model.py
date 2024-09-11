@@ -3,6 +3,7 @@ from utils.dataset_utils import EnvironmentDataset, get_data_dimensions, create_
 from utils.file_utils import find_model_path
 from utils.config_utils import config_wrapper
 import torch
+from torch import Tensor
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from models import BasePredictiveModel, get_model_class
@@ -226,7 +227,7 @@ class Trainer:
         epoch_averages: Dict[str, Any] = {}
 
         for key, values in train_stats.items():
-            values_cpu = values.cpu()
+            values_cpu = values.cpu() if isinstance(values, Tensor) else values
             mean_value = np.mean(values_cpu)
             std_value = np.std(values_cpu)
             epoch_averages[f"train/{key}"] = {"mean": mean_value, "std": std_value}
@@ -234,7 +235,7 @@ class Trainer:
 
         print("Validation results:")
         for key, values in val_stats.items():
-            values_cpu = values.cpu()
+            values_cpu = values.cpu() if isinstance(values, Tensor) else values
             mean_value = np.mean(values)
             epoch_averages[f"val/{key}"] = mean_value
             print(f"  Val {key}: {mean_value:.4f}")
