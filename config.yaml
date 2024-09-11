@@ -74,26 +74,31 @@ training:
   hidden_dim: 64
   # Number of training epochs
   epochs: 2000
+  # Number of batches to use per epoch (set to null to use all batches)
+  batches_per_epoch: 1
   # Batch size for training
   batch_size: 1
   # Minibatch size
-  minibatch_size: 8
+  minibatch_size: 4
   # Number of training iterations per batch
-  iterations_per_batch: 1
+  iterations_per_batch: 8
   # Whether to compute and print a validation error at each minibatch (slow)
-  track_val_error: false
+  track_val_loss: false
   # Learning rate for the optimizer
-  learning_rate: 0.002
+  learning_rate: 0.001
   # Weight decay for the optimizer
-  weight_decay: 0.00001
+  weight_decay: 1e-5
+  # Betas for the optimizer
+  beta1: 0.99
+  beta2: 0.9999
   # Factor to downsample input images
   downsample_factor: 1
   # Maximum gradient norm for gradient clipping
-  max_grad_norm: 1.0
+  max_grad_norm: 5.0
   # Set to true to enable automatic mixed precision
   use_amp: false 
-  # Training set split size
-  train_ratio: 0.9
+  # Validation set split size (if float, it is the ratio of the dataset, if int, it is the number of samples)
+  val_size: 1
   # Whether to use pinned host memory for faster data copies
   pin_memory: true
   # Number of processes for fetching data in dataloader
@@ -110,12 +115,30 @@ training:
   overwrite_checkpoints: true
   # Loss function to use for training
   loss:
-    mse_weight: 1.0
-    l1_weight: 0.0
+    mse_weight: 0.5
+    l1_weight: 0.3
     diversity_weight: 0.0
-    latent_l1_weight: 0.005
-    latent_l2_weight: 0.002
+    latent_l1_weight: 0.05
+    latent_l2_weight: 0.05
     temporal_decay: 0.9
+    perceptual_weight: 1.0
+    num_scales: 1
+
+  # Optimizer options
+  optimizer:
+    type: "RMSprop"
+    beta1: 0.92
+    beta2: 0.9995
+    learning_rate: 1e-4
+    weight_decay: 1e-5
+    momentum: 0.2
+    alpha: 0.99
+
+  # Scheduler options
+  scheduler:
+    type: "StepLR"
+    step_size: 30
+    gamma: 0.1
 
 # Reinforcement Learning Training options
 rl_training:

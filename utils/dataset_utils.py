@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import Dataset, DataLoader, random_split
+from torch.utils.data import Dataset, DataLoader, random_split, Sampler
 from pathlib import Path
 import numpy as np
 import os
@@ -183,32 +183,57 @@ class EnvironmentDataset(Dataset):
             start_idx += batch_size
         
         return merged_batch
+    
 
-def create_data_loaders(dataset, batch_size, train_ratio, prefetch_factor, num_workers, pin_memory):
+class SubsetRandomSampler(Sampler):
+    def __init__(self, indices, num_samples=None):
+        self.indices = indices
+        self._num_samples = num_samples
+
+    @property
+    def num_samples(self):
+        return len(self.indices) if self._num_samples is None else self._num_samples
+
+    def __iter__(self):
+        return (self.indices[i] for i in torch.randperm(len(self.indices))[:self.num_samples])
+
+    def __len__(self):
+        return self.num_samples
+
+
+
+def create_data_loaders(dataset, batch_size, val_size, prefetch_factor, num_workers, pin_memory, batches_per_epoch=None):
     dataset_size = len(dataset)
-    train_size = int(train_ratio * dataset_size)
-    val_size = dataset_size - train_size
+    if isinstance(val_size, float):
+        val_size = int(val_size * dataset_size)
+    train_size = dataset_size - val_size
 
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
+    if batches_per_epoch is not None:
+        train_sampler = SubsetRandomSampler(range(len(train_dataset)), num_samples=batches_per_epoch)
+    else:
+        train_sampler = None
+
     train_loader = DataLoader(
         train_dataset, 
-        batch_size=batch_size,  # Each item is a pre-batched set of episodes
-        shuffle=True, 
+        batch_size=batch_size,
+        shuffle=(train_sampler is None),
+        sampler=train_sampler,
         num_workers=num_workers,
         pin_memory=pin_memory,
         collate_fn=EnvironmentDataset.collate_fn,
-        prefetch_factor=prefetch_factor,  # Prefetch 2 batches per worker
+        prefetch_factor=prefetch_factor,
     )
     
     val_loader = DataLoader(
         val_dataset, 
-        batch_size=batch_size,  # Each item is a pre-batched set of episodes
+        batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
         pin_memory=pin_memory,
         collate_fn=EnvironmentDataset.collate_fn,
-        prefetch_factor=prefetch_factor,  # Prefetch 2 batches per worker
+        prefetch_factor=prefetch_factor,
     )
 
     return train_loader, val_loader

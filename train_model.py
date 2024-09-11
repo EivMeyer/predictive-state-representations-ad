@@ -16,6 +16,11 @@ from utils.training_utils import analyze_predictions, init_wandb
 from datetime import datetime
 from torch.cuda.amp import autocast, GradScaler
 from typing import Dict, List, Tuple, Any, Optional
+import os
+from torch.optim import Adam, AdamW, SGD, RMSprop
+from torch.optim.lr_scheduler import StepLR, ExponentialLR, CosineAnnealingLR, ReduceLROnPlateau
+
+
 
 class Trainer:
     def __init__(self, 
@@ -62,11 +67,14 @@ class Trainer:
         # Get a single validation batch for quick validation
         val_batch = next(iter(self.val_loader))
         val_batch = move_batch_to_device(val_batch, self.device)
+        val_batch = {k: v[0:1] for k, v in val_batch.items()}
         
         running_avg_loss = None
         alpha = 0.01  # Smoothing factor for running average
 
-        pbar = tqdm(enumerate(self.train_loader), total=len(self.train_loader), leave=False, disable=not self.cfg.verbose)
+        total_batches = len(self.train_loader) if self.cfg.training.batches_per_epoch is None else self.cfg.training.batches_per_epoch
+
+        pbar = tqdm(enumerate(self.train_loader), total=total_batches, leave=False, disable=not self.cfg.verbose)
         for iteration, full_batch in pbar:
             full_batch = move_batch_to_device(full_batch, self.device)
             batch_size = full_batch['observations'].shape[0]
@@ -110,18 +118,29 @@ class Trainer:
                         running_avg_loss = alpha * loss.item() + (1 - alpha) * running_avg_loss
                     
                     # Compute validation error if configured
-                    if self.cfg.training.track_val_error:
+                    if self.cfg.training.track_val_loss:
                         with torch.no_grad():
                             val_outputs = self.model.forward(val_batch)
                             val_loss, _ = self.model.compute_loss(val_batch, val_outputs)
                     
                     if self.cfg.verbose:
-                        # Get current learning rate
-                        current_lr = self.optimizer.param_groups[0]['lr']
+                        # Get current learning rate and optimizer info
+                        param_group = self.optimizer.param_groups[0]
+                        current_lr = param_group['lr']
+                        optimizer_type = self.optimizer.__class__.__name__
                         
+                        # Prepare optimizer info string
+                        optimizer_info = f"Optimizer: {optimizer_type}, LR: {current_lr:.6f}"
+                        if 'betas' in param_group:
+                            optimizer_info += f", Betas: {param_group['betas']}"
+                        if 'momentum' in param_group:
+                            optimizer_info += f", Momentum: {param_group['momentum']:.4f}"
+
                         # Update progress bar
-                        pbar.set_description(f"Train Loss: {loss.item():.6f}, Avg Loss: {running_avg_loss:.6f}, LR: {current_lr:.6f}" + 
-                                            (f", Val Loss: {val_loss.item():.6f}" if self.cfg.training.track_val_error else ""))
+                        pbar.set_description(
+                            f"Train Loss: {loss.item():.6f}, Avg Loss: {running_avg_loss:.6f}, {optimizer_info}" +
+                            (f", Val Loss: {val_loss.item():.6f}" if self.cfg.training.track_val_loss else "")
+                        )
             
             if self.cfg.training.create_plots and iteration == len(self.train_loader) - 1:
                 self.train_predictions = predictions[:9].detach()
@@ -258,8 +277,7 @@ class Trainer:
         }, step=self.current_epoch)
 
         metrics = {
-            'MSE (train)': np.mean(self.val_stats['mse']),
-            'MSE (val)': np.mean(self.val_stats['mse']),
+            'Loss (val)': np.mean(self.val_stats['total_loss']),
         }
         visualize_prediction(self.fig, self.axes, self.hold_out_obs, self.hold_out_target, hold_out_pred, 
                             self.current_epoch, self.train_predictions, self.train_ground_truth, metrics)
@@ -276,14 +294,82 @@ class Trainer:
         print(f"Final model saved to {final_model_path}")
         self.wandb.save(str(final_model_path))
 
-    def load_checkpoint(self, checkpoint_path: Path, load_scheduler: bool, device) -> None:
+    def load_checkpoint(self, checkpoint_path: Path, load_scheduler: bool, device):
         checkpoint = torch.load(checkpoint_path, map_location=device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+        # Recreate the optimizer with the current configuration
+        self.optimizer = get_optimizer(self.model, self.cfg)
+
+        # Load the optimizer state, ignoring missing or extra parameters
+        optimizer_state = checkpoint['optimizer_state_dict']
+        current_optimizer_state = self.optimizer.state_dict()
+
+        # Only load state for parameters that exist in both states
+        common_params = set(optimizer_state['param_groups'][0]['params']) & set(current_optimizer_state['param_groups'][0]['params'])
+        
+        for param in common_params:
+            if param in optimizer_state['state']:
+                current_optimizer_state['state'][param] = optimizer_state['state'][param]
+
+        self.optimizer.load_state_dict(current_optimizer_state)
+
+        # Override optimizer learning rate, betas and weight_decay:
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = self.cfg.training.optimizer.learning_rate
+            if 'betas' in param_group:
+                param_group['betas'] = (self.cfg.training.optimizer.beta1, self.cfg.training.optimizer.beta2)
+            param_group['weight_decay'] = self.cfg.training.optimizer.weight_decay
+
+        # Recreate the scheduler with the current configuration
+        self.scheduler = get_scheduler(self.optimizer, self.cfg)
+
         if load_scheduler and 'scheduler_state_dict' in checkpoint:
-            self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            try:
+                self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            except ValueError:
+                print("Warning: Failed to load scheduler state. Starting with a fresh scheduler.")
+
         self.start_epoch = checkpoint['epoch'] + 1
         print(f"Resuming training from epoch {self.start_epoch}")
+
+
+def get_optimizer(model, cfg):
+    optimizer_type = cfg.training.optimizer.type
+    lr = cfg.training.optimizer.learning_rate
+    weight_decay = cfg.training.optimizer.weight_decay
+
+    if optimizer_type == "Adam":
+        betas = (cfg.training.optimizer.beta1, cfg.training.optimizer.beta2)
+        return Adam(model.parameters(), lr=lr, weight_decay=weight_decay, betas=betas)
+    elif optimizer_type == "AdamW":
+        betas = (cfg.training.optimizer.beta1, cfg.training.optimizer.beta2)
+        return AdamW(model.parameters(), lr=lr, weight_decay=weight_decay, betas=betas)
+    elif optimizer_type == "SGD":
+        momentum = cfg.training.optimizer.momentum
+        return SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
+    elif optimizer_type == "RMSprop":
+        alpha = cfg.training.optimizer.alpha
+        momentum = cfg.training.optimizer.momentum
+        return RMSprop(model.parameters(), lr=lr, alpha=alpha, weight_decay=weight_decay, momentum=momentum)
+    else:
+        raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
+
+def get_scheduler(optimizer, cfg):
+    scheduler_type = cfg.training.scheduler.type
+
+    if scheduler_type == "StepLR":
+        return StepLR(optimizer, step_size=cfg.training.scheduler.step_size, gamma=cfg.training.scheduler.gamma)
+    elif scheduler_type == "ExponentialLR":
+        return ExponentialLR(optimizer, gamma=cfg.training.scheduler.gamma)
+    elif scheduler_type == "CosineAnnealingLR":
+        return CosineAnnealingLR(optimizer, T_max=cfg.training.scheduler.T_max, eta_min=cfg.training.scheduler.eta_min)
+    elif scheduler_type == "ReduceLROnPlateau":
+        return ReduceLROnPlateau(optimizer, mode='min', factor=cfg.training.scheduler.factor, 
+                                 patience=cfg.training.scheduler.patience, threshold=cfg.training.scheduler.threshold)
+    else:
+        raise ValueError(f"Unsupported scheduler type: {scheduler_type}")
+    
 
 @config_wrapper()
 def main(cfg: DictConfig) -> None:
@@ -305,12 +391,14 @@ def main(cfg: DictConfig) -> None:
     train_loader, val_loader = create_data_loaders(
         dataset=full_dataset, 
         batch_size=cfg.training.batch_size, 
-        train_ratio=cfg.training.train_ratio, 
+        val_size=cfg.training.val_size, 
         num_workers=cfg.training.num_workers, 
         pin_memory=cfg.training.pin_memory,
-        prefetch_factor=cfg.training.prefetch_factor
+        prefetch_factor=cfg.training.prefetch_factor,
+        batches_per_epoch=cfg.training.batches_per_epoch
     )
     print(f"Training on {device}")
+    print(f"Total batches: {len(full_dataset)}")
     print(f"Train set: {len(train_loader)}")
     print(f"Validation set: {len(val_loader)}")
     
@@ -325,17 +413,24 @@ def main(cfg: DictConfig) -> None:
         cfg=cfg
     ).to(device)
 
-    optimizer = optim.AdamW(model.parameters(), lr=cfg.training.learning_rate, weight_decay=cfg.training.weight_decay)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.training.epochs, eta_min=1e-4)
+    optimizer = get_optimizer(model, cfg)
+    scheduler = get_scheduler(optimizer, cfg)
 
     trainer = Trainer(cfg, model, train_loader, val_loader, optimizer, scheduler, device, wandb)
     trainer.run_name = run_name
 
     if cfg.training.warmstart_model:
-        checkpoint_path = find_model_path(cfg.project_dir, cfg.training.warmstart_model)
+        if cfg.training.warmstart_model == "latest":
+            checkpoint_path = max(
+                (os.path.join(root, name) for root, _, files in os.walk("./output/models") for name in files if name == "model_latest.pth"),
+                key=os.path.getmtime
+            )
+        else:
+            checkpoint_path = find_model_path(cfg.project_dir, cfg.training.warmstart_model)
         if checkpoint_path is None:
             raise FileNotFoundError(f"Model file not found: {cfg.training.warmstart_model}. "
                                     f"Searched in {cfg.project_dir} and its subdirectories.")
+        print(f"Loading model from {checkpoint_path}")
         trainer.load_checkpoint(checkpoint_path, cfg.training.warmstart_load_scheduler_state, device)
     
     trainer.train()

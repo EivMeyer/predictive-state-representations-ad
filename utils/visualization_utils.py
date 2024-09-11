@@ -1,7 +1,7 @@
-from matplotlib.gridspec import GridSpec
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 import numpy as np
-
+import os
 
 def prepare_image(img):
     img = np.squeeze(img)
@@ -19,7 +19,7 @@ def normalize(img):
     return (img - img_min) / (img_max - img_min) if img_min != img_max else img
 
 def setup_visualization(input_seq_len, pred_seq_len):
-    plt.ion()
+    plt.ion()  # Turn on interactive mode
     fig = plt.figure(figsize=(30, 20))
     
     # Calculate the number of columns and rows needed
@@ -38,7 +38,7 @@ def setup_visualization(input_seq_len, pred_seq_len):
         'train': [fig.add_subplot(gs[i:i+2, -3:]) for i in range(0, 6, 2)]
     }
     
-    plt.show()
+    plt.show(block=False)  # Show the figure without blocking
     return fig, axes
 
 def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoch, train_predictions, train_ground_truth, metrics):
@@ -92,7 +92,7 @@ def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoc
     # Add overall metrics to suptitle
     metrics_text = "\n".join([f"{k}: {v:.4f}" for k, v in metrics.items()])
     fig.suptitle(f'Prediction Analysis - Epoch {epoch}\n\n{metrics_text}', fontsize=16, fontweight='bold')
-    # fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    
+    # Update the figure without bringing it to the front
     fig.canvas.draw()
     fig.canvas.flush_events()
-    plt.pause(0.1)  # Pause to update the plot
