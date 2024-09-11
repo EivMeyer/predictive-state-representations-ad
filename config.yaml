@@ -136,7 +136,7 @@ training:
 
   # Scheduler configuration
   scheduler:
-    type: "CosineAnnealingLR"  # Options: "StepLR", "ExponentialLR", "CosineAnnealingLR", "ReduceLROnPlateau"
+    type: "NoScheduler"  # Options: "StepLR", "ExponentialLR", "CosineAnnealingLR", "ReduceLROnPlateau", "NoScheduler"
     T_max: 50  # Period of cosine annealing in epochs
     eta_min: 1e-5  # Minimum learning rate
     # Other scheduler options (uncomment if needed):

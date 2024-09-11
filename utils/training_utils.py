@@ -1,6 +1,17 @@
 import torch
-import time
 from omegaconf import DictConfig, OmegaConf
+from torch.optim.lr_scheduler import _LRScheduler
+
+class NoScheduler(_LRScheduler):
+    def __init__(self, optimizer):
+        super(NoScheduler, self).__init__(optimizer)
+
+    def step(self):
+        pass
+
+    def get_last_lr(self):
+        return [group['lr'] for group in self.optimizer.param_groups]
+
 
 def init_wandb(cfg: DictConfig):
     if cfg.wandb.enabled:

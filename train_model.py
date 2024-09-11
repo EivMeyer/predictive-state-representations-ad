@@ -13,7 +13,7 @@ import numpy as np
 import time
 from utils.visualization_utils import setup_visualization, visualize_prediction
 import torch.multiprocessing as mp
-from utils.training_utils import analyze_predictions, init_wandb
+from utils.training_utils import analyze_predictions, init_wandb, NoScheduler
 from datetime import datetime
 from torch.cuda.amp import autocast, GradScaler
 from typing import Dict, List, Tuple, Any, Optional
@@ -411,6 +411,8 @@ def get_scheduler(optimizer, cfg):
     elif scheduler_type == "ReduceLROnPlateau":
         return ReduceLROnPlateau(optimizer, mode='min', factor=cfg.training.scheduler.factor, 
                                  patience=cfg.training.scheduler.patience, threshold=cfg.training.scheduler.threshold)
+    elif scheduler_type == "NoScheduler":
+        return NoScheduler(optimizer)
     else:
         raise ValueError(f"Unsupported scheduler type: {scheduler_type}")
     
