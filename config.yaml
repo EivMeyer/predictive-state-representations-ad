@@ -129,7 +129,7 @@ training:
     type: "RMSprop"
     beta1: 0.92
     beta2: 0.9995
-    learning_rate: 2e-4
+    learning_rate: 1e-4
     weight_decay: 1e-5
     momentum: 0.9
     alpha: 0.99
