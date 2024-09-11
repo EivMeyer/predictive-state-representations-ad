@@ -42,9 +42,8 @@ class CombinedLoss(nn.Module):
         return torch.mean(latent ** 2)
 
     def gradient_magnitude(self, x):
-        # Ensure x is 4D: [batch_size, channels, height, width]
-        if x.dim() == 5:
-            x = x.view(-1, *x.shape[2:])
+        shape = x.shape
+        x = x.view(-1, *x.shape[2:])
         
         # Apply Sobel filter to each channel independently
         sobel_x = self.sobel_filter_x().to(x.device)
@@ -53,7 +52,10 @@ class CombinedLoss(nn.Module):
         grad_x = F.conv2d(x, sobel_x, padding=1, groups=x.shape[1])
         grad_y = F.conv2d(x, sobel_y, padding=1, groups=x.shape[1])
         
-        return torch.sqrt(grad_x**2 + grad_y**2 + 1e-6)
+        grad_magnitude = torch.sqrt(grad_x**2 + grad_y**2 + 1e-6)
+
+        # Convert back to original shape
+        return grad_magnitude.view(*shape)
 
     def sobel_filter_x(self):
         return torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32).view(1, 1, 3, 3).repeat(3, 1, 1, 1)
@@ -64,44 +66,40 @@ class CombinedLoss(nn.Module):
     def forward(self, pred, target, latent):
         device = pred.device
         
-        # Handle case where pred and target have an extra dimension (sequence length of 1)
-        if pred.dim() == 5 and pred.shape[1] == 1:
-            pred = pred.squeeze(1)
-        if target.dim() == 5 and target.shape[1] == 1:
-            target = target.squeeze(1)
+        batch_size, seq_len, channels, height, width = pred.shape
         
-        batch_size, channels, height, width = pred.shape
-        
-        temporal_weights = self.compute_temporal_weights(1, device=device)  # Use 1 as seq_len since we've squeezed it
-        temporal_weights = temporal_weights.view(1, 1, 1, 1)
+        temporal_weights = self.compute_temporal_weights(seq_len, device=device)
+        temporal_weights = temporal_weights.unsqueeze(0).repeat(batch_size, 1)
 
         total_loss = 0
         loss_components = {}
 
         for scale in range(self.num_scales):
+            batch_size, seq_len, channels, height, width = pred.shape
+
             if scale > 0:
-                pred = F.avg_pool2d(pred, kernel_size=2, stride=2)
-                target = F.avg_pool2d(target, kernel_size=2, stride=2)
+                pred = F.avg_pool2d(pred.flatten(end_dim=1), kernel_size=2, stride=2).view(batch_size, seq_len, channels, height // 2, width // 2)
+                target = F.avg_pool2d(target.flatten(end_dim=1), kernel_size=2, stride=2).view(batch_size, seq_len, channels, height // 2, width // 2)
 
             # MSE loss with temporal weighting
-            mse_loss = ((pred - target) ** 2).mean()
-            weighted_mse_loss = mse_loss * temporal_weights.squeeze()
+            mse_loss = ((pred - target) ** 2).mean(dim=(2, 3, 4))
+            weighted_mse_loss = (mse_loss * temporal_weights).sum(dim=-1).mean(dim=0)
             total_loss += self.mse_weight * weighted_mse_loss
-            loss_components[f'mse_scale_{scale}'] = weighted_mse_loss.item()
+            loss_components[f'mse_scale_{scale}'] = weighted_mse_loss
 
             # L1 loss with temporal weighting
-            l1_loss = torch.abs(pred - target).mean()
-            weighted_l1_loss = l1_loss * temporal_weights.squeeze()
+            l1_loss = torch.abs(pred - target).mean(dim=(2, 3, 4))
+            weighted_l1_loss = (l1_loss * temporal_weights).sum(dim=-1).mean(dim=0)
             total_loss += self.l1_weight * weighted_l1_loss
-            loss_components[f'l1_scale_{scale}'] = weighted_l1_loss.item()
+            loss_components[f'l1_scale_{scale}'] = weighted_l1_loss
 
             # Perceptual loss (gradient-based) with temporal weighting
             pred_grad = self.gradient_magnitude(pred)
             target_grad = self.gradient_magnitude(target)
-            perceptual_loss = ((pred_grad - target_grad) ** 2).mean()
-            weighted_perceptual_loss = perceptual_loss * temporal_weights.squeeze()
+            perceptual_loss = ((pred_grad - target_grad) ** 2).mean(dim=(2, 3, 4))
+            weighted_perceptual_loss = (perceptual_loss * temporal_weights).sum(dim=-1).mean(dim=0)
             total_loss += self.perceptual_weight * weighted_perceptual_loss
-            loss_components[f'perceptual_scale_{scale}'] = weighted_perceptual_loss.item()
+            loss_components[f'perceptual_scale_{scale}'] = weighted_perceptual_loss
 
         diversity_loss = self.diversity_loss(pred.unsqueeze(1))  # Add sequence dimension back for diversity loss
         total_loss += self.diversity_weight * diversity_loss
