@@ -79,22 +79,15 @@ training:
   # Batch size for training
   batch_size: 1
   # Minibatch size
-  minibatch_size: 4
+  minibatch_size: 32
   # Number of training iterations per batch
-  iterations_per_batch: 8
+  iterations_per_batch: 4
   # Whether to compute and print a validation error at each minibatch (slow)
   track_val_loss: false
-  # Learning rate for the optimizer
-  learning_rate: 0.001
-  # Weight decay for the optimizer
-  weight_decay: 1e-5
-  # Betas for the optimizer
-  beta1: 0.99
-  beta2: 0.9999
   # Factor to downsample input images
   downsample_factor: 1
   # Maximum gradient norm for gradient clipping
-  max_grad_norm: 5.0
+  max_grad_norm: 1.0
   # Set to true to enable automatic mixed precision
   use_amp: false 
   # Validation set split size (if float, it is the ratio of the dataset, if int, it is the number of samples)
@@ -136,8 +129,8 @@ training:
 
   # Scheduler configuration
   scheduler:
-    type: "NoScheduler"  # Options: "StepLR", "ExponentialLR", "CosineAnnealingLR", "ReduceLROnPlateau", "NoScheduler"
-    T_max: 50  # Period of cosine annealing in epochs
+    type: "CosineAnnealingLR"  # Options: "StepLR", "ExponentialLR", "CosineAnnealingLR", "ReduceLROnPlateau", "NoScheduler"
+    T_max: 100  # Period of cosine annealing in epochs
     eta_min: 1e-5  # Minimum learning rate
     # Other scheduler options (uncomment if needed):
     # step_size: 30  # Only used for StepLR
