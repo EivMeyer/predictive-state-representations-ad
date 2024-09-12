@@ -73,7 +73,7 @@ training:
   # Latent representation size
   hidden_dim: 64
   # Number of training epochs
-  epochs: 2000
+  epochs: 100000
   # Number of batches to use per epoch (set to null to use all batches)
   batches_per_epoch: 1
   # Batch size for training
