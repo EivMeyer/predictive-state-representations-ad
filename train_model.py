@@ -205,6 +205,7 @@ class Trainer:
         if self.cfg.training.create_plots:
             hold_out_batch = next(iter(self.val_loader))
             hold_out_batch = move_batch_to_device(hold_out_batch, self.device)
+            hold_out_batch = {k: v[0:2] for k, v in hold_out_batch.items()} # Take only the first two samples
             self.hold_out_batch = hold_out_batch
             self.hold_out_obs = hold_out_batch['observations'][:2]
             self.hold_out_target = hold_out_batch['next_observations'][:2]
