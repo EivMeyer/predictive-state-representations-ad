@@ -47,7 +47,8 @@ class PredictiveModelV8(BasePredictiveModel):
             latent_l2_weight=self.cfg.training.loss.latent_l2_weight,
             temporal_decay=cfg.training.loss.temporal_decay,
             perceptual_weight=cfg.training.loss.perceptual_weight,
-            num_scales=cfg.training.loss.num_scales
+            num_scales=cfg.training.loss.num_scales,
+            use_sample_weights=cfg.training.loss.use_sample_weights
         )
 
         self._initialize_weights()

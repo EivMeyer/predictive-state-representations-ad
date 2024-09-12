@@ -63,6 +63,7 @@ class PredictiveModelV9(BasePredictiveModel):
             latent_l1_weight=self.cfg.training.loss.latent_l1_weight,
             latent_l2_weight=self.cfg.training.loss.latent_l2_weight,
             temporal_decay=self.cfg.training.loss.temporal_decay,
+            use_sample_weights=cfg.training.loss.use_sample_weights
         )
 
         self._initialize_weights()

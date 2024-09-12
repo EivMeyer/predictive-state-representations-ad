@@ -1,11 +1,14 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
+import numpy as np
+
 
 class CombinedLoss(nn.Module):
     def __init__(self, mse_weight=0.5, l1_weight=0.3, diversity_weight=0.1, 
                  latent_l1_weight=0.05, latent_l2_weight=0.05, temporal_decay=0.9,
-                 perceptual_weight=0.1, num_scales=3):
+                 perceptual_weight=0.1, num_scales=3, use_sample_weights=True, warmup_iterations=1000, momentum=0.99):
         super(CombinedLoss, self).__init__()
         self.mse_weight = mse_weight
         self.l1_weight = l1_weight
@@ -15,6 +18,93 @@ class CombinedLoss(nn.Module):
         self.temporal_decay = temporal_decay
         self.perceptual_weight = perceptual_weight
         self.num_scales = num_scales
+        self.use_sample_weights = use_sample_weights
+
+        if self.use_sample_weights:
+            # Setup for running statistics for sample weights
+            self.warmup_iterations = warmup_iterations
+            self.momentum = momentum
+            self.register_buffer('iteration_count', torch.tensor(0))
+            self.register_buffer('running_mean', None)
+            self.register_buffer('running_std', None)
+
+    def update_running_stats(self, batch_mean, batch_std):
+        if self.running_mean is None:
+            self.running_mean = batch_mean
+            self.running_std = batch_std
+        else:
+            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * batch_mean
+            self.running_std = self.momentum * self.running_std + (1 - self.momentum) * batch_std
+
+    def compute_sample_weights(self, observations, debug=False):
+        batch_size, seq_len, channels, height, width = observations.shape
+        
+        # Compute channel-wise mean and std for each sample
+        sample_means = observations.view(batch_size, seq_len, channels, -1).mean(dim=3)
+        sample_stds = observations.view(batch_size, seq_len, channels, -1).std(dim=3)
+        
+        # Compute batch statistics
+        batch_mean = sample_means.mean(dim=(0, 1))
+        batch_std = sample_stds.mean(dim=(0, 1))
+        
+        # Update running statistics
+        self.update_running_stats(batch_mean, batch_std)
+        
+        # Compute channel-wise deviations
+        mean_deviation = torch.abs(sample_means - self.running_mean.unsqueeze(0).unsqueeze(0))
+        std_deviation = torch.abs(sample_stds - self.running_std.unsqueeze(0).unsqueeze(0))
+        
+        # Combine deviations across channels and time
+        total_deviation = (mean_deviation + std_deviation).sum(dim=(1, 2))
+        
+        # Normalize weights
+        weights = total_deviation / total_deviation.sum()
+        
+        if debug:
+            self.plot_observation_sequences(observations, weights, sample_means, sample_stds, batch_mean, batch_std)
+        
+        return weights
+    
+    def plot_observation_sequences(self, observations, weights, sample_means, sample_stds, batch_mean, batch_std):
+        batch_size, seq_len, channels, height, width = observations.shape
+        
+        # Determine grid size
+        grid_size = int(np.ceil(np.sqrt(batch_size)))
+        
+        fig, axes = plt.subplots(grid_size, grid_size, figsize=(20, 20))
+        fig.suptitle("Observation Sequences, Weights, and Channel Statistics", fontsize=16)
+        
+        for i in range(batch_size):
+            row = i // grid_size
+            col = i % grid_size
+            ax = axes[row, col]
+            
+            # Plot the middle frame of the sequence
+            mid_frame = seq_len // 2
+            img = observations[i, mid_frame].permute(1, 2, 0).cpu().numpy()
+            
+            if channels == 1:
+                ax.imshow(img.squeeze(), cmap='gray')
+            else:
+                ax.imshow(img)
+            
+            # Prepare channel statistics text
+            stats_text = f"Weight: {weights[i]:.4f}\n"
+            for c in range(channels):
+                stats_text += f"Ch{c} - μ: {sample_means[i, mid_frame, c]:.2f} (β: {batch_mean[c]:.2f}), "
+                stats_text += f"σ: {sample_stds[i, mid_frame, c]:.2f} (β: {batch_std[c]:.2f})\n"
+            
+            ax.set_title(stats_text, fontsize=8)
+            ax.axis('off')
+        
+        # Remove any unused subplots
+        for i in range(batch_size, grid_size * grid_size):
+            row = i // grid_size
+            col = i % grid_size
+            fig.delaxes(axes[row, col])
+        
+        plt.tight_layout()
+        plt.show()
 
     def compute_temporal_weights(self, seq_len, device):
         weights = torch.tensor([self.temporal_decay ** i for i in range(seq_len)], device=device)
@@ -71,6 +161,12 @@ class CombinedLoss(nn.Module):
         temporal_weights = self.compute_temporal_weights(seq_len, device=device)
         temporal_weights = temporal_weights.unsqueeze(0).repeat(batch_size, 1)
 
+        if self.use_sample_weights:
+            # Compute sample weights
+            sample_weights = self.compute_sample_weights(target).to(device)
+        else:
+            sample_weights = torch.ones(batch_size, device=device)
+
         total_loss = 0
         loss_components = {}
 
@@ -81,27 +177,31 @@ class CombinedLoss(nn.Module):
                 pred = F.avg_pool2d(pred.flatten(end_dim=1), kernel_size=2, stride=2).view(batch_size, seq_len, channels, height // 2, width // 2)
                 target = F.avg_pool2d(target.flatten(end_dim=1), kernel_size=2, stride=2).view(batch_size, seq_len, channels, height // 2, width // 2)
 
-            # MSE loss with temporal weighting
+            # MSE loss with temporal and sample weighting
             mse_loss = ((pred - target) ** 2).mean(dim=(2, 3, 4))
-            weighted_mse_loss = (mse_loss * temporal_weights).sum(dim=-1).mean(dim=0)
+            weighted_mse_loss = (mse_loss * temporal_weights).sum(dim=-1) * sample_weights
+            weighted_mse_loss = weighted_mse_loss.mean()
             total_loss += self.mse_weight * weighted_mse_loss
-            loss_components[f'mse_scale_{scale}'] = weighted_mse_loss
+            loss_components[f'mse_scale_{scale}'] = weighted_mse_loss.item()
 
-            # L1 loss with temporal weighting
+            # L1 loss with temporal and sample weighting
             l1_loss = torch.abs(pred - target).mean(dim=(2, 3, 4))
-            weighted_l1_loss = (l1_loss * temporal_weights).sum(dim=-1).mean(dim=0)
+            weighted_l1_loss = (l1_loss * temporal_weights).sum(dim=-1) * sample_weights
+            weighted_l1_loss = weighted_l1_loss.mean()
             total_loss += self.l1_weight * weighted_l1_loss
-            loss_components[f'l1_scale_{scale}'] = weighted_l1_loss
+            loss_components[f'l1_scale_{scale}'] = weighted_l1_loss.item()
 
-            # Perceptual loss (gradient-based) with temporal weighting
+            # Perceptual loss (gradient-based) with temporal and sample weighting
             pred_grad = self.gradient_magnitude(pred)
             target_grad = self.gradient_magnitude(target)
             perceptual_loss = ((pred_grad - target_grad) ** 2).mean(dim=(2, 3, 4))
-            weighted_perceptual_loss = (perceptual_loss * temporal_weights).sum(dim=-1).mean(dim=0)
+            weighted_perceptual_loss = (perceptual_loss * temporal_weights).sum(dim=-1) * sample_weights
+            weighted_perceptual_loss = weighted_perceptual_loss.mean()
             total_loss += self.perceptual_weight * weighted_perceptual_loss
-            loss_components[f'perceptual_scale_{scale}'] = weighted_perceptual_loss
+            loss_components[f'perceptual_scale_{scale}'] = weighted_perceptual_loss.item()
 
-        diversity_loss = self.diversity_loss(pred.unsqueeze(1))  # Add sequence dimension back for diversity loss
+        # The rest of the losses remain unchanged
+        diversity_loss = self.diversity_loss(pred.unsqueeze(1))
         total_loss += self.diversity_weight * diversity_loss
         loss_components['diversity'] = diversity_loss.item()
 
