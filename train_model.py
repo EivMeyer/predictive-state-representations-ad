@@ -341,7 +341,7 @@ class Trainer:
 
     def load_checkpoint(self, checkpoint_path: Path, load_scheduler: bool, device):
         checkpoint = torch.load(checkpoint_path, map_location=device)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.model.load_state_dict(checkpoint['model_state_dict'], strict=False)
 
         # Recreate the optimizer with the current configuration
         self.optimizer = get_optimizer(self.model, self.cfg)
