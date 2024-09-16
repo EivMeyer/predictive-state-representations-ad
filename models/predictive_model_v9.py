@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from models.base_predictive_model import BasePredictiveModel
 from models.autoencoder_model_v1 import AutoEncoderModelV1
+from models.autoencoder_model_v0 import AutoEncoderModelV0
 from models.loss_functions import CombinedLoss
 from utils.file_utils import find_model_path
 
@@ -22,8 +23,8 @@ class PredictiveModelV9(BasePredictiveModel):
         assert pretrained_model_path is not None, "Pretrained model path must be provided"
 
         # Load pre-trained autoencoder
-        self.autoencoder = AutoEncoderModelV1(obs_shape, action_dim, ego_state_dim, cfg)
-        self.autoencoder.load_state_dict(torch.load(pretrained_model_path)['model_state_dict'])
+        self.autoencoder = AutoEncoderModelV0(obs_shape, action_dim, ego_state_dim, cfg)
+        self.autoencoder.load_state_dict(torch.load(pretrained_model_path)['model_state_dict'], strict=False)
         self.autoencoder.eval()
         
         for param in self.autoencoder.parameters():
@@ -34,7 +35,10 @@ class PredictiveModelV9(BasePredictiveModel):
             dummy_input = torch.zeros(1, *obs_shape)
             dummy_ego_state = torch.zeros(1, ego_state_dim)
             dummy_batch = {'observations': dummy_input, 'ego_states': dummy_ego_state}
-            latent_dim = self.autoencoder.encode(dummy_batch).shape[1]
+            dummy_encoding = self.autoencoder.encode(dummy_batch)
+            if isinstance(dummy_encoding, tuple):
+                dummy_encoding = dummy_encoding[0]
+            latent_dim = dummy_encoding.shape[1]
 
         self.latent_dim = latent_dim
         self.hidden_dim = cfg.training.hidden_dim
@@ -85,6 +89,8 @@ class PredictiveModelV9(BasePredictiveModel):
         observations_reshaped = observations.view(-1, channels, height, width)
         with torch.no_grad():
             latent_features = self.autoencoder.encode({'observations': observations_reshaped, 'ego_states': ego_states.view(-1, ego_states.shape[-1])})
+            if isinstance(latent_features, tuple):
+                latent_features = latent_features[0]
         latent_features = latent_features.view(batch_size, seq_len, -1)
         latent_features = self.latent_projector(latent_features)
 
@@ -146,6 +152,8 @@ class PredictiveModelV9(BasePredictiveModel):
                 'ego_states': target_ego_states_reshaped
             }
             target_latents = self.autoencoder.encode(target_batch)
+            if isinstance(target_latents, tuple):
+                target_latents = target_latents[0]
             target_latents = target_latents.view(batch_size, seq_len, -1)
 
         # Calculate loss

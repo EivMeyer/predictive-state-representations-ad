@@ -155,14 +155,18 @@ class CombinedLoss(nn.Module):
 
     def forward(self, pred, target, latent):
         device = pred.device
+
+        if pred.ndim == 3 and target.ndim == 3:
+            # Expand dimensions to match image format (insert height and width dimensions)
+            pred = pred.unsqueeze(-1).unsqueeze(-1)
+            target = target.unsqueeze(-1).unsqueeze(-1)
         
         batch_size, seq_len, channels, height, width = pred.shape
         
         temporal_weights = self.compute_temporal_weights(seq_len, device=device)
         temporal_weights = temporal_weights.unsqueeze(0).repeat(batch_size, 1)
 
-        if self.use_sample_weights:
-            # Compute sample weights
+        if self.use_sample_weights and width > 1 and height > 1:
             sample_weights = self.compute_sample_weights(target).to(device)
         else:
             sample_weights = torch.ones(batch_size, device=device)
@@ -177,41 +181,49 @@ class CombinedLoss(nn.Module):
                 pred = F.avg_pool2d(pred.flatten(end_dim=1), kernel_size=2, stride=2).view(batch_size, seq_len, channels, height // 2, width // 2)
                 target = F.avg_pool2d(target.flatten(end_dim=1), kernel_size=2, stride=2).view(batch_size, seq_len, channels, height // 2, width // 2)
 
-            # MSE loss with temporal and sample weighting
-            mse_loss = ((pred - target) ** 2).mean(dim=(2, 3, 4))
-            weighted_mse_loss = (mse_loss * temporal_weights).sum(dim=-1) * sample_weights
-            weighted_mse_loss = weighted_mse_loss.mean()
-            total_loss += self.mse_weight * weighted_mse_loss
-            loss_components[f'mse_scale_{scale}'] = weighted_mse_loss.item()
+            if self.mse_weight > 0:
+                # MSE loss with temporal and sample weighting
+                mse_loss = ((pred - target) ** 2).mean(dim=(2, 3, 4))
+                weighted_mse_loss = (mse_loss * temporal_weights).sum(dim=-1) * sample_weights
+                weighted_mse_loss = weighted_mse_loss.mean()
+                total_loss += self.mse_weight * weighted_mse_loss
+                loss_components[f'mse_scale_{scale}'] = weighted_mse_loss.item()
 
-            # L1 loss with temporal and sample weighting
-            l1_loss = torch.abs(pred - target).mean(dim=(2, 3, 4))
-            weighted_l1_loss = (l1_loss * temporal_weights).sum(dim=-1) * sample_weights
-            weighted_l1_loss = weighted_l1_loss.mean()
-            total_loss += self.l1_weight * weighted_l1_loss
-            loss_components[f'l1_scale_{scale}'] = weighted_l1_loss.item()
+            if self.l1_weight > 0:
+                # L1 loss with temporal and sample weighting
+                l1_loss = torch.abs(pred - target).mean(dim=(2, 3, 4))
+                weighted_l1_loss = (l1_loss * temporal_weights).sum(dim=-1) * sample_weights
+                weighted_l1_loss = weighted_l1_loss.mean()
+                total_loss += self.l1_weight * weighted_l1_loss
+                loss_components[f'l1_scale_{scale}'] = weighted_l1_loss.item()
 
-            # Perceptual loss (gradient-based) with temporal and sample weighting
-            pred_grad = self.gradient_magnitude(pred)
-            target_grad = self.gradient_magnitude(target)
-            perceptual_loss = ((pred_grad - target_grad) ** 2).mean(dim=(2, 3, 4))
-            weighted_perceptual_loss = (perceptual_loss * temporal_weights).sum(dim=-1) * sample_weights
-            weighted_perceptual_loss = weighted_perceptual_loss.mean()
-            total_loss += self.perceptual_weight * weighted_perceptual_loss
-            loss_components[f'perceptual_scale_{scale}'] = weighted_perceptual_loss.item()
+            if self.perceptual_weight > 0 and width > 1 and height > 1:
+                # Perceptual loss (gradient-based) with temporal and sample weighting
+                pred_grad = self.gradient_magnitude(pred)
+                target_grad = self.gradient_magnitude(target)
+                perceptual_loss = ((pred_grad - target_grad) ** 2).mean(dim=(2, 3, 4))
+                weighted_perceptual_loss = (perceptual_loss * temporal_weights).sum(dim=-1) * sample_weights
+                weighted_perceptual_loss = weighted_perceptual_loss.mean()
+                total_loss += self.perceptual_weight * weighted_perceptual_loss
+                loss_components[f'perceptual_scale_{scale}'] = weighted_perceptual_loss.item()
 
-        # The rest of the losses remain unchanged
-        diversity_loss = self.diversity_loss(pred.unsqueeze(1))
-        total_loss += self.diversity_weight * diversity_loss
-        loss_components['diversity'] = diversity_loss.item()
+            if width == 1 or height == 1:
+                break
 
-        latent_l1_loss = self.latent_l1_loss(latent)
-        total_loss += self.latent_l1_weight * latent_l1_loss
-        loss_components['latent_l1'] = latent_l1_loss.item()
+        if self.diversity_weight > 0:
+            diversity_loss = self.diversity_loss(pred.unsqueeze(1))
+            total_loss += self.diversity_weight * diversity_loss
+            loss_components['diversity'] = diversity_loss.item()
 
-        latent_l2_loss = self.latent_l2_loss(latent)
-        total_loss += self.latent_l2_weight * latent_l2_loss
-        loss_components['latent_l2'] = latent_l2_loss.item()
+        if self.latent_l1_weight > 0:
+            latent_l1_loss = self.latent_l1_loss(latent)
+            total_loss += self.latent_l1_weight * latent_l1_loss
+            loss_components['latent_l1'] = latent_l1_loss.item()
+
+        if self.latent_l2_weight > 0:
+            latent_l2_loss = self.latent_l2_loss(latent)
+            total_loss += self.latent_l2_weight * latent_l2_loss
+            loss_components['latent_l2'] = latent_l2_loss.item()
 
         loss_components['total'] = total_loss.item()
 

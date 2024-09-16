@@ -128,7 +128,10 @@ class AutoEncoderModelV0(BasePredictiveModel):
 
 
     def encode(self, batch):
-        observation = batch['observations'][:, -1]  # Take only the last observation
+        if batch['observations'].ndim == 5:
+            observation = batch['observations'][:, -1]  # Take only the last observation
+        else:
+            observation = batch['observations']
         encoder_features = self.encoder(observation)
         mu = self.fc_mu(encoder_features)
         logvar = self.fc_logvar(encoder_features)

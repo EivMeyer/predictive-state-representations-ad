@@ -52,13 +52,16 @@ wandb:
   project: PredictiveStateRepresentations-AD
 
 representation:
-  model_path: "./models/model_64_sparse.pth"
+  # Type of model to use for encoding
+  model_type: "AutoEncoderModelV0" # AutoEncoderModelV0, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, VQVAEPredictiveModel
+  # Path to the model
+  model_path: "../models/pretrained/autoencoder_model_v0.pth"
 
 models:
   VQVAEPredictiveModel:
-    pretrained_model_path: "../models/pretrained/autoencoder_model_v1.pth"
+    pretrained_model_path: "../models/pretrained/autoencoder_model_v0.pth"
   PredictiveModelV9:
-    pretrained_model_path: "../models/pretrained/autoencoder_model_v1.pth"
+    pretrained_model_path: "../models/pretrained/autoencoder_model_v0.pth"
   AutoEncoderModelV0:
     kl_weight: 0.001
 

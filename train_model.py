@@ -135,10 +135,12 @@ class Trainer:
                     self.update_stats(epoch_stats, stats)
                     
                     # Update running average loss
-                    if running_avg_loss is None:
-                        running_avg_loss = loss.item()
-                    else:
-                        running_avg_loss = alpha * loss.item() + (1 - alpha) * running_avg_loss
+                    loss_scalar = loss.item()
+                    if np.isfinite(loss_scalar):
+                        if running_avg_loss is None:
+                            running_avg_loss = loss_scalar
+                        else:
+                            running_avg_loss = alpha * loss_scalar + (1 - alpha) * running_avg_loss
                     
                     # Compute validation error if configured
                     if self.cfg.training.track_val_loss:

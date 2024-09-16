@@ -284,6 +284,8 @@ class RepresentationObserver(BaseObserver):
                 'ego_states': dummy_ego_state_tensor
             }
             dummy_rep = self.representation_model.encode(dummy_batch)
+            if isinstance(dummy_rep, tuple):
+                dummy_rep = dummy_rep[0]
 
         rep_shape = dummy_rep.cpu().numpy().shape[1:]
 
@@ -325,6 +327,8 @@ class RepresentationObserver(BaseObserver):
                 'ego_states': ego_state_tensor
             }
             rep = self.representation_model.encode(batch)
+            if isinstance(rep, tuple):
+                rep = rep[0]
             
         representation = rep.cpu().numpy().squeeze()
 
@@ -387,7 +391,7 @@ def create_representation_model(cfg, device):
     obs_shape, action_dim, ego_state_dim = get_data_dimensions(full_dataset)
 
     # Get the model class based on the config
-    ModelClass = get_model_class(cfg.training.model_type)
+    ModelClass = get_model_class(cfg.representation.model_type)
     if ModelClass is None:
         raise ValueError(f"Invalid model type: {cfg.training.model_type}")
 
@@ -401,7 +405,7 @@ def create_representation_model(cfg, device):
     
     print(f"Using model file: {model_path}")
 
-    model.load_state_dict(torch.load(model_path, map_location=device)['model_state_dict'])
+    model.load_state_dict(torch.load(model_path, map_location=device)['model_state_dict'], strict=False)
     model.to(device)
 
     return model
