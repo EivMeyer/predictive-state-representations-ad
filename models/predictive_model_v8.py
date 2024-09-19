@@ -26,7 +26,10 @@ class PredictiveModelV8(BasePredictiveModel):
         self.encoder_projector = nn.Linear(encoder_output_size, self.hidden_dim)
         self.ego_state_projector = nn.Linear(ego_state_dim, self.hidden_dim)
 
-        self.pos_encoder = PositionalEncoding(self.hidden_dim, max_len=self.num_frames_to_predict)
+        self.readout_token = nn.Parameter(torch.randn(1, 1, self.hidden_dim))
+
+        self.pos_encoder_encoding = PositionalEncoding(self.hidden_dim, max_len=self.num_frames_to_predict + 1)
+        self.pos_encoder_decoding = PositionalEncoding(self.hidden_dim, max_len=self.num_frames_to_predict)
 
         # Transformer encoder and decoder
         encoder_layers = nn.TransformerEncoderLayer(d_model=self.hidden_dim, nhead=nhead, dim_feedforward=1024, norm_first=True)
@@ -36,6 +39,7 @@ class PredictiveModelV8(BasePredictiveModel):
         self.transformer_decoder = nn.TransformerDecoder(decoder_layers, num_layers=num_decoder_layers)
 
         # Decoder
+        self.decoder_input_proj = nn.Linear(self.hidden_dim, self.hidden_dim)
         self.decoder = self._make_decoder(obs_shape)
 
         # Loss function
@@ -129,9 +133,14 @@ class PredictiveModelV8(BasePredictiveModel):
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
 
+    def generate_square_subsequent_mask(self, sz):
+        mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
+        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+        return mask
+
     def encode(self, batch):
         observations = batch['observations']
-        ego_states = batch['ego_states']
+        ego_states = batch['ego_states'] / torch.tensor([40, 0.3, 0.01, 0.1], device=batch['ego_states'].device) # Normalize ego states
 
         batch_size, seq_len, channels, height, width = observations.shape
 
@@ -147,21 +156,36 @@ class PredictiveModelV8(BasePredictiveModel):
         # Combine encoder features and ego features
         combined_features = encoder_features + ego_features
 
-        # Add positional encoding and apply transformer encoder
-        src = self.pos_encoder(combined_features.permute(1, 0, 2))
-        memory = self.transformer_encoder(src)
+        # Prepend the readout token to the sequence
+        readout_tokens = self.readout_token.expand(batch_size, -1, -1)
+        combined_features = torch.cat([combined_features, readout_tokens], dim=1)
 
-        # Return only the last memory state
+        # Add positional encoding
+        src = self.pos_encoder_encoding(combined_features.permute(1, 0, 2))
+
+        # Generate temporal mask for encoder
+        src_mask = self.generate_square_subsequent_mask(src.size(0)).to(src.device)
+
+        # Apply transformer encoder with temporal mask
+        memory = self.transformer_encoder(src, mask=src_mask)
+
+        # Return only the readout token's final state
         return memory[-1]
 
     def decode(self, batch, memory):
         batch_size, hidden_dim = memory.shape
 
-        # Prepare decoder input
-        decoder_input = self.pos_encoder(memory.unsqueeze(0).repeat(self.num_frames_to_predict, 1, 1))
+        # Apply the projection to the memory
+        projected_memory = self.decoder_input_proj(memory)
 
-        # Generate future frame predictions using only the last memory state
-        output = self.transformer_decoder(decoder_input, memory.unsqueeze(0))
+        # Prepare decoder input
+        decoder_input = self.pos_encoder_decoding(projected_memory.unsqueeze(0).repeat(self.num_frames_to_predict, 1, 1))
+
+        # Generate temporal mask for decoder
+        tgt_mask = self.generate_square_subsequent_mask(self.num_frames_to_predict).to(decoder_input.device)
+
+        # Generate future frame predictions using the projected memory state
+        output = self.transformer_decoder(decoder_input, projected_memory.unsqueeze(0), tgt_mask=tgt_mask)
 
         # Reshape for convolutional decoder
         output = output.permute(1, 0, 2).contiguous()
@@ -174,7 +198,6 @@ class PredictiveModelV8(BasePredictiveModel):
         predictions = predictions.view(batch_size, self.num_frames_to_predict, self.obs_shape[-3], self.obs_shape[-2], self.obs_shape[-1])
 
         return predictions
-    
 
     def compute_loss(self, batch, model_output):
         predictions = model_output['predictions']
