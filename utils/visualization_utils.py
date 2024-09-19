@@ -49,6 +49,12 @@ def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoc
 
     for ax_list in axes.values():
         clear_axes(ax_list)
+
+    observations = observations.cpu().numpy().astype(np.float32)
+    ground_truth = ground_truth.cpu().numpy().astype(np.float32)
+    prediction = prediction.cpu().numpy().astype(np.float32)
+    train_predictions = train_predictions.cpu().numpy().astype(np.float32)
+    train_ground_truth = train_ground_truth.cpu().numpy().astype(np.float32)
     
     input_seq_len = observations.shape[1]
     pred_seq_len = prediction.shape[1]
@@ -56,14 +62,14 @@ def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoc
     def plot_sample(sample_num):
         # Display input sequence
         for i, ax in enumerate(axes[f'input_{sample_num}']):
-            obs = normalize(prepare_image(observations[sample_num-1, i].cpu().numpy()))
+            obs = normalize(prepare_image(observations[sample_num-1, i]))
             ax.imshow(obs, cmap='viridis' if obs.ndim == 2 else None)
             ax.set_title(f'Input {sample_num} (t-{input_seq_len-1-i})', fontsize=8)
         
         # Display ground truth and predictions
         for i in range(pred_seq_len):
-            gt_np = normalize(prepare_image(ground_truth[sample_num-1, i].cpu().numpy()))
-            pred_np = normalize(prepare_image(prediction[sample_num-1, i].cpu().numpy()))
+            gt_np = normalize(prepare_image(ground_truth[sample_num-1, i]))
+            pred_np = normalize(prepare_image(prediction[sample_num-1, i]))
             
             axes[f'gt_{sample_num}'][i].imshow(gt_np, cmap='viridis' if gt_np.ndim == 2 else None)
             axes[f'gt_{sample_num}'][i].set_title(f'GT {sample_num} (t+{i+1})', fontsize=8)
@@ -80,8 +86,8 @@ def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoc
     for i in range(len(axes['train'])):
         ax = axes['train'][i]
         if i < num_train_preds:
-            pred_np = normalize(prepare_image(train_predictions[i, 0].cpu().numpy()))
-            gt_np = normalize(prepare_image(train_ground_truth[i, 0].cpu().numpy()))
+            pred_np = normalize(prepare_image(train_predictions[i, 0]))
+            gt_np = normalize(prepare_image(train_ground_truth[i, 0]))
             
             ax.imshow(np.hstack([gt_np, pred_np]), cmap='viridis' if gt_np.ndim == 2 else None)
             ax.set_title(f'Train {i+1}: GT | Pred', fontsize=8)
