@@ -4,11 +4,11 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import numpy as np
 
-
 class CombinedLoss(nn.Module):
     def __init__(self, mse_weight=0.5, l1_weight=0.3, diversity_weight=0.1, 
                  latent_l1_weight=0.05, latent_l2_weight=0.05, temporal_decay=0.9,
-                 perceptual_weight=0.1, num_scales=3, use_sample_weights=True, warmup_iterations=1000, momentum=0.99):
+                 perceptual_weight=0.1, num_scales=3, use_sample_weights=True,
+                 r_weight=1.0, g_weight=1.0, b_weight=1.0, warmup_iterations=1000, momentum=0.99):
         super(CombinedLoss, self).__init__()
         self.mse_weight = mse_weight
         self.l1_weight = l1_weight
@@ -19,6 +19,9 @@ class CombinedLoss(nn.Module):
         self.perceptual_weight = perceptual_weight
         self.num_scales = num_scales
         self.use_sample_weights = use_sample_weights
+        self.r_weight = r_weight
+        self.g_weight = g_weight
+        self.b_weight = b_weight
 
         if self.use_sample_weights:
             # Setup for running statistics for sample weights
@@ -182,16 +185,18 @@ class CombinedLoss(nn.Module):
                 target = F.avg_pool2d(target.flatten(end_dim=1), kernel_size=2, stride=2).view(batch_size, seq_len, channels, height // 2, width // 2)
 
             if self.mse_weight > 0:
-                # MSE loss with temporal and sample weighting
-                mse_loss = ((pred - target) ** 2).mean(dim=(2, 3, 4))
+                # MSE loss with temporal and sample weighting, and RGB channel weighting
+                channel_weights = torch.tensor([self.r_weight, self.g_weight, self.b_weight], device=device).view(1, 1, 3, 1, 1)
+                mse_loss = ((pred - target) ** 2 * channel_weights).mean(dim=(2, 3, 4))
                 weighted_mse_loss = (mse_loss * temporal_weights).sum(dim=-1) * sample_weights
                 weighted_mse_loss = weighted_mse_loss.mean()
                 total_loss += self.mse_weight * weighted_mse_loss
                 loss_components[f'mse_scale_{scale}'] = weighted_mse_loss.item()
 
             if self.l1_weight > 0:
-                # L1 loss with temporal and sample weighting
-                l1_loss = torch.abs(pred - target).mean(dim=(2, 3, 4))
+                # L1 loss with temporal and sample weighting, and RGB channel weighting
+                channel_weights = torch.tensor([self.r_weight, self.g_weight, self.b_weight], device=device).view(1, 1, 3, 1, 1)
+                l1_loss = (torch.abs(pred - target) * channel_weights).mean(dim=(2, 3, 4))
                 weighted_l1_loss = (l1_loss * temporal_weights).sum(dim=-1) * sample_weights
                 weighted_l1_loss = weighted_l1_loss.mean()
                 total_loss += self.l1_weight * weighted_l1_loss
