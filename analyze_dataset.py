@@ -5,44 +5,60 @@ from pathlib import Path
 import numpy as np
 from utils.config_utils import config_wrapper
 
+import matplotlib.pyplot as plt
+import numpy as np
+from typing import Dict, Any
 
-def visualize_episode(episode):
+def visualize_episode(episode: Dict[str, Any]) -> None:
     observations, next_observations = episode['observations'], episode['next_observations']
-
-    # Example to show one image from observations and one from predictions
-    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-    fig.suptitle('Example Episode Images')
-
-    # Show first observation image
-    if len(observations) > 0:
-        obs_image = np.squeeze(observations[0])  # Remove singleton dimensions
-        if obs_image.ndim == 3:  # Check if it's still a valid image shape
-            axs[0].imshow(obs_image)
-            axs[0].set_title('First Observation')
-            axs[0].axis('off')  # Hide axes for images
+    
+    # Select first batch if batched
+    if observations.ndim == 5:
+        observations = observations[0]
+        next_observations = next_observations[0]
+    
+    num_frames = len(observations)
+    
+    # Create a figure with two rows: one for observations, one for next_observations
+    fig, axs = plt.subplots(2, num_frames, figsize=(4*num_frames, 8))
+    fig.suptitle('Full Episode Sequence')
+    
+    for i in range(num_frames):
+        # Process and display observation
+        obs_image = np.squeeze(observations[i])
+        if obs_image.shape[0] == 3:
+            obs_image = np.transpose(obs_image, (1, 2, 0))
+        
+        if obs_image.ndim == 3:
+            axs[0, i].imshow(obs_image)
+            axs[0, i].set_title(f'Obs {i+1}')
+            axs[0, i].axis('off')
         else:
-            print("Observation image has an unexpected number of dimensions:", obs_image.shape)
-
-    # Show first next observation image
-    if len(next_observations) > 0:
-        next_obs_image = np.squeeze(next_observations[0])
+            axs[0, i].text(0.5, 0.5, 'Invalid shape', ha='center', va='center')
+        
+        # Process and display next_observation
+        next_obs_image = np.squeeze(next_observations[i])
+        if next_obs_image.shape[0] == 3:
+            next_obs_image = np.transpose(next_obs_image, (1, 2, 0))
+        
         if next_obs_image.ndim == 3:
-            axs[1].imshow(next_obs_image)
-            axs[1].set_title('First Prediction Observation')
-            axs[1].axis('off')
+            axs[1, i].imshow(next_obs_image)
+            axs[1, i].set_title(f'Next Obs {i+1}')
+            axs[1, i].axis('off')
         else:
-            print("Next observation image has an unexpected number of dimensions:", next_obs_image.shape)
-
+            axs[1, i].text(0.5, 0.5, 'Invalid shape', ha='center', va='center')
+    
+    plt.tight_layout()
     plt.show()
 
 @config_wrapper()
 def main(cfg: DictConfig) -> None:
     dataset_path = Path(cfg.project_dir) / "dataset"
     dataset = EnvironmentDataset(dataset_path)
-
-    # Visualize the first 10 episodes as examples
+    
+    # Visualize the first 5 episodes as examples
     if len(dataset) > 0:
-        for i in range(10):
+        for i in range(min(5, len(dataset))):
             visualize_episode(dataset[i])
     else:
         print("No episodes available in the dataset.")

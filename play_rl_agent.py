@@ -1,20 +1,17 @@
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from pathlib import Path
 import numpy as np
 
-from utils.rl_utils import setup_rl_experiment
 from utils.config_utils import config_wrapper
 from commonroad_geometric.simulation.ego_simulation.control_space.keyboard_input import UserAdvanceScenarioInterrupt, UserQuitInterrupt, UserResetInterrupt, get_keyboard_action
+from environments import get_environment
 
 @config_wrapper()
 def main(cfg: DictConfig) -> None:
 
-    experiment = setup_rl_experiment(cfg)
-    env = experiment.make_env(
-        scenario_dir=Path(cfg.scenario_dir),
-        n_envs=1,
-        seed=cfg.seed
-    )
+    # Create the environment
+    env_class = get_environment(cfg.environment)
+    env = env_class().make_env(cfg, n_envs=1, seed=cfg.seed)
 
     obs = env.reset()
     total_reward = 0.0

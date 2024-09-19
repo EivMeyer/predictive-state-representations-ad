@@ -1,5 +1,6 @@
 # experiment_setup.py
 
+from omegaconf import OmegaConf
 import yaml
 from pathlib import Path
 from commonroad_geometric.learning.reinforcement.experiment import RLExperiment, RLExperimentConfig, RLEnvironmentOptions, RLEnvironmentParams
@@ -12,72 +13,15 @@ from commonroad_geometric.learning.reinforcement.termination_criteria.implementa
 from commonroad_geometric.common.io_extensions.scenario import LaneletAssignmentStrategy
 from commonroad_geometric.dataset.scenario.preprocessing.wrappers.chain_preprocessors import chain_preprocessors
 from commonroad_geometric.simulation.ego_simulation.ego_vehicle_simulation import EgoVehicleSimulationOptions
-from commonroad_geometric.learning.reinforcement.observer.implementations import RenderObserver
-from commonroad_geometric.rendering.traffic_scene_renderer import TrafficSceneRenderer, TrafficSceneRendererOptions
-from commonroad_geometric.rendering.plugins.cameras.ego_vehicle_camera import EgoVehicleCamera
-from commonroad_geometric.rendering.plugins.implementations import (
-    RenderLaneletNetworkPlugin,
-    RenderPlanningProblemSetPlugin,
-    RenderTrafficGraphPlugin,
-    RenderEgoVehiclePlugin
-)
-from commonroad_geometric.rendering.plugins.obstacles.render_obstacle_plugin import RenderObstaclePlugin
-from commonroad_geometric.rendering.plugins.obstacles.render_obstacle_flow_plugin import RenderObstacleFlowPlugin
-from commonroad_geometric.rendering.viewer.pyglet.gl_viewer_2d import GLViewerOptions
-from commonroad_geometric.rendering.color.color import Color
 from commonroad_geometric.simulation.interfaces.static.scenario_simulation import ScenarioSimulation, ScenarioSimulationOptions
 from commonroad_geometric.simulation.ego_simulation.respawning.implementations import RandomRespawner, RandomRespawnerOptions
 from commonroad_geometric.dataset.extraction.traffic.traffic_extractor import TrafficExtractorOptions
 from commonroad.common.solution import VehicleType, VehicleModel
+from functools import partial
+from environments.commonroad_env.rewarders import create_rewarders
+from environments.commonroad_env.termination_criteria import create_termination_criteria
+from environments.commonroad_env.observers import create_representation_observer, create_render_observer, create_renderer_options, create_representation_model
 
-
-
-def create_renderer_options(view_range, window_size):
-    renderer_options = TrafficSceneRendererOptions(
-        camera=EgoVehicleCamera(
-            view_range=view_range,
-            camera_rotation_speed=None
-        ),
-        plugins=[
-            RenderLaneletNetworkPlugin(
-                lanelet_linewidth=0.0,
-                fill_color=Color("grey")
-            ),
-            # RenderPlanningProblemSetPlugin(
-            #     render_trajectory=True,
-            #     render_start_waypoints=True,
-            #     render_goal_waypoints=True,
-            #     render_look_ahead_point=False
-            # ),
-            RenderEgoVehiclePlugin(
-                render_trail=False,
-                ego_vehicle_linewidth=0.0,
-                ego_vehicle_color_collision=None,
-                ego_vehicle_fill_color=Color((0.1, 0.8, 0.1, 1.0))
-            ),
-            RenderObstaclePlugin(
-                from_graph=False,
-                obstacle_fill_color=Color("red"),
-                obstacle_color=Color("red"),
-                obstacle_line_width=0.0
-            ),
-        ],
-        viewer_options=GLViewerOptions(
-            window_height=window_size,
-            window_width=window_size,
-        )
-    )
-
-    return renderer_options
-
-def create_render_observer(config):
-    renderer_options = create_renderer_options(
-        view_range=config["view_range"],
-        window_size=config["window_size"]
-    )
-    return RenderObserver(
-        renderer_options=renderer_options
-    )
 
 def create_scenario_preprocessors():
     scenario_preprocessors = [
@@ -146,13 +90,38 @@ def create_base_experiment_config(config):
 
 def setup_base_experiment(config):
     """Set up the RL experiment using the provided configuration."""
-    experiment_config = create_base_experiment_config(config)
+ 
+    experiment_config = create_base_experiment_config(OmegaConf.to_container(config['commonroad'], resolve=True))
     experiment = RLExperiment(config=experiment_config)
 
     # Create the environment
     environment = experiment.make_env(
-        scenario_dir=Path(config["scenario_dir"]),
+        scenario_dir=Path(config['commonroad']["scenario_dir"]),
         n_envs=config["dataset"]["num_workers"],
         seed=config["seed"]
     )
     return experiment, environment
+
+def setup_rl_experiment(cfg):
+    """
+    Configures the downstream RL experiment by modifying the base experiment.
+    """
+    representation_observer_constructor = partial(create_representation_observer, cfg=cfg)
+
+    experiment_config = create_base_experiment_config(OmegaConf.to_container(cfg, resolve=True))
+    experiment_config.env_options.observer = representation_observer_constructor
+    experiment_config.respawner_options['init_steering_angle'] = 0.0
+    experiment_config.respawner_options['init_orientation_noise'] = 0.0
+    experiment_config.respawner_options['init_position_noise'] = 0.0
+    experiment_config.respawner_options['min_goal_distance_l2'] = 400.0
+    experiment_config.respawner_options['route_length'] = 1
+    experiment_config.respawner_options['min_vehicle_distance'] = 20.0
+    experiment_config.respawner_options['init_speed'] = 'auto'
+    experiment_config.control_space_options['lower_bound_acceleration'] = -10.0
+    experiment_config.control_space_options['upper_bound_acceleration'] = 10.0
+    experiment_config.rewarder = SumRewardAggregator(create_rewarders())
+    experiment_config.termination_criteria = create_termination_criteria()
+
+    experiment = RLExperiment(config=experiment_config)
+
+    return experiment

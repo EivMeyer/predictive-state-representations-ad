@@ -7,8 +7,8 @@ import wandb
 import torch
 from utils.file_utils import find_model_path
 from utils.config_utils import config_wrapper
-
-from utils.rl_utils import setup_rl_experiment, VideoRecorderEvalCallback, DebugCallback, WandbCallback
+from environments import get_environment
+from utils.rl_utils import VideoRecorderEvalCallback, DebugCallback, BaseWandbCallback
 
 
 def initialize_ppo_model(cfg, env, device):
@@ -78,27 +78,26 @@ def load_warmstart_ppo_model(project_dir, model_path, env, device):
 
 @config_wrapper()
 def main(cfg: DictConfig) -> None:
+    cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+
     # Initialize wandb if enabled
     if cfg.wandb.enabled:
-        wandb.init(project=cfg.wandb.project + '-RL', config=OmegaConf.to_container(cfg, resolve=True))
+        wandb.init(project=cfg.wandb.project + "-" + cfg.environment + '-RL', config=cfg_dict)
 
-    experiment = setup_rl_experiment(cfg)
+    # Create the environment
+    env_class = get_environment(cfg.environment)
+    env = env_class().make_env(cfg, n_envs=cfg.rl_training.num_envs, seed=cfg.seed, rl_mode=True)
+
     device = torch.device("cuda" if torch.cuda.is_available() and cfg.device == "auto" else cfg.device)
-
-    env = experiment.make_env(
-        scenario_dir=cfg.scenario_dir,
-        n_envs=cfg.rl_training.num_envs,
-        seed=cfg.seed
-    )
-    cfg.dataset.num_workers
 
     model = initialize_ppo_model(cfg, env, device)
 
     # Setup evaluation environment
-    eval_env = experiment.make_env(
-        scenario_dir=cfg.scenario_dir,
+    eval_env = env_class().make_env(
+        cfg,
         n_envs=1,
-        seed=cfg.seed + 1000,  # Different seed for eval env
+        seed=cfg.seed + 1000,
+        rl_mode=True
     )
     
     # Setup video recording
@@ -122,7 +121,7 @@ def main(cfg: DictConfig) -> None:
     # Setup callbacks
     callbacks = [eval_callback]
     if cfg.wandb.enabled:
-        callbacks.append(WandbCallback())
+        callbacks.append(BaseWandbCallback())
     if cfg.debug_mode:
         debug_callback = DebugCallback()
         callbacks.append(debug_callback)

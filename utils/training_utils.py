@@ -16,7 +16,7 @@ class NoScheduler(_LRScheduler):
 def init_wandb(cfg: DictConfig):
     if cfg.wandb.enabled:
         import wandb
-        wandb.init(project=cfg.wandb.project, config=OmegaConf.to_container(cfg, resolve=True))
+        wandb.init(project=cfg.wandb.project + "-" + cfg.environment, config=OmegaConf.to_container(cfg, resolve=True))
         print(f"Initialized wandb project: {cfg.wandb.project}")
         return wandb
     else:

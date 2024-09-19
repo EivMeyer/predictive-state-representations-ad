@@ -4,9 +4,8 @@
 # Directory where the project output will be stored
 project_dir: "./output"
 
-# Directory containing scenario files
-# Place your scenario files in this directory
-scenario_dir: "scenarios"
+# Name of the environment to use
+environment: "commonroad" # Either "commonroad" or "image_cartpole"
 
 # Automatically select the device (CPU/GPU)
 # Set this to "auto" to let the system choose the device automatically

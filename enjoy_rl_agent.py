@@ -1,21 +1,16 @@
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from pathlib import Path
 from stable_baselines3 import PPO
 from utils.config_utils import config_wrapper
-from utils.rl_utils import setup_rl_experiment
+from environments import get_environment
 
 @config_wrapper()
 def main(cfg: DictConfig) -> None:
+    # Create the environment
+    env_class = get_environment(cfg.environment)
+    env = env_class().make_env(cfg, n_envs=1, seed=cfg.seed)
 
-    # Setup the environment from configuration
-    experiment = setup_rl_experiment(cfg)
-    env = experiment.make_env(
-        scenario_dir=Path(cfg.scenario_dir),
-        n_envs=1,
-        seed=cfg.seed
-    )
-
-    # Load the model
+    # Load the model. We load the most recent model in the project directory
     model_path = sorted(Path(cfg.project_dir).rglob('*.zip'), key=lambda x: x.stat().st_mtime, reverse=True)[0]
     print("Loading model from:", model_path)
     model = PPO.load(model_path, env=env)

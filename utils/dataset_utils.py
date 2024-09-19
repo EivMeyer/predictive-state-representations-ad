@@ -86,11 +86,26 @@ class EnvironmentDataset(Dataset):
             self._save_current_batch()
 
     def _preprocess_image(self, image):
+        # Ensure image is a numpy array
+        if not isinstance(image, np.ndarray):
+            image = np.array(image)
+
+        # Downsample if necessary
         if self.downsample_factor > 1:
-            image = cv2.resize(image, (image.shape[1] // self.downsample_factor, 
-                                       image.shape[0] // self.downsample_factor), 
+            image = cv2.resize(image, (image.shape[1] // self.downsample_factor,
+                                       image.shape[0] // self.downsample_factor),
                                interpolation=cv2.INTER_AREA)
-        return image.transpose(2, 0, 1)  # [C, H, W] format
+
+        # Check if the image needs to be transposed
+        if len(image.shape) == 3 and image.shape[2] in [1, 3, 4]:  # HWC format
+            image = image.transpose(2, 0, 1)  # Convert to CHW format
+        elif len(image.shape) == 2:  # Grayscale image
+            image = np.expand_dims(image, axis=0)  # Add channel dimension
+
+        # Ensure the image is uint8
+        image = np.asarray(image, dtype=np.uint8)
+
+        return image
 
     def _save_current_batch(self):
         batch_data = {
