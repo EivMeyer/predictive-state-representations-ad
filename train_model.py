@@ -248,14 +248,17 @@ class Trainer:
             mean_value = np.mean(values_cpu)
             std_value = np.std(values_cpu)
             epoch_averages[f"train/{key}"] = {"mean": mean_value, "std": std_value}
-            print(f"  Mean train {key}: {mean_value:.4f} (±{std_value:.4f})")
+            if self.cfg.verbose:
+                print(f"  Mean train {key}: {mean_value:.4f} (±{std_value:.4f})")
 
-        print("Validation results:")
+        if self.cfg.verbose:
+            print("Validation results:")
         for key, values in val_stats.items():
             values_cpu =  process_values(values)
             mean_value = np.mean(values)
             epoch_averages[f"val/{key}"] = mean_value
-            print(f"  Val {key}: {mean_value:.4f}")
+            if self.cfg.verbose:
+                print(f"  Val {key}: {mean_value:.4f}")
 
         self.wandb.log(epoch_averages, step=self.current_epoch)
 
@@ -272,7 +275,8 @@ class Trainer:
             path = Path(self.cfg.project_dir) / "models" / self.run_name / "best_model.pth"
             path.parent.mkdir(parents=True, exist_ok=True)
             torch.save(save_dict, path)
-            print(f"New best model saved with validation loss: {save_dict['val_loss']:.4f}")
+            if self.cfg.verbose:
+                print(f"New best model saved with validation loss: {save_dict['val_loss']:.4f}")
         elif self.current_epoch % self.cfg.training.save_interval == 0:
             if self.cfg.training.overwrite_checkpoints:
                 path = Path(self.cfg.project_dir) / "models" / self.run_name / "model_latest.pth"
@@ -280,7 +284,8 @@ class Trainer:
                 path = Path(self.cfg.project_dir) / "models" / self.run_name / f"model_epoch_{self.current_epoch+1}.pth"
             path.parent.mkdir(parents=True, exist_ok=True)
             torch.save(save_dict, path)
-            print(f"Model saved to {path}")
+            if self.cfg.verbose:
+                print(f"Model saved to {path}")
             self.wandb.save(str(path))
 
     def train(self) -> None:
@@ -290,8 +295,7 @@ class Trainer:
 
             train_stats = self.train_epoch()
             self.val_stats = self.validate()
-            if self.cfg.verbose:
-                self.log_epoch_stats(train_stats, self.val_stats)
+            self.log_epoch_stats(train_stats, self.val_stats)
 
             self.scheduler.step()
             current_lr = self.scheduler.get_last_lr()[0]
