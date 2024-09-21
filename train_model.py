@@ -29,22 +29,21 @@ class Trainer:
                 model: BasePredictiveModel, 
                 train_loader: DataLoader, 
                 val_loader: DataLoader, 
-                optimizer: optim.Optimizer, 
-                scheduler: optim.lr_scheduler._LRScheduler, 
                 device: torch.device, 
                 wandb: Any):
         self.cfg = cfg
         self.model = model
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.optimizer = optimizer
-        self.scheduler = scheduler
         self.device = device
         self.wandb = wandb
         self.best_val_loss: float = float('inf')
         self.start_epoch: int = 0
         self.current_epoch: int = 0
         self.run_name: str = ""
+
+        self.optimizer = get_optimizer(model, self.cfg)
+        self.scheduler = get_scheduler(self.optimizer, self.cfg)
         
         self.hold_out_batch: Optional[dict[str, torch.Tensor]] = None
         self.hold_out_obs: Optional[torch.Tensor] = None
@@ -386,21 +385,28 @@ def get_optimizer(model, cfg):
     lr = cfg.training.optimizer.learning_rate
     weight_decay = cfg.training.optimizer.weight_decay
 
+    # Use the new get_parameter_groups method if available
+    if hasattr(model, 'get_parameter_groups'):
+        param_groups = model.get_parameter_groups()
+    else:
+        param_groups = model.parameters()
+
     if optimizer_type == "Adam":
         betas = (cfg.training.optimizer.beta1, cfg.training.optimizer.beta2)
-        return Adam(model.parameters(), lr=lr, weight_decay=weight_decay, betas=betas)
+        return Adam(param_groups, lr=lr, weight_decay=weight_decay, betas=betas)
     elif optimizer_type == "AdamW":
         betas = (cfg.training.optimizer.beta1, cfg.training.optimizer.beta2)
-        return AdamW(model.parameters(), lr=lr, weight_decay=weight_decay, betas=betas)
+        return AdamW(param_groups, lr=lr, weight_decay=weight_decay, betas=betas)
     elif optimizer_type == "SGD":
         momentum = cfg.training.optimizer.momentum
-        return SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
+        return SGD(param_groups, lr=lr, momentum=momentum, weight_decay=weight_decay)
     elif optimizer_type == "RMSprop":
         alpha = cfg.training.optimizer.alpha
         momentum = cfg.training.optimizer.momentum
-        return RMSprop(model.parameters(), lr=lr, alpha=alpha, weight_decay=weight_decay, momentum=momentum)
+        return RMSprop(param_groups, lr=lr, alpha=alpha, weight_decay=weight_decay, momentum=momentum)
     else:
         raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
+    
 
 def get_scheduler(optimizer, cfg):
     scheduler_type = cfg.training.scheduler.type
@@ -462,10 +468,7 @@ def main(cfg: DictConfig) -> None:
         cfg=cfg
     ).to(device)
 
-    optimizer = get_optimizer(model, cfg)
-    scheduler = get_scheduler(optimizer, cfg)
-
-    trainer = Trainer(cfg, model, train_loader, val_loader, optimizer, scheduler, device, wandb)
+    trainer = Trainer(cfg, model, train_loader, val_loader, device, wandb)
     trainer.run_name = run_name
 
     if cfg.training.warmstart_model:

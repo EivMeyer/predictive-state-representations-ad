@@ -20,4 +20,16 @@ viewer:
   # Size of the viewer window
   window_size: 64
 
+# Training configuration
+training:
+  # Type of model to use for training
+  model_type: PredictiveModelV9M1
+  # Use automatic mixed precision
+  use_amp: true
+  # Track validation loss
+  track_val_loss: false
+  # Hidden dimension size
+  hidden_dim: 64
+  # ...
+
 # ...

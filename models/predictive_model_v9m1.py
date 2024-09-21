@@ -4,6 +4,7 @@ from models.base_predictive_model import BasePredictiveModel
 from models.autoencoder_model_v0 import AutoEncoderModelV0
 from models.loss_functions import CombinedLoss
 from utils.file_utils import find_model_path
+import copy
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
@@ -13,7 +14,7 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         return x + self.pe[:x.size(0)]
 
-class PredictiveModelV9(BasePredictiveModel):
+class PredictiveModelV9M1(BasePredictiveModel):
     def __init__(self, obs_shape, action_dim, ego_state_dim, cfg, 
                  pretrained_model_path=None, nhead=16, num_encoder_layers=8, num_decoder_layers=8):
         super().__init__(obs_shape, action_dim, ego_state_dim, cfg)
@@ -26,8 +27,12 @@ class PredictiveModelV9(BasePredictiveModel):
         self.autoencoder.load_state_dict(torch.load(pretrained_model_path)['model_state_dict'], strict=False)
         self.autoencoder.eval()
         
-        for param in self.autoencoder.parameters():
+        # Freeze the encoder part of the autoencoder
+        for param in self.autoencoder.encoder.parameters():
             param.requires_grad = False
+
+        # Create a trainable copy of the decoder
+        self.trainable_decoder = copy.deepcopy(self.autoencoder.decoder)
 
         # Determine the size of the latent space
         with torch.no_grad():
@@ -75,6 +80,10 @@ class PredictiveModelV9(BasePredictiveModel):
         )
 
         self._initialize_weights()
+
+        # Create parameter groups for different learning rates
+        self.decoder_params = list(self.trainable_decoder.parameters())
+        self.other_params = [p for n, p in self.named_parameters() if not any(p is dp for dp in self.decoder_params)]
 
     def _initialize_weights(self):
         for m in self.modules():
@@ -135,8 +144,8 @@ class PredictiveModelV9(BasePredictiveModel):
         encoded_state = self.encode(batch)
         predicted_latents = self.decode(batch, encoded_state)
 
-        # Decode latents to observations
-        predictions = self.autoencoder.decode(batch, predicted_latents.view(-1, self.latent_dim))
+        # Decode latents to observations using the trainable decoder
+        predictions = self.trainable_decoder(predicted_latents.view(-1, self.latent_dim))
         predictions = predictions.view(batch['observations'].shape[0], self.num_frames_to_predict, *self.obs_shape[-3:])
 
         return {
@@ -167,6 +176,17 @@ class PredictiveModelV9(BasePredictiveModel):
             target_latents = target_latents.view(batch_size, seq_len, -1)
 
         # Calculate loss
-        loss, loss_components = self.loss_function(predicted_latents, target_latents, encoded_state)
+        loss, loss_components = self.loss_function(predictions, target_observations, encoded_state)
+
+        # Add latent space loss
+        latent_loss, latent_loss_components = self.loss_function(predicted_latents, target_latents, encoded_state)
+        loss += latent_loss
+        loss_components.update({f"latent_{k}": v for k, v in latent_loss_components.items()})
 
         return loss, loss_components
+    
+    def get_parameter_groups(self):
+        return [
+            {'params': self.other_params},
+            {'params': self.decoder_params, 'lr': self.cfg.models.PredictiveModelV9M1.decoder_learning_rate}
+        ]

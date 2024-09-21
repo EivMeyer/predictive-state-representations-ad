@@ -184,9 +184,10 @@ class CombinedLoss(nn.Module):
                 pred = F.avg_pool2d(pred.flatten(end_dim=1), kernel_size=2, stride=2).view(batch_size, seq_len, channels, height // 2, width // 2)
                 target = F.avg_pool2d(target.flatten(end_dim=1), kernel_size=2, stride=2).view(batch_size, seq_len, channels, height // 2, width // 2)
 
+            channel_weights = torch.tensor([self.r_weight, self.g_weight, self.b_weight], device=device).view(1, 1, 3, 1, 1) if channels == 3 else 1
+
             if self.mse_weight > 0:
                 # MSE loss with temporal and sample weighting, and RGB channel weighting
-                channel_weights = torch.tensor([self.r_weight, self.g_weight, self.b_weight], device=device).view(1, 1, 3, 1, 1)
                 mse_loss = ((pred - target) ** 2 * channel_weights).mean(dim=(2, 3, 4))
                 weighted_mse_loss = (mse_loss * temporal_weights).sum(dim=-1) * sample_weights
                 weighted_mse_loss = weighted_mse_loss.mean()
@@ -195,7 +196,6 @@ class CombinedLoss(nn.Module):
 
             if self.l1_weight > 0:
                 # L1 loss with temporal and sample weighting, and RGB channel weighting
-                channel_weights = torch.tensor([self.r_weight, self.g_weight, self.b_weight], device=device).view(1, 1, 3, 1, 1)
                 l1_loss = (torch.abs(pred - target) * channel_weights).mean(dim=(2, 3, 4))
                 weighted_l1_loss = (l1_loss * temporal_weights).sum(dim=-1) * sample_weights
                 weighted_l1_loss = weighted_l1_loss.mean()
