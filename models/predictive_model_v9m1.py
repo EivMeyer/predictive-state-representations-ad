@@ -68,15 +68,26 @@ class PredictiveModelV9M1(BasePredictiveModel):
         # Output projector
         self.output_projector = nn.Linear(self.hidden_dim, latent_dim)
 
-        # Loss function
-        self.loss_function = CombinedLoss(
+        # Loss function for latent space
+        self.loss_function_latent = CombinedLoss(
             mse_weight=self.cfg.training.loss.mse_weight,
             l1_weight=self.cfg.training.loss.l1_weight,
             diversity_weight=self.cfg.training.loss.diversity_weight,
             latent_l1_weight=self.cfg.training.loss.latent_l1_weight,
             latent_l2_weight=self.cfg.training.loss.latent_l2_weight,
             temporal_decay=self.cfg.training.loss.temporal_decay,
-            use_sample_weights=cfg.training.loss.use_sample_weights
+            use_sample_weights=False
+        )
+
+        # Loss function for observations 
+        self.loss_function_observations = CombinedLoss(
+            mse_weight=self.cfg.training.loss.mse_weight,
+            l1_weight=self.cfg.training.loss.l1_weight,
+            diversity_weight=0.0,
+            latent_l1_weight=0.0,
+            latent_l2_weight=0.0,
+            temporal_decay=self.cfg.training.loss.temporal_decay,
+            use_sample_weights=False
         )
 
         self._initialize_weights()
@@ -176,10 +187,10 @@ class PredictiveModelV9M1(BasePredictiveModel):
             target_latents = target_latents.view(batch_size, seq_len, -1)
 
         # Calculate loss
-        loss, loss_components = self.loss_function(predictions, target_observations, encoded_state)
+        loss, loss_components = self.loss_function_observations(predictions, target_observations, encoded_state)
 
         # Add latent space loss
-        latent_loss, latent_loss_components = self.loss_function(predicted_latents, target_latents, encoded_state)
+        latent_loss, latent_loss_components = self.loss_function_latent(predicted_latents, target_latents, encoded_state)
         loss += latent_loss
         loss_components.update({f"latent_{k}": v for k, v in latent_loss_components.items()})
 
