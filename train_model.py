@@ -231,7 +231,8 @@ class Trainer:
                 stats_dict["total_loss"].append(total_loss)
 
     def log_epoch_stats(self, train_stats: Dict[str, List[float]], val_stats: Dict[str, List[float]]) -> None:
-        print(f"Epoch {self.current_epoch} completed:")
+        if self.cfg.verbose:
+            print(f"Epoch {self.current_epoch} completed:")
         epoch_averages: Dict[str, Any] = {}
 
         def process_values(values):
@@ -289,16 +290,19 @@ class Trainer:
 
             train_stats = self.train_epoch()
             self.val_stats = self.validate()
-            self.log_epoch_stats(train_stats, self.val_stats)
+            if self.cfg.verbose:
+                self.log_epoch_stats(train_stats, self.val_stats)
 
             self.scheduler.step()
             current_lr = self.scheduler.get_last_lr()[0]
-            print(f"Current learning rate: {current_lr}")
+            if self.cfg.verbose:
+                print(f"Current learning rate: {current_lr}")
             self.wandb.log({"learning_rate": current_lr}, step=epoch)
 
             epoch_time = time.time() - start_time
             epoch_speed = len(self.train_loader) / epoch_time
-            print(f"Epoch speed: {epoch_speed:.2f} iterations/second")
+            if self.cfg.verbose:
+                print(f"Epoch speed: {epoch_speed:.2f} iterations/second")
             self.wandb.log({"epoch_speed": epoch_speed}, step=epoch)
 
             if self.cfg.training.create_plots:
