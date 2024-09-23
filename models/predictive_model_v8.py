@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import math
+import torch.nn.functional as F
 from models.base_predictive_model import BasePredictiveModel
 from models.loss_functions import CombinedLoss
 
@@ -40,7 +40,18 @@ class PredictiveModelV8(BasePredictiveModel):
 
         # Decoder
         self.decoder_input_proj = nn.Linear(self.hidden_dim, self.hidden_dim)
-        self.decoder = self._make_decoder(obs_shape)
+        
+        if cfg.environments[cfg.environment].segmentation.enabled:
+            # Create separate decoder heads for each segment
+            self.segment_names = cfg.environments[cfg.environment].segmentation.segments
+            self.decoders = nn.ModuleDict({
+                segment['name']: self._make_decoder(obs_shape)
+                for segment in self.segment_names
+            })
+        else:
+            self.decoders = nn.ModuleDict({
+                'full_frame': self._make_decoder(obs_shape)
+            })
 
         # Loss function
         self.loss_function = CombinedLoss(
@@ -194,20 +205,51 @@ class PredictiveModelV8(BasePredictiveModel):
         output = output.permute(1, 0, 2).contiguous()
         output = output.view(-1, self.hidden_dim, 1, 1)
 
-        # Apply convolutional decoder
-        predictions = self.decoder(output)
-
-        # Reshape to [batch_size, num_frames_to_predict, channels, height, width]
-        predictions = predictions.view(batch_size, self.num_frames_to_predict, self.obs_shape[-3], self.obs_shape[-2], self.obs_shape[-1])
+        # Apply convolutional decoders for each segment
+        predictions = {}
+        for segment_name, decoder in self.decoders.items():
+            segment_output = decoder(output)
+            predictions[segment_name] = segment_output.view(batch_size, self.num_frames_to_predict, self.obs_shape[-3], self.obs_shape[-2], self.obs_shape[-1])
 
         return predictions
+
+    def forward(self, batch):
+        encoded_state = self.encode(batch)
+        predictions = self.decode(batch, encoded_state)
+        return {
+            'predictions': predictions,
+            'encoded_state': encoded_state
+        }
 
     def compute_loss(self, batch, model_output):
         predictions = model_output['predictions']
         target_observations = batch['next_observations']
         encoded_state = model_output['encoded_state']
 
-        # Calculate loss
-        loss, loss_components = self.loss_function(predictions, target_observations, encoded_state)
+        if not isinstance(target_observations, dict):
+            target_observations = {'full_frame': target_observations}
+        if not isinstance(predictions, dict):
+            predictions = {'full_frame': predictions}
 
-        return loss, loss_components
+        total_loss = 0
+        loss_components = {}
+
+        # Calculate loss for each segment
+        for segment_name in self.decoders.keys():
+            segment_pred = predictions[segment_name]
+            segment_target = target_observations[segment_name]
+
+            segment_loss, segment_loss_components = self.loss_function(segment_pred, segment_target, encoded_state)
+            total_loss += segment_loss
+
+            # Store loss components for each segment
+            for component_name, component_value in segment_loss_components.items():
+                loss_components[f"{segment_name}_{component_name}"] = component_value
+
+        # Calculate average loss
+        num_segments = len(self.decoders)
+        avg_loss = total_loss / num_segments
+
+        loss_components['total_loss'] = avg_loss.item()
+
+        return avg_loss, loss_components

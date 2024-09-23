@@ -13,7 +13,7 @@ import numpy as np
 import time
 from utils.visualization_utils import setup_visualization, visualize_prediction
 import torch.multiprocessing as mp
-from utils.training_utils import analyze_predictions, init_wandb, NoScheduler
+from utils.training_utils import init_wandb, NoScheduler
 from datetime import datetime
 from torch.cuda.amp import autocast, GradScaler
 from typing import Dict, List, Tuple, Any, Optional
@@ -21,7 +21,18 @@ import os
 from torch.optim import Adam, AdamW, SGD, RMSprop
 from torch.optim.lr_scheduler import StepLR, ExponentialLR, CosineAnnealingLR, ReduceLROnPlateau
 
-
+def select_subset_batch(v, start_idx, end_idx):
+    # Helper function to select the first n elements of a tensor or dictionary of tensors
+    if isinstance(v, Tensor):
+        return v[start_idx:end_idx]
+    elif isinstance(v, dict):
+        return {k: select_subset_batch(vv, start_idx, end_idx) for k, vv in v.items()}
+    
+def detach_dict(d):
+    if isinstance(d, Tensor):
+        return d.detach()
+    else:
+        return {k: v.detach() for k, v in d.items()}
 
 class Trainer:
     def __init__(self, 
@@ -89,7 +100,7 @@ class Trainer:
         # Get a single validation batch for quick validation
         val_batch = next(iter(self.val_loader))
         val_batch = move_batch_to_device(val_batch, self.device)
-        val_batch = {k: v[0:1] for k, v in val_batch.items()}
+        val_batch = {k: select_subset_batch(v, 0, 1) for k, v in val_batch.items()}
         
         running_avg_loss = None
         alpha = 0.01  # Smoothing factor for running average
@@ -104,7 +115,7 @@ class Trainer:
             for _ in range(self.cfg.training.iterations_per_batch):
                 for start_idx in range(0, batch_size, self.cfg.training.minibatch_size):
                     end_idx = min(start_idx + self.cfg.training.minibatch_size, batch_size)
-                    batch = {k: v[start_idx:end_idx] for k, v in full_batch.items()}
+                    batch = {k: select_subset_batch(v, start_idx, end_idx) for k, v in full_batch.items()}
                     
                     self.optimizer.zero_grad()
                     
@@ -130,8 +141,6 @@ class Trainer:
                     targets = batch['next_observations']
                     
                     self.update_stats(epoch_stats, loss_components, loss.item())
-                    stats = analyze_predictions(predictions, targets)
-                    self.update_stats(epoch_stats, stats)
                     
                     # Update running average loss
                     loss_scalar = loss.item()
@@ -165,10 +174,12 @@ class Trainer:
                             f"Train Loss: {loss.item():.6f}, Avg Loss: {running_avg_loss:.6f}, {optimizer_info}" +
                             (f", Val Loss: {val_loss.item():.6f}" if self.cfg.training.track_val_loss else "")
                         )
+
+                        break
             
             if self.cfg.training.create_plots and iteration == len(self.train_loader) - 1:
-                self.train_predictions = predictions[:9].detach()
-                self.train_ground_truth = targets[:9].detach()
+                self.train_predictions = detach_dict(select_subset_batch(predictions, 0, 9))
+                self.train_ground_truth = select_subset_batch(targets, 0, 9)
         
         return epoch_stats
 
@@ -183,7 +194,7 @@ class Trainer:
                 
                 for start_idx in range(0, batch_size, self.val_batch_size):
                     end_idx = min(start_idx + self.val_batch_size, batch_size)
-                    minibatch = {k: v[start_idx:end_idx] for k, v in batch.items()}
+                    minibatch = {k: select_subset_batch(v, start_idx, end_idx) for k, v in batch.items()}
                     
                     if self.use_amp:
                         with autocast():
@@ -197,22 +208,22 @@ class Trainer:
                     targets = minibatch['next_observations']
                     
                     self.update_stats(val_stats, loss_components, loss.item())
-                    stats = analyze_predictions(predictions, targets)
-                    self.update_stats(val_stats, stats)
         
         return val_stats
 
     def setup_visualization(self) -> None:
+
         if self.cfg.training.create_plots:
             hold_out_batch = next(iter(self.val_loader))
             hold_out_batch = move_batch_to_device(hold_out_batch, self.device)
-            hold_out_batch = {k: v[0:2] for k, v in hold_out_batch.items()} # Take only the first two samples
+            hold_out_batch = {k: select_subset_batch(v, 0, 2) for k, v in hold_out_batch.items()} # Take only the first two samples
             self.hold_out_batch = hold_out_batch
-            self.hold_out_obs = hold_out_batch['observations'][:2]
-            self.hold_out_target = hold_out_batch['next_observations'][:2]
+            self.hold_out_obs = hold_out_batch['observations']
+            self.hold_out_target = hold_out_batch['next_observations']
             seq_length = self.hold_out_obs.shape[1]
-            num_predictions = self.hold_out_target.shape[1]
-            self.fig, self.axes = setup_visualization(seq_length, num_predictions)
+            num_predictions = self.hold_out_target.shape[1] if isinstance(self.hold_out_target, Tensor) else next(iter(self.hold_out_target.values())).shape[1]
+            num_segments = 1 if isinstance(self.hold_out_target, Tensor) else len(self.hold_out_target)
+            self.fig, self.axes = setup_visualization(num_segments, seq_length, num_predictions)
 
     def update_stats(self, stats_dict: Dict[str, List[float]], new_stats: Dict[str, float], total_loss: Optional[float] = None) -> None:
         for key, value in new_stats.items():
@@ -447,7 +458,7 @@ def main(cfg: DictConfig) -> None:
     run_dir = Path(cfg.project_dir) / "models" / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     
-    full_dataset = EnvironmentDataset(dataset_path, downsample_factor=cfg.training.downsample_factor)
+    full_dataset = EnvironmentDataset(cfg)
     obs_shape, action_dim, ego_state_dim = get_data_dimensions(full_dataset)
     
     device = torch.device("cuda" if torch.cuda.is_available() and cfg.device == "auto" else cfg.device)

@@ -218,7 +218,7 @@ def create_representation_model(cfg, device):
     model_save_dir.mkdir(parents=True, exist_ok=True)
 
     # Load the full dataset
-    full_dataset = EnvironmentDataset(dataset_path, downsample_factor=cfg['training']['downsample_factor'])
+    full_dataset = EnvironmentDataset(cfg)
 
     # Get data dimensions
     obs_shape, action_dim, ego_state_dim = get_data_dimensions(full_dataset)

@@ -197,103 +197,123 @@ rl_training:
 
 # Environment-specific options
 
-commonroad: 
-  scenario_dir: "scenarios"
+environments: 
+  image_cartpole:
+    max_episode_steps: 500
+  segmentation:
+      enabled: false
+      segments:
+        - name: "cart"
+          color: [0, 0, 255]  # Blue for the cart
+        - name: "pole"
+          color: [0, 255, 0]  # Green for the pole
+        - name: "background"
+          color: [255, 255, 255]  # White for the background
 
-  # Simulation options
-  simulation:
-    # Steps for lanelet graph conversion (if any)
-    lanelet_graph_conversion_steps: null
-    # Use linear projection for lanelets
-    linear_lanelet_projection: true
-    # Whether to sort lanelet assignments
-    sort_lanelet_assignments: false
 
-  # Control space options
-  control_space:
-    # Minimum acceleration
-    lower_bound_acceleration: -6.0
-    # Maximum acceleration
-    upper_bound_acceleration: 6.5
-    # Minimum velocity
-    lower_bound_velocity: 0.001
-    # Minimum steering angle
-    lower_bound_steering: -0.15
-    # Maximum steering angle
-    upper_bound_steering: 0.15
-    # Minimum velocity for steering
-    min_velocity_steering: 1.0
+  commonroad: 
+    segmentation:
+      enabled: false
+      color_tolerance: 0.4
+      segments:
+        - name: "vehicles"
+          color: [255, 0, 0]
+        - name: "background"
+          color: "remainder"
 
-  # Viewer options
-  viewer:
-    # Range of view in the simulation
-    view_range: 90.0
-    # Size of the viewer window
-    window_size: 64
+    scenario_dir: "scenarios"
 
-  # Respawner options
-  respawner:
-    # Randomize initial arclength
-    random_init_arclength: true
-    # Randomize goal arclength
-    random_goal_arclength: true
-    # Randomize start timestep
-    random_start_timestep: true
-    # Spawn only at intersections
-    only_intersections: false
-    # Min and max route length
-    route_length: [10, 15]
-    # Initial speed distribution
-    init_speed: "uniform_random"
-    # Minimum initial arclength
-    min_init_arclength: 50.0
-    # Range for random speed
-    random_speed_range: [0.0, 50.0]
-    # Initial steering angle distribution
-    init_steering_angle: "normal_random"
-    # Range for random steering angle
-    random_steering_angle_range: [-0.08, 0.08]
-    # Params for normal distribution for steering angle
-    normal_steering_angle_params: [0.0, 0.02]
-    # Noise in initial orientation
-    init_orientation_noise: 0.4
-    # Noise in initial position
-    init_position_noise: 3.0
-    # Minimum distance to goal
-    min_goal_distance: 100.0
-    # Minimum L2 distance to goal
-    min_goal_distance_l2: 100.0
-    # Maximum L2 distance to goal (if any)
-    max_goal_distance_l2: null
-    # Maximum distance to goal (if any)
-    max_goal_distance: null
-    # Minimum remaining distance (if any)
-    min_remaining_distance: null
-    # Maximum outer attempts for respawning
-    max_attempts_outer: 50
-    # Minimum distance between vehicles
-    min_vehicle_distance: 0.0
-    # Minimum vehicle speed (if any)
-    min_vehicle_speed: null
-    # Minimum number of vehicles on route (if any)
-    min_vehicles_route: null
-    # Maximum inner attempts for respawning
-    max_attempts_inner: 5
+    # Simulation options
+    simulation:
+      # Steps for lanelet graph conversion (if any)
+      lanelet_graph_conversion_steps: null
+      # Use linear projection for lanelets
+      linear_lanelet_projection: true
+      # Whether to sort lanelet assignments
+      sort_lanelet_assignments: false
 
-  # Traffic extraction options
-  traffic_extraction:
-    # Type of edge drawer to use
-    edge_drawer: "NoEdgeDrawer"
-    # List of postprocessors to apply
-    postprocessors: []
-    # Consider only ego-centric incoming edges
-    only_ego_inc_edges: false
-    # Assign vehicles to multiple lanelets
-    assign_multiple_lanelets: true
-    # Radius of ego-centric map
-    ego_map_radius: 50.0
-    # Include lanelet vertices in extraction
-    include_lanelet_vertices: false
+    # Control space options
+    control_space:
+      # Minimum acceleration
+      lower_bound_acceleration: -6.0
+      # Maximum acceleration
+      upper_bound_acceleration: 6.5
+      # Minimum velocity
+      lower_bound_velocity: 0.001
+      # Minimum steering angle
+      lower_bound_steering: -0.15
+      # Maximum steering angle
+      upper_bound_steering: 0.15
+      # Minimum velocity for steering
+      min_velocity_steering: 1.0
 
-image_cartpole:
-  max_episode_steps: 500
+    # Viewer options
+    viewer:
+      # Range of view in the simulation
+      view_range: 90.0
+      # Size of the viewer window
+      window_size: 64
+
+    # Respawner options
+    respawner:
+      # Randomize initial arclength
+      random_init_arclength: true
+      # Randomize goal arclength
+      random_goal_arclength: true
+      # Randomize start timestep
+      random_start_timestep: true
+      # Spawn only at intersections
+      only_intersections: false
+      # Min and max route length
+      route_length: [10, 15]
+      # Initial speed distribution
+      init_speed: "uniform_random"
+      # Minimum initial arclength
+      min_init_arclength: 50.0
+      # Range for random speed
+      random_speed_range: [0.0, 50.0]
+      # Initial steering angle distribution
+      init_steering_angle: "normal_random"
+      # Range for random steering angle
+      random_steering_angle_range: [-0.08, 0.08]
+      # Params for normal distribution for steering angle
+      normal_steering_angle_params: [0.0, 0.02]
+      # Noise in initial orientation
+      init_orientation_noise: 0.4
+      # Noise in initial position
+      init_position_noise: 3.0
+      # Minimum distance to goal
+      min_goal_distance: 100.0
+      # Minimum L2 distance to goal
+      min_goal_distance_l2: 100.0
+      # Maximum L2 distance to goal (if any)
+      max_goal_distance_l2: null
+      # Maximum distance to goal (if any)
+      max_goal_distance: null
+      # Minimum remaining distance (if any)
+      min_remaining_distance: null
+      # Maximum outer attempts for respawning
+      max_attempts_outer: 50
+      # Minimum distance between vehicles
+      min_vehicle_distance: 0.0
+      # Minimum vehicle speed (if any)
+      min_vehicle_speed: null
+      # Minimum number of vehicles on route (if any)
+      min_vehicles_route: null
+      # Maximum inner attempts for respawning
+      max_attempts_inner: 5
+
+    # Traffic extraction options
+    traffic_extraction:
+      # Type of edge drawer to use
+      edge_drawer: "NoEdgeDrawer"
+      # List of postprocessors to apply
+      postprocessors: []
+      # Consider only ego-centric incoming edges
+      only_ego_inc_edges: false
+      # Assign vehicles to multiple lanelets
+      assign_multiple_lanelets: true
+      # Radius of ego-centric map
+      ego_map_radius: 50.0
+      # Include lanelet vertices in extraction
+      include_lanelet_vertices: false

@@ -5,16 +5,32 @@ import numpy as np
 import os
 import cv2
 import logging
+from omegaconf import DictConfig, OmegaConf
+
 
 class EnvironmentDataset(Dataset):
-    def __init__(self, data_dir, downsample_factor=1, storage_batch_size=32):
-        self.data_dir = Path(data_dir)
+    def __init__(self, cfg: OmegaConf | dict):
+        if isinstance(cfg, dict):
+            cfg = OmegaConf.create(cfg)
+
+        self.data_dir = Path(cfg.project_dir) / "dataset"
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.downsample_factor = downsample_factor
-        self.storage_batch_size = storage_batch_size
+        self.downsample_factor = cfg["dataset"]["storage_batch_size"]
+        self.storage_batch_size = cfg["dataset"]["storage_batch_size"]
         self.current_batch = []
         self.episode_files = []
         self.update_file_list()
+
+        # Get environment-specific configuration
+        env_config = cfg.environments[cfg.environment]
+        self.segmentation_enabled = env_config.segmentation.enabled
+        self.segments = env_config.segmentation.segments if self.segmentation_enabled else None
+        self.color_tolerance = env_config.segmentation.color_tolerance if self.segmentation_enabled and env_config.segmentation.color_tolerance is not None else 0.4
+        
+        if self.segmentation_enabled:
+            self.remainder_segment = next((seg for seg in self.segments if seg.get('color') == "remainder"), None)
+            self.color_segments = [seg for seg in self.segments if seg.get('color') != "remainder"]
+
 
     def update_file_list(self):
         self.episode_files = sorted([f for f in os.listdir(self.data_dir) if f.startswith("batch_") and f.endswith(".pt")])
@@ -27,6 +43,8 @@ class EnvironmentDataset(Dataset):
         file = self.episode_files[idx]
         try:
             data = self._load_and_process_file(file)
+            if self.segmentation_enabled:
+                data = self._segment_data(data)
             return data
         except Exception as e:
             logging.error(f"Error loading file {file}: {str(e)}. Removing it from the dataset.")
@@ -84,6 +102,32 @@ class EnvironmentDataset(Dataset):
 
         if len(self.current_batch) >= self.storage_batch_size:
             self._save_current_batch()
+
+    def _segment_data(self, data):
+        next_observations = data['next_observations']
+        batch_size, seq_len, channels, height, width = next_observations.shape
+        remainder = torch.ones_like(next_observations)
+        segmented_next_observations = {}
+
+        for segment in self.color_segments:
+            color = torch.tensor(segment['color'], dtype=torch.float32) / 255.0
+            color = color.view(1, 1, 3, 1, 1)
+            
+            # Calculate color difference
+            color_diff = torch.abs(next_observations - color)
+            
+            # Create mask where all channels are within tolerance
+            mask = torch.all(color_diff <= self.color_tolerance, dim=2, keepdim=True)
+            
+            segmented_obs = next_observations * mask
+            segmented_next_observations[segment['name']] = segmented_obs
+            remainder = remainder * (~mask)
+
+        segmented_next_observations[self.remainder_segment['name']] = next_observations * remainder
+
+        data['next_observations'] = segmented_next_observations
+
+        return data
 
     def _preprocess_image(self, image):
         # Ensure image is a numpy array
@@ -179,26 +223,38 @@ class EnvironmentDataset(Dataset):
         
         # Get the shapes of the tensors
         first_subbatch = batch[0]
-        shapes = {key: first_subbatch[key].shape[1:] for key in first_subbatch.keys()}
+        shapes = {key: first_subbatch[key].shape[1:] if isinstance(first_subbatch[key], torch.Tensor) else None 
+                for key in first_subbatch.keys()}
         
         # Pre-allocate tensors for the merged batch on CPU
-        merged_batch = {
-            key: torch.empty((total_samples, *shapes[key]),
-                            dtype=first_subbatch[key].dtype,
-                            pin_memory=True)  # Use pinned memory for faster transfers
-            for key in first_subbatch.keys()
-        }
+        merged_batch = {}
+        for key in first_subbatch.keys():
+            if key == 'next_observations' and isinstance(first_subbatch[key], dict):
+                merged_batch[key] = {
+                    segment: torch.empty((total_samples, *first_subbatch[key][segment].shape[1:]),
+                                        dtype=first_subbatch[key][segment].dtype,
+                                        pin_memory=True)
+                    for segment in first_subbatch[key]
+                }
+            elif shapes[key] is not None:
+                merged_batch[key] = torch.empty((total_samples, *shapes[key]),
+                                                dtype=first_subbatch[key].dtype,
+                                                pin_memory=True)
         
         # Fill the pre-allocated tensors
         start_idx = 0
         for subbatch in batch:
             batch_size = subbatch['observations'].size(0)
             for key in merged_batch.keys():
-                merged_batch[key][start_idx:start_idx+batch_size].copy_(subbatch[key])
+                if key == 'next_observations' and isinstance(subbatch[key], dict):
+                    for segment in merged_batch[key]:
+                        merged_batch[key][segment][start_idx:start_idx+batch_size].copy_(subbatch[key][segment])
+                else:
+                    merged_batch[key][start_idx:start_idx+batch_size].copy_(subbatch[key])
             start_idx += batch_size
         
         return merged_batch
-    
+
 
 class SubsetRandomSampler(Sampler):
     def __init__(self, indices, num_samples=None):
@@ -281,6 +337,14 @@ def get_data_dimensions(dataset):
     return obs_shape, action_dim, ego_state_dim
 
 def move_batch_to_device(batch, device):
-    # Move entire batch to GPU at once
-    batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
-    return batch
+    def move_to_device(item):
+        if isinstance(item, torch.Tensor):
+            return item.to(device, non_blocking=True)
+        elif isinstance(item, dict):
+            return {k: move_to_device(v) for k, v in item.items()}
+        elif isinstance(item, list):
+            return [move_to_device(v) for v in item]
+        else:
+            return item
+
+    return {k: move_to_device(v) for k, v in batch.items()}

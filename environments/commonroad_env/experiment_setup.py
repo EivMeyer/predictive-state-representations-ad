@@ -91,12 +91,12 @@ def create_base_experiment_config(config):
 def setup_base_experiment(config):
     """Set up the RL experiment using the provided configuration."""
  
-    experiment_config = create_base_experiment_config(OmegaConf.to_container(config['commonroad'], resolve=True))
+    experiment_config = create_base_experiment_config(OmegaConf.to_container(config['envronments']['commonroad'], resolve=True))
     experiment = RLExperiment(config=experiment_config)
 
     # Create the environment
     environment = experiment.make_env(
-        scenario_dir=Path(config['commonroad']["scenario_dir"]),
+        scenario_dir=Path(config['envronments']['commonroad']["scenario_dir"]),
         n_envs=config["dataset"]["num_workers"],
         seed=config["seed"]
     )

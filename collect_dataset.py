@@ -7,10 +7,7 @@ from utils.config_utils import config_wrapper
 from environments import get_environment
 
 def collect_episodes(cfg_dict, env, num_episodes):
-    dataset = EnvironmentDataset(
-        data_dir=Path(cfg_dict["project_dir"]) / "dataset",
-        storage_batch_size=cfg_dict["dataset"]["storage_batch_size"]
-    )
+    dataset = EnvironmentDataset(cfg_dict)
 
     num_envs = env.num_envs if hasattr(env, 'num_envs') else 1
     

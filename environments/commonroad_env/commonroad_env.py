@@ -11,7 +11,7 @@ class CommonRoadEnv(BaseEnv):
         self.env = None
 
     def make_env(self, config, n_envs, seed, rl_mode=False):
-        experiment_config = create_base_experiment_config(config['commonroad'])
+        experiment_config = create_base_experiment_config(config['environments']['commonroad'])
         if rl_mode:
             experiment_config.env_options.observer = create_representation_observer(config, config['device'])
             experiment_config.rewarder = SumRewardAggregator(create_rewarders())
