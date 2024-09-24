@@ -7,7 +7,7 @@ import numpy as np
 class CombinedLoss(nn.Module):
     def __init__(self, mse_weight=0.5, l1_weight=0.3, diversity_weight=0.1, 
                  latent_l1_weight=0.05, latent_l2_weight=0.05, temporal_decay=0.9,
-                 perceptual_weight=0.1, num_scales=3, use_sample_weights=True,
+                 perceptual_weight=0.1, num_scales=1, use_sample_weights=True,
                  r_weight=1.0, g_weight=1.0, b_weight=1.0, warmup_iterations=1000, momentum=0.99):
         super(CombinedLoss, self).__init__()
         self.mse_weight = mse_weight

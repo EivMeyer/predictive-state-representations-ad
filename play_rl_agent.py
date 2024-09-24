@@ -11,7 +11,7 @@ def main(cfg: DictConfig) -> None:
 
     # Create the environment
     env_class = get_environment(cfg.environment)
-    env = env_class().make_env(cfg, n_envs=1, seed=cfg.seed)
+    env = env_class().make_env(cfg, n_envs=1, seed=cfg.seed, rl_mode=True)
 
     obs = env.reset()
     total_reward = 0.0

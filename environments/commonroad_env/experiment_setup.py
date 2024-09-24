@@ -88,10 +88,12 @@ def create_base_experiment_config(config):
 
     return experiment_config
 
-def setup_base_experiment(config):
+def setup_base_experiment(config, experiment_config):
     """Set up the RL experiment using the provided configuration."""
+
+    if isinstance(config, OmegaConf):
+        config = OmegaConf.to_container(config, resolve=True)
  
-    experiment_config = create_base_experiment_config(OmegaConf.to_container(config['commonroad'], resolve=True))
     experiment = RLExperiment(config=experiment_config)
 
     # Create the environment

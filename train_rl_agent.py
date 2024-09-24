@@ -86,14 +86,15 @@ def main(cfg: DictConfig) -> None:
 
     # Create the environment
     env_class = get_environment(cfg.environment)
-    env = env_class().make_env(cfg, n_envs=cfg.rl_training.num_envs, seed=cfg.seed, rl_mode=True)
+    env_instance = env_class()
+    env = env_instance.make_env(cfg, n_envs=cfg.rl_training.num_envs, seed=cfg.seed, rl_mode=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() and cfg.device == "auto" else cfg.device)
 
     model = initialize_ppo_model(cfg, env, device)
 
     # Setup evaluation environment
-    eval_env = env_class().make_env(
+    eval_env = env_instance.make_env(
         cfg,
         n_envs=1,
         seed=cfg.seed + 1000,
@@ -125,6 +126,8 @@ def main(cfg: DictConfig) -> None:
     if cfg.debug_mode:
         debug_callback = DebugCallback()
         callbacks.append(debug_callback)
+    custom_callbacks = env_instance.custom_callbacks(cfg_dict)
+    callbacks.extend(custom_callbacks)
 
     # Train the agent
     model.learn(total_timesteps=cfg.rl_training.total_timesteps, callback=callbacks,

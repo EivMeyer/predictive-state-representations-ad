@@ -8,7 +8,7 @@ from environments import get_environment
 def main(cfg: DictConfig) -> None:
     # Create the environment
     env_class = get_environment(cfg.environment)
-    env = env_class().make_env(cfg, n_envs=1, seed=cfg.seed)
+    env = env_class().make_env(cfg, n_envs=1, seed=cfg.seed, rl_mode=True)
 
     # Load the model. We load the most recent model in the project directory
     model_path = sorted(Path(cfg.project_dir).rglob('*.zip'), key=lambda x: x.stat().st_mtime, reverse=True)[0]

@@ -13,3 +13,6 @@ class BaseEnv(ABC):
     @abstractmethod
     def get_action_space(self):
         pass
+
+    def custom_callbacks(self, config: dict):
+        return []

@@ -48,7 +48,8 @@ class RepresentationObserver(BaseObserver):
         render_observer: RenderObserver, 
         sequence_length: int, 
         include_ego_state: bool = True,
-        debug: bool = False
+        debug: bool = False,
+        debug_freq: int = 1
     ):
         super().__init__()
         self.representation_model = representation_model
@@ -57,6 +58,7 @@ class RepresentationObserver(BaseObserver):
         self.sequence_length = sequence_length
         self.include_ego_state = include_ego_state
         self.debug = debug
+        self.debug_freq = debug_freq
         self.representation_model.eval()
         self.obs_buffer = deque(maxlen=sequence_length)
         self.ego_state_buffer = deque(maxlen=sequence_length)
@@ -64,6 +66,7 @@ class RepresentationObserver(BaseObserver):
         
         if self.debug:
             self.setup_debug_plot()
+        self.call_count = 0
 
     def setup_debug_plot(self):
         self.fig = plt.figure(figsize=(20, 6))
@@ -165,9 +168,9 @@ class RepresentationObserver(BaseObserver):
             
         representation = rep.cpu().numpy().squeeze()
 
-        if self.debug:
+        if self.debug and self.call_count % self.debug_freq == 0:
             with torch.no_grad():
-                decoding = self.representation_model.decode(batch, rep)
+                decoding = self.representation_model.decode_image(batch, rep)
                 if decoding.ndim == 5: # If the model returns a sequence of predictions
                     decoding = decoding[0]
             predictions = decoding.permute(0, 2, 3, 1).cpu().detach().numpy()
@@ -176,6 +179,8 @@ class RepresentationObserver(BaseObserver):
 
         if self.include_ego_state:
             representation = np.concatenate([representation, ego_state])
+
+        self.call_count += 1
 
         return representation
 

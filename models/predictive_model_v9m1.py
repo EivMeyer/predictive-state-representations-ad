@@ -150,6 +150,14 @@ class PredictiveModelV9M1(BasePredictiveModel):
         predicted_latents = self.output_projector(output.permute(1, 0, 2))
 
         return predicted_latents
+    
+    def decode_image(self, batch, encoded_state):
+        predicted_latents = self.decode(batch, encoded_state)
+
+        predictions = self.trainable_decoder(predicted_latents.view(-1, self.latent_dim))
+        predictions = predictions.view(batch['observations'].shape[0], self.num_frames_to_predict, *self.obs_shape[-3:])
+
+        return predictions
 
     def forward(self, batch):
         encoded_state = self.encode(batch)

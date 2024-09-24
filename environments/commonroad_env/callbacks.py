@@ -3,14 +3,21 @@ import wandb
 import numpy as np
 
 class CommonRoadWandbCallback(BaseWandbCallback):
-    def __init__(self, verbose: int = 0):
+    def __init__(self, cfg, verbose: int = 0):
+        self.enabled = cfg['wandb']['enabled']
+        if not self.enabled:
+            return
         super(CommonRoadWandbCallback, self).__init__(verbose)
 
     def _on_training_start(self) -> None:
+        if not self.enabled:
+            return
         super()._on_training_start()
         self._termination_reasons = self.training_env.get_attr('termination_reasons')[0]
 
     def _log_episode_metrics(self, rollout_buffer, n_episodes_done_step, n_steps, last_done_array, last_info):
+        if not self.enabled:
+            return
         super()._log_episode_metrics(rollout_buffer, n_episodes_done_step, n_steps, last_done_array, last_info)
 
         termination_criteria_flags = dict.fromkeys(self._termination_reasons, False)

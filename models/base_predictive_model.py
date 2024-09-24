@@ -13,8 +13,8 @@ class BasePredictiveModel(nn.Module, ABC):
         self.ego_state_dim = ego_state_dim
         self.cfg = cfg
         
-        self.num_frames_to_predict=self.cfg.dataset.t_pred
-        self.hidden_dim=self.cfg.training.hidden_dim
+        self.num_frames_to_predict=self.cfg['dataset']['t_pred']
+        self.hidden_dim=self.cfg['training']['hidden_dim']
 
     @abstractmethod
     def encode(self, batch):
@@ -23,6 +23,10 @@ class BasePredictiveModel(nn.Module, ABC):
     @abstractmethod
     def decode(self, batch, encoded_state):
         pass
+
+    def decode_image(self, batch, encoded_state):
+        # Overwrite this method if your model does not predict images
+        return self.decode(batch, encoded_state)
 
     @abstractmethod
     def compute_loss(self, batch, encoded_state, predictions) -> Tuple[Tensor, Dict[str, float]]:
