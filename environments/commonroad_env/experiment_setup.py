@@ -12,9 +12,10 @@ from commonroad_geometric.dataset.scenario.preprocessing.preprocessors.implement
 from commonroad_geometric.learning.reinforcement.termination_criteria.implementations import *
 from commonroad_geometric.common.io_extensions.scenario import LaneletAssignmentStrategy
 from commonroad_geometric.dataset.scenario.preprocessing.wrappers.chain_preprocessors import chain_preprocessors
+from commonroad_geometric.dataset.scenario.preprocessing.preprocessors.implementations import *
 from commonroad_geometric.simulation.ego_simulation.ego_vehicle_simulation import EgoVehicleSimulationOptions
 from commonroad_geometric.simulation.interfaces.static.scenario_simulation import ScenarioSimulation, ScenarioSimulationOptions
-from commonroad_geometric.simulation.ego_simulation.respawning.implementations import RandomRespawner, RandomRespawnerOptions
+from commonroad_geometric.simulation.ego_simulation.respawning.implementations import *
 from commonroad_geometric.dataset.extraction.traffic.traffic_extractor import TrafficExtractorOptions
 from commonroad.common.solution import VehicleType, VehicleModel
 from functools import partial
@@ -25,6 +26,7 @@ from environments.commonroad_env.observers import create_representation_observer
 
 def create_scenario_preprocessors():
     scenario_preprocessors = [
+        # MergeLaneletsPreprocessor()
         # VehicleFilterPreprocessor(),
         # RemoveIslandsPreprocessor()
         # SegmentLaneletsPreprocessor(100.0),

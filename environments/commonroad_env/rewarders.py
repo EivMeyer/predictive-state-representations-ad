@@ -46,8 +46,10 @@ def create_rewarders():
         ),
         # FrictionViolationPenaltyRewardComputer(penalty=-0.01),
         TrajectoryProgressionRewardComputer(
-            weight=0.2,
-            delta_threshold=0.08
+            weight=0.05,
+            delta_threshold=3,
+            relative_arclength=False,
+            linear_path_projection=True
         ),
         ConstantRewardComputer(reward=-0.001),
         #
@@ -58,7 +60,7 @@ def create_rewarders():
         TimeToCollisionPenaltyRewardComputer(weight=0.1), # requires incoming edges
         OffroadPenaltyRewardComputer(penalty=-3.5),
         VelocityPenaltyRewardComputer(
-            reference_velocity=56.0,
+            reference_velocity=33.0,
             weight=0.002,
             loss_type=RewardLossMetric.L2,
             only_upper=True

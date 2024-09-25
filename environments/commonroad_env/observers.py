@@ -296,7 +296,10 @@ def create_render_observer(config):
     )
 
 def create_representation_observer(cfg, device):
-    device = torch.device("cuda" if torch.cuda.is_available() and device == "auto" else device)
+    if device == "auto":
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = device
     representation_model = create_representation_model(cfg, device)
     render_observer = create_render_observer(cfg['commonroad']['viewer'])
     representation_observer = RepresentationObserver(representation_model, device, debug=cfg['debug_mode'], render_observer=render_observer, sequence_length=cfg['dataset']['t_obs'])
