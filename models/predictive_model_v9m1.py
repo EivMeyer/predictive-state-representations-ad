@@ -23,8 +23,12 @@ class PredictiveModelV9M1(BasePredictiveModel):
         assert pretrained_model_path is not None, "Pretrained model path must be provided"
 
         # Load pre-trained autoencoder
+        if cfg.device == 'auto':
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        else:
+            device = cfg.device
         self.autoencoder = AutoEncoderModelV0(obs_shape, action_dim, ego_state_dim, cfg)
-        self.autoencoder.load_state_dict(torch.load(pretrained_model_path)['model_state_dict'], strict=False)
+        self.autoencoder.load_state_dict(torch.load(pretrained_model_path, map_location=device)['model_state_dict'], strict=False)
         self.autoencoder.eval()
         
         # Freeze the encoder part of the autoencoder
