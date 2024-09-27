@@ -192,8 +192,8 @@ rl_training:
   max_grad_norm: 10.0
   # Network architecture for the policy and value function
   net_arch:
-    pi: [128, 128, 64]
-    vf: [128, 128, 64]
+    pi: [256, 128, 64]
+    vf: [256, 128, 64]
 
 # Environment-specific options
 
@@ -229,7 +229,7 @@ commonroad:
     # Range of view in the simulation
     view_range: 90.0
     # Size of the viewer window
-    window_size: 64
+    window_size: 128
 
   # Respawner options
   respawner:

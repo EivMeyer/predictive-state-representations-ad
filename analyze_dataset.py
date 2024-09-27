@@ -21,7 +21,7 @@ def visualize_episode(episode: Dict[str, Any]) -> None:
     
     # Create a figure with two rows: one for observations, one for next_observations
     fig, axs = plt.subplots(2, num_frames, figsize=(4*num_frames, 8))
-    fig.suptitle('Full Episode Sequence')
+    fig.suptitle('Full Episode Sequence. Observation shape: {}'.format(observations[0].shape))
     
     for i in range(num_frames):
         # Process and display observation

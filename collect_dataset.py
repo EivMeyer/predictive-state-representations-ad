@@ -27,7 +27,12 @@ def collect_episodes(cfg_dict, env, num_episodes):
             ego_state_sequences = [[] for _ in range(num_envs)]
             done_sequences = [[] for _ in range(num_envs)]
             
-            obs, _ = env.reset()
+            obs_result = env.reset()
+            if isinstance(obs_result, tuple):
+                obs, _ = obs_result
+            else:
+                obs = obs_result
+                
             if not is_vector_env:
                 obs = [obs]
             
@@ -39,12 +44,26 @@ def collect_episodes(cfg_dict, env, num_episodes):
                 step_result = env.step(actions)
                 
                 if is_vector_env:
-                    new_obs, rewards, terminateds, truncateds, infos = step_result
-                    dones = [term or trunc for term, trunc in zip(terminateds, truncateds)]
+                    truncateds = None # Assume no truncation
+                    if len(step_result) == 5:
+                        new_obs, rewards, terminateds, truncateds, infos = step_result
+                    else:
+                        new_obs, rewards, terminateds, infos = step_result
+                    if truncateds is not None:
+                        dones = [term or trunc for term, trunc in zip(terminateds, truncateds)]
+                    else:
+                        dones = terminateds
                 else:
-                    new_obs, reward, terminated, truncated, info = step_result
+                    truncated = None # Assume no truncation
+                    if len(step_result) == 5:
+                        new_obs, reward, terminated, truncated, info = step_result
+                    else:
+                        new_obs, reward, terminated, info = step_result
+                    if truncated is not None:
+                        dones = [terminated or truncated]
+                    else:
+                        dones = [terminated]
                     new_obs, rewards, terminateds, truncateds, infos = [new_obs], [reward], [terminated], [truncated], [info]
-                    dones = [terminated or truncated]
 
                 # Create a placeholder for ego_states (adjust as needed)
                 ego_states = [np.zeros(4) for _ in range(num_envs)]  # Assuming 4-dimensional ego state
@@ -102,7 +121,7 @@ def main(cfg: DictConfig) -> None:
 
     # Create the environment
     env_class = get_environment(cfg.environment)
-    env = env_class().make_env(cfg, n_envs=1, seed=cfg.seed)
+    env = env_class(cfg).make_env(cfg, n_envs=1, seed=cfg.seed)
     
     dataset = collect_episodes(cfg_dict, env, cfg.dataset.num_episodes)
     
