@@ -33,7 +33,8 @@ class AutoEncoderModelV0(BasePredictiveModel):
         # Calculate the size of the encoder output
         with torch.no_grad():
             dummy_input = torch.zeros(1, obs_shape[-3], obs_shape[-2], obs_shape[-1])
-            encoder_output_size = self.encoder(dummy_input).shape[1]
+            encoder_output = self.encoder(dummy_input)
+            encoder_output_size = encoder_output.numel()  # Total number of elements
 
         self.latent_dim = self.hidden_dim 
         self.fc_mu = nn.Linear(encoder_output_size, self.latent_dim)
@@ -61,12 +62,11 @@ class AutoEncoderModelV0(BasePredictiveModel):
 
     def _make_encoder(self, obs_shape):
         return nn.Sequential(
-            self._make_encoder_block(obs_shape[-3], 64),
-            self._make_encoder_block(64, 128),
-            self._make_encoder_block(128, 256),
-            self._make_encoder_block(256, 512),
-            nn.AdaptiveAvgPool2d((1, 1)),
-            nn.Flatten()
+            self._make_encoder_block(obs_shape[-3], 32),
+            self._make_encoder_block(32, 64),
+            # No more downsampling after this point to maintain 8x8 spatial dimensions
+            ResidualBlock(64, 64),
+            ResidualBlock(64, 64)
         )
 
     def _make_encoder_block(self, in_channels, out_channels):
@@ -133,9 +133,10 @@ class AutoEncoderModelV0(BasePredictiveModel):
         else:
             observation = batch['observations']
         encoder_features = self.encoder(observation)
-        mu = self.fc_mu(encoder_features)
-        logvar = self.fc_logvar(encoder_features)
-        return mu, logvar
+        encoder_features_flat = encoder_features.view(encoder_features.size(0), -1)
+        mu = self.fc_mu(encoder_features_flat)
+        logvar = self.fc_logvar(encoder_features_flat)
+        return mu, logvar, encoder_features
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
@@ -146,10 +147,10 @@ class AutoEncoderModelV0(BasePredictiveModel):
         return self.decoder(z)
 
     def forward(self, batch):
-        mu, logvar = self.encode(batch)
+        mu, logvar, encoder_features = self.encode(batch)
         z = self.reparameterize(mu, logvar)
         reconstruction = self.decode(batch, z).unsqueeze(1)  # Add sequence length dimension
-        return {'predictions': reconstruction, 'encoded_state': mu, 'logvar': logvar}
+        return {'predictions': reconstruction, 'encoded_state': mu, 'logvar': logvar, 'encoder_features': encoder_features}
 
     def compute_loss(self, batch, model_output):
         reconstruction = model_output['predictions']
