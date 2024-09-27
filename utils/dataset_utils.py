@@ -27,7 +27,7 @@ class EnvironmentDataset(Dataset):
         file = self.episode_files[idx]
         try:
             data = self._load_and_process_file(file)
-            return data
+            return self._shuffle_batch(data)
         except Exception as e:
             logging.error(f"Error loading file {file}: {str(e)}. Removing it from the dataset.")
             self._remove_corrupted_file(idx)
@@ -40,6 +40,14 @@ class EnvironmentDataset(Dataset):
                 return self.__getitem__(idx)
             else:
                 raise RuntimeError("No valid files found after the specified index.")
+            
+    def _shuffle_batch(self, data):
+        batch_size = data['observations'].shape[0]
+        shuffle_idx = torch.randperm(batch_size)
+        
+        return {
+            key: value[shuffle_idx] for key, value in data.items()
+        }
 
     def _load_and_process_file(self, file):
         file_path = self.data_dir / file
@@ -174,30 +182,11 @@ class EnvironmentDataset(Dataset):
 
     @staticmethod
     def collate_fn(batch):
-        # Determine the total number of samples across all subbatches
-        total_samples = sum(subbatch['observations'].size(0) for subbatch in batch)
-        
-        # Get the shapes of the tensors
-        first_subbatch = batch[0]
-        shapes = {key: first_subbatch[key].shape[1:] for key in first_subbatch.keys()}
-        
-        # Pre-allocate tensors for the merged batch on CPU
-        merged_batch = {
-            key: torch.empty((total_samples, *shapes[key]),
-                            dtype=first_subbatch[key].dtype,
-                            pin_memory=True)  # Use pinned memory for faster transfers
-            for key in first_subbatch.keys()
+        # Each item in the batch is already shuffled, so we just need to concatenate
+        return {
+            key: torch.cat([subbatch[key] for subbatch in batch], dim=0)
+            for key in batch[0].keys()
         }
-        
-        # Fill the pre-allocated tensors
-        start_idx = 0
-        for subbatch in batch:
-            batch_size = subbatch['observations'].size(0)
-            for key in merged_batch.keys():
-                merged_batch[key][start_idx:start_idx+batch_size].copy_(subbatch[key])
-            start_idx += batch_size
-        
-        return merged_batch
     
 
 class SubsetRandomSampler(Sampler):
