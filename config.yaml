@@ -70,6 +70,7 @@ models:
     decoder_learning_rate: 2e-5
     vib_weight: 0.1  # Weight for the Variational Information Bottleneck KL loss
     vae_weight: 0.1  # Weight for the variational decoding KL loss
+    condition_on_future_actions: true
 
 # Training configuration
 training:

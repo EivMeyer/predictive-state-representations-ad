@@ -104,6 +104,10 @@ class PredictiveModelV9M2(BasePredictiveModel):
             for _ in range(self.num_frames_to_predict)
         ])
 
+        # Future action conditioning
+        self.action_projector = nn.Linear(action_dim, self.hidden_dim)
+        self.condition_on_future_actions = cfg.models.PredictiveModelV9M2.condition_on_future_actions
+
         # Loss function for latent space
         self.loss_function_latent = CombinedLoss(
             mse_weight=self.cfg.training.loss.mse_weight,
@@ -181,7 +185,12 @@ class PredictiveModelV9M2(BasePredictiveModel):
         # Prepare decoder input
         decoder_input = self.pos_encoder_decoding(memory.unsqueeze(0).repeat(self.num_frames_to_predict, 1, 1))
 
-        # Generate future latent predictions using only the last memory state
+        # Incorporate future actions if provided and configured to use them
+        if self.condition_on_future_actions:
+            action_features = self.action_projector(batch['next_actions'])
+            decoder_input += action_features.permute(1, 0, 2)
+
+        # Generate future latent predictions
         output = self.transformer_decoder(decoder_input, memory.unsqueeze(0))
 
         # Project output and apply variational layers for each decoding step
