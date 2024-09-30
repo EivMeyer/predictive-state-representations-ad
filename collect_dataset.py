@@ -12,100 +12,90 @@ def collect_episodes(cfg_dict, env, num_episodes):
         storage_batch_size=cfg_dict["dataset"]["storage_batch_size"]
     )
 
-    is_vector_env = hasattr(env, 'num_envs')
-    num_envs = env.num_envs if is_vector_env else 1
-    
-    t_obs = cfg_dict['dataset']['t_obs']
-    t_pred = cfg_dict['dataset']['t_pred']
-    total_steps = t_obs + t_pred
+    num_envs = env.num_envs if hasattr(env, 'num_envs') else 1
     
     episodes_collected = 0
     with tqdm(total=num_episodes, desc="Collecting episodes") as pbar:
         while episodes_collected < num_episodes:
-            obs_sequences = [[] for _ in range(num_envs)]
-            action_sequences = [[] for _ in range(num_envs)]
-            ego_state_sequences = [[] for _ in range(num_envs)]
-            done_sequences = [[] for _ in range(num_envs)]
+            obs_sequences, action_sequences, ego_state_sequences = [], [], []
+            next_obs_sequences, next_action_sequences, done_sequences = [], [], []
             
-            obs_result = env.reset()
-            if isinstance(obs_result, tuple):
-                obs, _ = obs_result
-            else:
-                obs = obs_result
-                
-            if not is_vector_env:
-                obs = [obs]
+            obs = env.reset()
             
-            for t in range(total_steps):
+            # Collect observations
+            for t in range(cfg_dict['dataset']['t_obs'] * (cfg_dict['dataset']['obs_skip_frames'] + 1)):
                 actions = [env.action_space.sample() for _ in range(num_envs)]
-                if not is_vector_env:
-                    actions = actions[0]
-                
-                step_result = env.step(actions)
-                
-                if is_vector_env:
-                    truncateds = None # Assume no truncation
-                    if len(step_result) == 5:
-                        new_obs, rewards, terminateds, truncateds, infos = step_result
-                    else:
-                        new_obs, rewards, terminateds, infos = step_result
-                    if truncateds is not None:
-                        dones = [term or trunc for term, trunc in zip(terminateds, truncateds)]
-                    else:
-                        dones = terminateds
+                step_tuple = env.step(actions)
+                if len(step_tuple) == 4:
+                    new_obs, rewards, dones, infos = env.step(actions)
                 else:
-                    truncated = None # Assume no truncation
-                    if len(step_result) == 5:
-                        new_obs, reward, terminated, truncated, info = step_result
-                    else:
-                        new_obs, reward, terminated, info = step_result
-                    if truncated is not None:
-                        dones = [terminated or truncated]
-                    else:
-                        dones = [terminated]
-                    new_obs, rewards, terminateds, truncateds, infos = [new_obs], [reward], [terminated], [truncated], [info]
-
-                # Create a placeholder for ego_states (adjust as needed)
-                ego_states = [np.zeros(4) for _ in range(num_envs)]  # Assuming 4-dimensional ego state
-
-                for i in range(num_envs):
-                    obs_sequences[i].append(obs[i])
-                    action_sequences[i].append(actions[i] if is_vector_env else actions)
-                    ego_state_sequences[i].append(ego_states[i])
-                    done_sequences[i].append(dones[i])
+                    new_obs, rewards, dones, _, infos = env.step(actions)
                 
-                if all(dones):
-                    break
+                if isinstance(dones, bool):
+                    # Put all return values in a list
+                    new_obs = [new_obs]
+                    rewards = [rewards]
+                    dones = [dones]
+                    infos = [infos]
+
+                try:
+                    ego_states = env.get_attr('ego_vehicle_simulation')
+                    ego_states = [np.array([e.ego_vehicle.state.velocity, 
+                                            e.ego_vehicle.state.acceleration, 
+                                            e.ego_vehicle.state.steering_angle, 
+                                            e.ego_vehicle.state.yaw_rate]) for e in ego_states]
+                except AttributeError: # THIS IS A HACK FOR THE COMMONROAD ENVIRONMENT. REMOVE THIS LATER. REPLACE WITH A BETTER SOLUTION
+                    ego_states = [np.zeros(4) for _ in range(num_envs)]
+                
+                
+                if t % (cfg_dict['dataset']['obs_skip_frames'] + 1) == 0:
+                    for i in range(num_envs):
+                        if len(obs_sequences) <= i:
+                            obs_sequences.append([])
+                            action_sequences.append([])
+                            ego_state_sequences.append([])
+                        
+                        obs_sequences[i].append(obs[i])
+                        action_sequences[i].append(actions[i])
+                        ego_state_sequences[i].append(ego_states[i])
                 
                 obs = new_obs
             
+            # Collect predictions
+            for t in range(cfg_dict['dataset']['t_pred'] * (cfg_dict['dataset']['pred_skip_frames'] + 1)):
+                actions = [np.zeros(env.action_space.shape) for _ in range(num_envs)]
+                
+                if len(step_tuple) == 4:
+                    new_obs, rewards, dones, infos = env.step(actions)
+                else:
+                    new_obs, rewards, dones, _, infos = env.step(actions)
+
+                if isinstance(dones, bool):
+                    # Put all return values in a list
+                    new_obs = [new_obs]
+                    rewards = [rewards]
+                    dones = [dones]
+                    infos = [infos]
+                
+                if t % (cfg_dict['dataset']['pred_skip_frames'] + 1) == 0:
+                    for i in range(num_envs):
+                        if len(next_obs_sequences) <= i:
+                            next_obs_sequences.append([])
+                            next_action_sequences.append([])
+                            done_sequences.append([])
+                        
+                        next_obs_sequences[i].append(new_obs[i])
+                        next_action_sequences[i].append(actions[i])
+                        done_sequences[i].append(dones[i])
+            
             for i in range(num_envs):
-                sequence_length = len(obs_sequences[i])
-                if sequence_length < total_steps:
-                    # If the episode terminated early, we pad with the last observation
-                    pad_length = total_steps - sequence_length
-                    last_obs = obs_sequences[i][-1]
-                    last_ego_state = ego_state_sequences[i][-1]
-                    obs_sequences[i].extend([last_obs] * pad_length)
-                    action_sequences[i].extend([np.zeros_like(action_sequences[i][-1])] * pad_length)
-                    ego_state_sequences[i].extend([last_ego_state] * pad_length)
-                    done_sequences[i].extend([True] * pad_length)
-                
-                # Prepare data for add_episode
-                observations = np.stack(obs_sequences[i])
-                actions = np.stack(action_sequences[i])
-                ego_states = np.stack(ego_state_sequences[i])
-                next_observations = np.stack(obs_sequences[i][1:] + [obs_sequences[i][-1]])
-                next_actions = np.stack(action_sequences[i][1:] + [np.zeros_like(action_sequences[i][-1])])
-                dones = np.array(done_sequences[i])
-                
                 dataset.add_episode(
-                    observations,
-                    actions,
-                    ego_states,
-                    next_observations,
-                    next_actions,
-                    dones
+                    obs_sequences[i], 
+                    action_sequences[i], 
+                    ego_state_sequences[i],
+                    next_obs_sequences[i], 
+                    next_action_sequences[i], 
+                    done_sequences[i]
                 )
                 episodes_collected += 1
                 pbar.update(1)
@@ -121,7 +111,7 @@ def main(cfg: DictConfig) -> None:
 
     # Create the environment
     env_class = get_environment(cfg.environment)
-    env = env_class(cfg).make_env(cfg, n_envs=1, seed=cfg.seed)
+    env = env_class().make_env(cfg, n_envs=1, seed=cfg.seed)
     
     dataset = collect_episodes(cfg_dict, env, cfg.dataset.num_episodes)
     

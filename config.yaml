@@ -14,7 +14,7 @@ hydra:
 project_dir: "./output"
 
 # Name of the environment to use
-environment: "image_cartpole" # Either "commonroad" or "image_cartpole"
+environment: "commonroad" # Either "commonroad" or "image_cartpole"
 
 # Random seed for reproducibility
 seed: 123
@@ -43,7 +43,7 @@ dataset:
   # Number of frames to skip between each recorded observation frame
   obs_skip_frames: 0
   # Number of frames to skip between each recorded prediction frame
-  pred_skip_frames: 0
+  pred_skip_frames: 4
 
 wandb:
   # Enable Weights & Biases logging
@@ -66,11 +66,15 @@ models:
     kl_weight: 0.001
   PredictiveModelV9M1:
     decoder_learning_rate: 2e-5
+  PredictiveModelV9M2:
+    decoder_learning_rate: 2e-5
+    vib_weight: 0.1  # Weight for the Variational Information Bottleneck KL loss
+    vae_weight: 0.1  # Weight for the variational decoding KL loss
 
 # Training configuration
 training:
   # Type of model to use for training
-  model_type: "AutoEncoderModelV0" # AutoEncoderModelV0, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, VQVAEPredictiveModel
+  model_type: "PredictiveModelV9M2" # AutoEncoderModelV0, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, PredictiveModelV9M2, VQVAEPredictiveModel
   # Set this to the path of a checkpoint to resume training
   warmstart_model: null # "./models/model_64_sparse.pth"
   # Whether to continue from the last scheduler state
