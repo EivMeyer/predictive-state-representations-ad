@@ -227,6 +227,7 @@ def create_representation_model(cfg, device):
 
     # Get data dimensions
     obs_shape, action_dim, ego_state_dim = get_data_dimensions(full_dataset)
+    obs_shape = (cfg.dataset.t_pred, 3, cfg.viewer.window_size, cfg.viewer.window_size) # TODO
 
     # Get the model class based on the config
     ModelClass = get_model_class(cfg['representation']['model_type'])
