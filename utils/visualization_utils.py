@@ -56,6 +56,11 @@ def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoc
     train_predictions = train_predictions.cpu().numpy().astype(np.float32)
     train_ground_truth = train_ground_truth.cpu().numpy().astype(np.float32)
     
+    if train_predictions.ndim == 4:
+        train_predictions = np.expand_dims(train_predictions, 1)
+    if prediction.ndim == 4:
+        prediction = np.expand_dims(prediction, 1)
+
     input_seq_len = observations.shape[1]
     pred_seq_len = prediction.shape[1]
     
@@ -80,6 +85,7 @@ def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoc
     # Plot samples
     plot_sample(1)
     plot_sample(2)
+
     
     # Display 3x3 grid of training predictions and ground truths
     num_train_preds = min(9, len(train_predictions))
