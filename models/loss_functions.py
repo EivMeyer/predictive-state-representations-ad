@@ -163,6 +163,11 @@ class CombinedLoss(nn.Module):
             # Expand dimensions to match image format (insert height and width dimensions)
             pred = pred.unsqueeze(-1).unsqueeze(-1)
             target = target.unsqueeze(-1).unsqueeze(-1)
+
+        if pred.ndim == 4 and target.ndim == 4:
+            # Insert sequence length dimension
+            pred = pred.unsqueeze(1)
+            target = target.unsqueeze(1)
         
         batch_size, seq_len, channels, height, width = pred.shape
         
