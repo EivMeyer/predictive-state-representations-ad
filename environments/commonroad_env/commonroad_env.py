@@ -23,7 +23,8 @@ class CommonRoadEnv(BaseEnv):
             experiment_config.respawner_options['init_position_noise'] = 0.0
             experiment_config.respawner_options['min_goal_distance_l2'] = 400.0
             experiment_config.respawner_options['route_length'] = 1
-            experiment_config.respawner_options['min_vehicle_distance'] = 20.0
+            experiment_config.respawner_options['min_vehicle_distance'] = 10.0
+            experiment_config.respawner_options['future_timestep_count'] = 5
             experiment_config.respawner_options['init_speed'] = 'auto'
             experiment_config.control_space_options['lower_bound_acceleration'] = -10.0
             experiment_config.control_space_options['upper_bound_acceleration'] = 10.0

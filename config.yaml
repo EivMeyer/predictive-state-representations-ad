@@ -197,8 +197,8 @@ rl_training:
   max_grad_norm: 10.0
   # Network architecture for the policy and value function
   net_arch:
-    pi: [256, 128, 64]
-    vf: [256, 128, 64]
+    pi: [64]
+    vf: [64]
 
 # Environment-specific options
 
