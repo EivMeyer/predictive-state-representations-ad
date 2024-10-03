@@ -68,14 +68,14 @@ class Trainer:
             current_memory = torch.cuda.memory_allocated(self.device)
             available_memory = total_memory - current_memory
             
-            # Use approximately 20% of available memory per batch
+            # Use at most 20% of available memory per batch
             target_memory = available_memory * 0.2
 
             # Estimate memory per sample (this is a rough estimate and might need adjustment)
             sample_size = sum(p.numel() * p.element_size() for p in self.model.parameters())
             estimated_size_per_sample = sample_size * 2  # Factor of 2 for forward and backward pass
 
-            val_batch_size = max(1, int(target_memory / estimated_size_per_sample))
+            val_batch_size = min(32, max(1, int(target_memory / estimated_size_per_sample)))
             print(f"Calculated validation batch size: {val_batch_size}")
             return val_batch_size
         else:
