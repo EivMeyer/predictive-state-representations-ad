@@ -75,12 +75,12 @@ class Trainer:
             sample_size = sum(p.numel() * p.element_size() for p in self.model.parameters())
             estimated_size_per_sample = sample_size * 2  # Factor of 2 for forward and backward pass
 
-            val_batch_size = min(32, max(1, int(target_memory / estimated_size_per_sample)))
+            val_batch_size = min(8, max(1, int(target_memory / estimated_size_per_sample)))
             print(f"Calculated validation batch size: {val_batch_size}")
             return val_batch_size
         else:
             # For CPU, use a default batch size
-            return 32
+            return 8
 
     def train_epoch(self) -> Dict[str, List[float]]:
         self.model.train()
