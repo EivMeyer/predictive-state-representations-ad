@@ -70,9 +70,9 @@ models:
   PredictiveModelV9M2:
     pretrained_model_path: "../models/pretrained/autoencoder_model_v0m1.pth"
     decoder_learning_rate: 2e-5
-    vib_weight: 0.1  # Weight for the Variational Information Bottleneck KL loss
-    vae_weight: 0.1  # Weight for the variational decoding KL loss
-    condition_on_future_actions: true
+    vib_weight: 0.0001  # Weight for the Variational Information Bottleneck KL loss
+    vae_weight: 0.00001  # Weight for the variational decoding KL loss
+    condition_on_future_actions: false
 
 # Training configuration
 training:
