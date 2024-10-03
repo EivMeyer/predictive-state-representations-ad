@@ -13,7 +13,7 @@ import numpy as np
 import time
 from utils.visualization_utils import setup_visualization, visualize_prediction
 import torch.multiprocessing as mp
-from utils.training_utils import analyze_predictions, init_wandb, NoScheduler, WarmupScheduler
+from utils.training_utils import analyze_predictions, init_wandb, NoScheduler
 from datetime import datetime
 from torch.cuda.amp import autocast, GradScaler
 from typing import Dict, List, Tuple, Any, Optional
