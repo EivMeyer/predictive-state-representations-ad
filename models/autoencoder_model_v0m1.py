@@ -104,8 +104,13 @@ class AutoEncoderModelV0M1(BasePredictiveModel):
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
 
-    def encode(self, observation):
-        encoder_features = self.encoder(observation)
+    def encode(self, observations):
+        if isinstance(observations, dict):
+            observations = observations['observations']
+        channels, height, width = observations.shape[-3:]
+        if observations.ndim == 5:
+            observations = observations.view(-1, channels, height, width)
+        encoder_features = self.encoder(observations)
         mu = self.fc_mu(encoder_features)
         logvar = self.fc_logvar(encoder_features)
         return mu, logvar, encoder_features
@@ -120,11 +125,11 @@ class AutoEncoderModelV0M1(BasePredictiveModel):
 
     def forward(self, batch):
         if batch['observations'].ndim == 5:
-            observation = batch['observations'][:, -1]  # Take only the last observation
+            observations = batch['observations'][:, -1]  # Take only the last observations
         else:
-            observation = batch['observations']
+            observations = batch['observations']
         
-        mu, logvar, encoder_features = self.encode(observation)
+        mu, logvar, encoder_features = self.encode(observations)
         z = self.reparameterize(mu, logvar)
         reconstruction = self.decode(z)
         
@@ -138,7 +143,7 @@ class AutoEncoderModelV0M1(BasePredictiveModel):
         logvar = model_output['logvar']
         
         if batch['observations'].ndim == 5:
-            target_observation = batch['observations'][:, -1]  # Take only the last observation
+            target_observation = batch['observations'][:, -1]  # Take only the last observations
         else:
             target_observation = batch['observations']
 

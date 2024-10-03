@@ -65,8 +65,10 @@ models:
   AutoEncoderModelV0:
     kl_weight: 0.001
   PredictiveModelV9M1:
+    encoder_learning_rate: 5e-6
     decoder_learning_rate: 2e-5
   PredictiveModelV9M2:
+    pretrained_model_path: "../models/pretrained/autoencoder_model_v0m1.pth"
     decoder_learning_rate: 2e-5
     vib_weight: 0.1  # Weight for the Variational Information Bottleneck KL loss
     vae_weight: 0.1  # Weight for the variational decoding KL loss
@@ -75,9 +77,9 @@ models:
 # Training configuration
 training:
   # Type of model to use for training
-  model_type: "PredictiveModelV9M2" # AutoEncoderModelV0, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, PredictiveModelV9M2, VQVAEPredictiveModel
+  model_type: "PredictiveModelV9M2" # AutoEncoderModelV0, AutoEncoderModelV0M1, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, PredictiveModelV9M2, VQVAEPredictiveModel
   # Set this to the path of a checkpoint to resume training
-  warmstart_model: null # "./models/model_64_sparse.pth"
+  warmstart_model: null # "../models/pretrained/predictive_model_v9m1.pth"
   # Whether to continue from the last scheduler state
   warmstart_load_scheduler_state: false
   # Latent representation size
@@ -197,11 +199,17 @@ rl_training:
   max_grad_norm: 10.0
   # Network architecture for the policy and value function
   net_arch:
-    pi: [64]
-    vf: [64]
+    pi: [64, 64]
+    vf: [64, 64]
+
+# Viewer options
+viewer:
+  # Range of view in the simulation
+  view_range: 90.0
+  # Size of the viewer window
+  window_size: 128
 
 # Environment-specific options
-
 commonroad: 
   scenario_dir: "scenarios"
 
@@ -228,13 +236,6 @@ commonroad:
     upper_bound_steering: 0.15
     # Minimum velocity for steering
     min_velocity_steering: 1.0
-
-  # Viewer options
-  viewer:
-    # Range of view in the simulation
-    view_range: 90.0
-    # Size of the viewer window
-    window_size: 128
 
   # Respawner options
   respawner:

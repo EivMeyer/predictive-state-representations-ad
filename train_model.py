@@ -13,7 +13,7 @@ import numpy as np
 import time
 from utils.visualization_utils import setup_visualization, visualize_prediction
 import torch.multiprocessing as mp
-from utils.training_utils import analyze_predictions, init_wandb, NoScheduler
+from utils.training_utils import analyze_predictions, init_wandb, NoScheduler, WarmupScheduler
 from datetime import datetime
 from torch.cuda.amp import autocast, GradScaler
 from typing import Dict, List, Tuple, Any, Optional
@@ -449,6 +449,7 @@ def main(cfg: DictConfig) -> None:
     
     full_dataset = EnvironmentDataset(dataset_path, downsample_factor=cfg.training.downsample_factor)
     obs_shape, action_dim, ego_state_dim = get_data_dimensions(full_dataset)
+    obs_shape = (cfg.dataset.t_pred, 3, cfg.viewer.window_size, cfg.viewer.window_size) # TODO
 
     if cfg.device == "auto":
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

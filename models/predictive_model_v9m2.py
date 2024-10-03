@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from models.base_predictive_model import BasePredictiveModel
 from models.autoencoder_model_v0 import AutoEncoderModelV0
+from models.autoencoder_model_v0m1 import AutoEncoderModelV0M1
 from models.loss_functions import CombinedLoss
 from utils.file_utils import find_model_path
 import copy
@@ -39,7 +40,7 @@ class PredictiveModelV9M2(BasePredictiveModel):
 
         self.seq_len, self.channels, self.height, self.width = obs_shape
 
-        pretrained_model_path = find_model_path(cfg.project_dir, cfg.models.PredictiveModelV9.pretrained_model_path) if pretrained_model_path is None else pretrained_model_path
+        pretrained_model_path = find_model_path(cfg.project_dir, cfg.models.PredictiveModelV9M2.pretrained_model_path) if pretrained_model_path is None else pretrained_model_path
         assert pretrained_model_path is not None, "Pretrained model path must be provided"
 
         # Load pre-trained autoencoder
@@ -47,7 +48,7 @@ class PredictiveModelV9M2(BasePredictiveModel):
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         else:
             device = cfg.device
-        self.autoencoder = AutoEncoderModelV0(obs_shape, action_dim, ego_state_dim, cfg)
+        self.autoencoder = AutoEncoderModelV0M1(obs_shape, action_dim, ego_state_dim, cfg)
         try:
             self.autoencoder.load_state_dict(torch.load(pretrained_model_path, map_location=device)['model_state_dict'], strict=False)
         except RuntimeError as e:
@@ -69,9 +70,11 @@ class PredictiveModelV9M2(BasePredictiveModel):
             dummy_encoding = self.autoencoder.encode(dummy_batch)
             if isinstance(dummy_encoding, tuple):
                 dummy_encoding = dummy_encoding[0]
-            latent_dim = dummy_encoding.shape[1]
+            latent_dim = torch.prod(torch.tensor(dummy_encoding.shape[1:])).item()
+            latent_shape = dummy_encoding.shape[1:]
 
         self.latent_dim = latent_dim
+        self.latent_shape = latent_shape
         self.hidden_dim = cfg.training.hidden_dim
 
         # Projectors
@@ -222,7 +225,7 @@ class PredictiveModelV9M2(BasePredictiveModel):
         predicted_latents, vae_mus, vae_logvars = self.decode(batch, encoded_state, sample)
 
         # Decode latents to observations using the trainable decoder
-        predictions = self.trainable_decoder(predicted_latents.view(-1, self.latent_dim))
+        predictions = self.trainable_decoder(predicted_latents.view(-1, *self.latent_shape))
         predictions = predictions.view(batch['observations'].shape[0], self.num_frames_to_predict, *self.obs_shape[-3:])
 
         return {
