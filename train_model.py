@@ -68,8 +68,8 @@ class Trainer:
             current_memory = torch.cuda.memory_allocated(self.device)
             available_memory = total_memory - current_memory
             
-            # Use at most 20% of available memory per batch
-            target_memory = available_memory * 0.2
+            # Use at most 5% of available memory per batch
+            target_memory = available_memory * 0.05
 
             # Estimate memory per sample (this is a rough estimate and might need adjustment)
             sample_size = sum(p.numel() * p.element_size() for p in self.model.parameters())

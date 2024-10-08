@@ -39,6 +39,8 @@ def create_base_experiment_config(config):
     """Create an RLExperimentConfig based on the provided configuration."""
     rewarder = SumRewardAggregator([])  # Add reward computers as needed
 
+    commonroad_config = config['commonroad']
+
     termination_criteria = [TimeoutCriterion(500)]
 
     feature_computers = TrafficFeatureComputerOptions(
@@ -57,7 +59,7 @@ def create_base_experiment_config(config):
     
     experiment_config = RLExperimentConfig(
         control_space_cls=SteeringAccelerationSpace,
-        control_space_options=config['control_space'],
+        control_space_options=commonroad_config['control_space'],
         ego_vehicle_simulation_options=EgoVehicleSimulationOptions(
             vehicle_model=VehicleModel.KS,
             vehicle_type=VehicleType.BMW_320i
@@ -70,18 +72,18 @@ def create_base_experiment_config(config):
             preprocessor=chain_preprocessors(*create_scenario_preprocessors()),
         ),
         respawner_cls=RandomRespawner,
-        respawner_options=config['respawner'],
+        respawner_options=commonroad_config['respawner'],
         rewarder=rewarder,
         simulation_cls=ScenarioSimulation,
-        simulation_options=config['simulation'],
+        simulation_options=commonroad_config['simulation'],
         termination_criteria=termination_criteria,
         traffic_extraction_factory=TrafficExtractorFactory(options=TrafficExtractorOptions(
-            edge_drawer=config['traffic_extraction']['edge_drawer'],
-            postprocessors=config['traffic_extraction']['postprocessors'],
-            only_ego_inc_edges=config['traffic_extraction']['only_ego_inc_edges'],
-            assign_multiple_lanelets=config['traffic_extraction']['assign_multiple_lanelets'],
-            ego_map_radius=config['traffic_extraction']['ego_map_radius'],
-            include_lanelet_vertices=config['traffic_extraction']['include_lanelet_vertices'],
+            edge_drawer=commonroad_config['traffic_extraction']['edge_drawer'],
+            postprocessors=commonroad_config['traffic_extraction']['postprocessors'],
+            only_ego_inc_edges=commonroad_config['traffic_extraction']['only_ego_inc_edges'],
+            assign_multiple_lanelets=commonroad_config['traffic_extraction']['assign_multiple_lanelets'],
+            ego_map_radius=commonroad_config['traffic_extraction']['ego_map_radius'],
+            include_lanelet_vertices=commonroad_config['traffic_extraction']['include_lanelet_vertices'],
             feature_computers=feature_computers
         ))
     )

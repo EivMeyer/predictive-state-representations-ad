@@ -37,13 +37,13 @@ dataset:
   # Number of episodes per batch
   storage_batch_size: 1024 
   # Number of timesteps for observation
-  t_obs: 10
+  t_obs: 8
   # Number of timesteps for prediction
-  t_pred: 10
+  t_pred: 8
   # Number of frames to skip between each recorded observation frame
   obs_skip_frames: 0
   # Number of frames to skip between each recorded prediction frame
-  pred_skip_frames: 4
+  pred_skip_frames: 3
 
 wandb:
   # Enable Weights & Biases logging
@@ -77,7 +77,7 @@ models:
 # Training configuration
 training:
   # Type of model to use for training
-  model_type: "PredictiveModelV9M2" # AutoEncoderModelV0, AutoEncoderModelV0M1, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, PredictiveModelV9M2, VQVAEPredictiveModel
+  model_type: "AutoEncoderModelV0" # AutoEncoderModelV0, AutoEncoderModelV0M1, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, PredictiveModelV9M2, VQVAEPredictiveModel
   # Set this to the path of a checkpoint to resume training
   warmstart_model: null # "../models/pretrained/predictive_model_v9m1.pth"
   # Whether to continue from the last scheduler state
@@ -93,7 +93,7 @@ training:
   # Minibatch size
   minibatch_size: 16
   # Number of training iterations per batch
-  iterations_per_batch: 4
+  iterations_per_batch: 1
   # Whether to compute and print a validation error at each minibatch (slow)
   track_val_loss: false
   # Factor to downsample input images
@@ -205,9 +205,9 @@ rl_training:
 # Viewer options
 viewer:
   # Range of view in the simulation
-  view_range: 90.0
+  view_range: 65.0
   # Size of the viewer window
-  window_size: 128
+  window_size: 64
 
 # Environment-specific options
 commonroad: 
