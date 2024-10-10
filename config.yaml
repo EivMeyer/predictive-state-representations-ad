@@ -37,13 +37,13 @@ dataset:
   # Number of episodes per batch
   storage_batch_size: 1024 
   # Number of timesteps for observation
-  t_obs: 8
+  t_obs: 10
   # Number of timesteps for prediction
-  t_pred: 8
+  t_pred: 10
   # Number of frames to skip between each recorded observation frame
   obs_skip_frames: 0
   # Number of frames to skip between each recorded prediction frame
-  pred_skip_frames: 3
+  pred_skip_frames: 4
 
 wandb:
   # Enable Weights & Biases logging
