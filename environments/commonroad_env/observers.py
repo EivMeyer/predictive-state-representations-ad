@@ -207,8 +207,11 @@ class RepresentationObserver(BaseObserver):
         self.im_rep.autoscale()
 
         self.fig.canvas.draw()
+        if False:
+            import os
+            os.makedirs('./debug_plots', exist_ok=True)
+            self.fig.savefig(f'./debug_plots/step_{self.call_count}.pdf')
         self.fig.canvas.flush_events()
-
 
     def reset(self, ego_vehicle_simulation: EgoVehicleSimulation) -> None:
         self.obs_buffer.clear()
@@ -302,6 +305,6 @@ def create_representation_observer(cfg, device):
     else:
         device = device
     representation_model = create_representation_model(cfg, device)
-    render_observer = create_render_observer(cfg['commonroad']['viewer'])
+    render_observer = create_render_observer(cfg['viewer'])
     representation_observer = RepresentationObserver(representation_model, device, debug=cfg['debug_mode'], render_observer=render_observer, sequence_length=cfg['dataset']['t_obs'])
     return representation_observer
