@@ -77,7 +77,7 @@ models:
 # Training configuration
 training:
   # Type of model to use for training
-  model_type: "AutoEncoderModelV0" # AutoEncoderModelV0, AutoEncoderModelV0M1, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, PredictiveModelV9M2, VQVAEPredictiveModel
+  model_type: "PredictiveModelV9M1" # AutoEncoderModelV0, AutoEncoderModelV0M1, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, PredictiveModelV9M2, VQVAEPredictiveModel
   # Set this to the path of a checkpoint to resume training
   warmstart_model: null # "../models/pretrained/predictive_model_v9m1.pth"
   # Whether to continue from the last scheduler state
@@ -178,36 +178,45 @@ rl_training:
   # Total number of timesteps for training
   total_timesteps: 10000000
   # Learning rate for the optimizer
-  learning_rate: 1.5e-4
+  learning_rate: 
+    initial: 3e-4
+    schedule: "linear"
+    end: 1e-5
   # Number of steps to collect samples for each update
-  n_steps: 256
+  n_steps: 1024
   # Batch size for each update
-  batch_size: 32
+  batch_size: 256
   # Number of epochs to train the model
-  n_epochs: 8
+  n_epochs: 4
   # Discount factor for future rewards
   gamma: 0.99
   # Lambda parameter for Generalized Advantage Estimation
   gae_lambda: 0.8
   # Clipping range for the surrogate objective
-  clip_range: 0.2
+  clip_range: 
+    initial: 0.2
+    schedule: "linear"
+    end: 0.05
   # Coefficient for the entropy loss
-  ent_coef: 0.01
+  ent_coef: 
+    initial: 0.05
+    schedule: "linear"
+    end: 0.01
   # Coefficient for the value function loss
   vf_coef: 0.5
   # Maximum norm for gradient clipping
   max_grad_norm: 10.0
   # Network architecture for the policy and value function
   net_arch:
-    pi: [64, 64]
-    vf: [64, 64]
+    pi: [256, 256, 128]
+    vf: [256, 256, 128]
 
 # Viewer options
 viewer:
   # Range of view in the simulation
   view_range: 65.0
   # Size of the viewer window
-  window_size: 64
+  window_size: 256
 
 # Environment-specific options
 commonroad: 
