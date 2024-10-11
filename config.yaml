@@ -178,10 +178,7 @@ rl_training:
   # Total number of timesteps for training
   total_timesteps: 10000000
   # Learning rate for the optimizer
-  learning_rate: 
-    initial: 3e-4
-    schedule: "linear"
-    end: 1e-5
+  learning_rate: 5e-5
   # Number of steps to collect samples for each update
   n_steps: 1024
   # Batch size for each update
@@ -193,15 +190,9 @@ rl_training:
   # Lambda parameter for Generalized Advantage Estimation
   gae_lambda: 0.8
   # Clipping range for the surrogate objective
-  clip_range: 
-    initial: 0.2
-    schedule: "linear"
-    end: 0.05
+  clip_range: 0.15
   # Coefficient for the entropy loss
-  ent_coef: 
-    initial: 0.05
-    schedule: "linear"
-    end: 0.01
+  ent_coef: 0.03
   # Coefficient for the value function loss
   vf_coef: 0.5
   # Maximum norm for gradient clipping
