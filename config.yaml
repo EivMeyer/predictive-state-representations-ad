@@ -216,7 +216,7 @@ viewer:
   # Range of view in the simulation
   view_range: 65.0
   # Size of the viewer window
-  window_size: 256
+  window_size: 64
 
 # Environment-specific options
 commonroad: 
