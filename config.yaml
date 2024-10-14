@@ -48,6 +48,8 @@ dataset:
   use_polar_transform: true
   # Whether to preprocess an existing dataset
   preprocess_existing: true
+  # Whether to preprocess online (i.e. during training)
+  preprocess_online: true
   # Number of worker processes for preprocessing (0 for single-process)
   preprocess_workers: 4
 

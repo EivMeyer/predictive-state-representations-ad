@@ -22,13 +22,13 @@ class EnvironmentDataset(Dataset):
         self.current_batch = []
         self.episode_files = []
         
-        if cfg.dataset.preprocess_existing:
+        if cfg.dataset.preprocess_existing and not cfg.dataset.preprocess_online:
             self.preprocess_dataset()
         
         self.update_file_list()
 
     def update_file_list(self):
-        if self.cfg.dataset.preprocess_existing:
+        if self.cfg.dataset.preprocess_existing and not cfg.dataset.preprocess_online:
             self.episode_files = sorted([f for f in os.listdir(self.preprocessed_dir) if f.startswith("batch_") and f.endswith(".pt")])
             self.use_preprocessed = True
         else:
@@ -136,7 +136,7 @@ class EnvironmentDataset(Dataset):
         
         data = torch.load(file_path, map_location='cpu')
 
-        if not self.use_preprocessed:
+        if not self.use_preprocessed and self.cfg.dataset.preprocess_online:
             # Apply preprocessing on-the-fly
             for key in ['observations', 'next_observations']:
                 if isinstance(data[key], np.ndarray):
