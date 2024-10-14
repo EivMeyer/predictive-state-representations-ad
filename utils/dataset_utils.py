@@ -5,20 +5,99 @@ import numpy as np
 import os
 import cv2
 import logging
+from utils.transformations import polar_transform
+from tqdm import tqdm
+from multiprocessing import Pool, cpu_count
 
 class EnvironmentDataset(Dataset):
-    def __init__(self, data_dir, downsample_factor=1, storage_batch_size=32):
-        self.data_dir = Path(data_dir)
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.data_dir = Path(cfg.project_dir) / "dataset"
+        self.preprocessed_dir = self.data_dir / "preprocessed"
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.downsample_factor = downsample_factor
-        self.storage_batch_size = storage_batch_size
+        self.preprocessed_dir.mkdir(parents=True, exist_ok=True)
+        self.downsample_factor = cfg.training.downsample_factor
+        self.storage_batch_size = cfg.dataset.storage_batch_size
+        self.use_polar_transform = cfg.dataset.use_polar_transform
         self.current_batch = []
         self.episode_files = []
+        
+        if cfg.dataset.preprocess_existing:
+            self.preprocess_dataset()
+        
         self.update_file_list()
 
     def update_file_list(self):
-        self.episode_files = sorted([f for f in os.listdir(self.data_dir) if f.startswith("batch_") and f.endswith(".pt")])
+        if self.cfg.dataset.preprocess_existing:
+            self.episode_files = sorted([f for f in os.listdir(self.preprocessed_dir) if f.startswith("batch_") and f.endswith(".pt")])
+            self.use_preprocessed = True
+        else:
+            self.episode_files = sorted([f for f in os.listdir(self.data_dir) if f.startswith("batch_") and f.endswith(".pt")])
+            self.use_preprocessed = False
         self.batch_count = len(self.episode_files)
+
+    def preprocess_dataset(self):
+        print("Preprocessing existing dataset...")
+        preprocessed_dir = self.data_dir / "preprocessed"
+        preprocessed_dir.mkdir(exist_ok=True)
+        
+        files_to_process = [f for f in self.data_dir.glob("batch_*.pt") if not (preprocessed_dir / f.name).exists()]
+        
+        if not files_to_process:
+            print("No files to preprocess or all files are already preprocessed.")
+            return
+        
+        num_workers = self.cfg.dataset.preprocess_workers if self.cfg.dataset.preprocess_workers > 0 else cpu_count()
+        
+        if num_workers > 1:
+            with Pool(num_workers) as pool:
+                list(tqdm(pool.imap(self.preprocess_file, files_to_process), total=len(files_to_process)))
+        else:
+            for file in tqdm(files_to_process):
+                self.preprocess_file(file)
+        
+        print("Preprocessing complete.")
+
+    def preprocess_file(self, file_path):
+        try:
+            data = torch.load(file_path)
+            
+            # Preprocess observations and next_observations
+            for key in ['observations', 'next_observations']:
+                data[key] = torch.stack([self._preprocess_image(img) for img in data[key]])
+            
+            # Save preprocessed data
+            preprocessed_path = self.data_dir / "preprocessed" / file_path.name
+            torch.save(data, preprocessed_path)
+        
+        except Exception as e:
+            print(f"Error preprocessing file {file_path}: {str(e)}")
+
+    def _preprocess_image(self, image):
+        # Ensure image is a numpy array
+        if not isinstance(image, np.ndarray):
+            image = np.array(image)
+
+        # If the input is a single image, add a batch dimension
+        if image.ndim == 3:
+            image = np.expand_dims(image, axis=0)
+
+        # Downsample if necessary
+        if self.downsample_factor > 1:
+            new_h, new_w = image.shape[2] // self.downsample_factor, image.shape[3] // self.downsample_factor
+            image = np.stack([cv2.resize(img.transpose(1, 2, 0), (new_w, new_h), 
+                                         interpolation=cv2.INTER_AREA).transpose(2, 0, 1) 
+                              for img in image])
+
+        # Convert to float32 and normalize to [0, 1] if necessary
+        if image.dtype == np.uint8:
+            image = image.astype(np.float32) / 255.0
+
+        # Apply polar transform if enabled
+        if self.use_polar_transform:
+            image = np.stack([polar_transform(img) for img in image])
+
+        return torch.from_numpy(image)
 
     def __getitem__(self, idx):
         if idx < 0 or idx >= self.batch_count:
@@ -50,16 +129,21 @@ class EnvironmentDataset(Dataset):
         }
 
     def _load_and_process_file(self, file):
-        file_path = self.data_dir / file
+        if self.use_preprocessed:
+            file_path = self.preprocessed_dir / file
+        else:
+            file_path = self.data_dir / file
+        
         data = torch.load(file_path, map_location='cpu')
 
-        # Convert images from uint8 to float32 and normalize if they are numpy arrays
-        for key in ['observations', 'next_observations']:
-            if isinstance(data[key], np.ndarray):
-                data[key] = torch.from_numpy(data[key]).float().div(255.0)
-            elif isinstance(data[key], torch.Tensor):
-                if data[key].dtype == torch.uint8:
-                    data[key] = data[key].float().div(255.0)
+        if not self.use_preprocessed:
+            # Apply preprocessing on-the-fly
+            for key in ['observations', 'next_observations']:
+                if isinstance(data[key], np.ndarray):
+                    data[key] = torch.stack([self._preprocess_image(img) for img in data[key]])
+                elif isinstance(data[key], torch.Tensor):
+                    if data[key].dtype == torch.uint8:
+                        data[key] = torch.stack([self._preprocess_image(img.numpy()) for img in data[key]])
 
         return data
 
@@ -92,29 +176,7 @@ class EnvironmentDataset(Dataset):
 
         if len(self.current_batch) >= self.storage_batch_size:
             self._save_current_batch()
-
-    def _preprocess_image(self, image):
-        # Ensure image is a numpy array
-        if not isinstance(image, np.ndarray):
-            image = np.array(image)
-
-        # Downsample if necessary
-        if self.downsample_factor > 1:
-            image = cv2.resize(image, (image.shape[1] // self.downsample_factor,
-                                       image.shape[0] // self.downsample_factor),
-                               interpolation=cv2.INTER_AREA)
-
-        # Check if the image needs to be transposed
-        if len(image.shape) == 3 and image.shape[2] in [1, 3, 4]:  # HWC format
-            image = image.transpose(2, 0, 1)  # Convert to CHW format
-        elif len(image.shape) == 2:  # Grayscale image
-            image = np.expand_dims(image, axis=0)  # Add channel dimension
-
-        # Ensure the image is uint8
-        image = np.asarray(image, dtype=np.uint8)
-
-        return image
-
+    
     def _save_current_batch(self):
         batch_data = {
             'observations': [],

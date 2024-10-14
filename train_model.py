@@ -441,13 +441,12 @@ def main(cfg: DictConfig) -> None:
 
     wandb = init_wandb(cfg)
 
-    dataset_path = Path(cfg.project_dir) / "dataset"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_name = f"{timestamp}_{wandb.run.name}_{cfg.training.model_type}" if cfg.wandb.enabled else f"{timestamp}_{cfg.training.model_type}"
     run_dir = Path(cfg.project_dir) / "models" / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     
-    full_dataset = EnvironmentDataset(dataset_path, downsample_factor=cfg.training.downsample_factor)
+    full_dataset = EnvironmentDataset(cfg)
     obs_shape, action_dim, ego_state_dim = get_data_dimensions(full_dataset)
     obs_shape = (cfg.dataset.t_pred, 3, cfg.viewer.window_size, cfg.viewer.window_size) # TODO
 

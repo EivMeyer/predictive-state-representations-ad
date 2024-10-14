@@ -44,6 +44,12 @@ dataset:
   obs_skip_frames: 0
   # Number of frames to skip between each recorded prediction frame
   pred_skip_frames: 4
+  # Whether to use polar transform for observations
+  use_polar_transform: true
+  # Whether to preprocess an existing dataset
+  preprocess_existing: true
+  # Number of worker processes for preprocessing (0 for single-process)
+  preprocess_workers: 0
 
 wandb:
   # Enable Weights & Biases logging

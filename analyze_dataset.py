@@ -53,8 +53,7 @@ def visualize_episode(episode: Dict[str, Any]) -> None:
 
 @config_wrapper()
 def main(cfg: DictConfig) -> None:
-    dataset_path = Path(cfg.project_dir) / "dataset"
-    dataset = EnvironmentDataset(dataset_path)
+    dataset = EnvironmentDataset(cfg)
     
     # Visualize the first 5 episodes as examples
     if len(dataset) > 0:

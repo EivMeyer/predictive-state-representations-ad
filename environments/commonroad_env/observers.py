@@ -38,6 +38,14 @@ from commonroad_geometric.learning.reinforcement.rewarder.reward_computer.base_r
 from commonroad_geometric.learning.reinforcement.rewarder.reward_computer.types import RewardLossMetric
 from commonroad_geometric.learning.reinforcement.rewarder.reward_aggregator.implementations import SumRewardAggregator
 from models import get_model_class
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+import matplotlib.patches as patches
+import numpy as np
+from matplotlib import font_manager
+
+# Global configuration
+SAVE_SEPARATE_PLOTS = True  # Set to True for separate plots, False for combined plot
 
 
 class RepresentationObserver(BaseObserver):
@@ -67,44 +75,6 @@ class RepresentationObserver(BaseObserver):
         if self.debug:
             self.setup_debug_plot()
         self.call_count = 0
-
-    def setup_debug_plot(self):
-        self.fig = plt.figure(figsize=(20, 6))
-        gs = self.fig.add_gridspec(1, 3, width_ratios=[1, 2, 1])
-
-        # Current observation
-        self.ax_obs = self.fig.add_subplot(gs[0, 0])
-        self.im_obs = self.ax_obs.imshow(np.zeros((64, 64, 3)))
-        self.ax_obs.set_title('Current Observation', fontsize=12, pad=10)
-        self.ax_obs.axis('off')
-
-        # Predictions grid
-        self.ax_pred = self.fig.add_subplot(gs[0, 1])
-        self.ax_pred.axis('off')
-        self.im_preds = []
-
-        for i in range(3):
-            for j in range(3):
-                # Adjust inset axes positions and ensure adequate spacing
-                ax = self.ax_pred.inset_axes([j/3 + 0.01, (2-i)/3 + 0.04, 0.28, 0.28])  # Reduced size and shifted positions
-                im = ax.imshow(np.zeros((64, 64, 3)))
-                self.im_preds.append(im)
-                ax.axis('off')
-                step = i * 3 + j
-                label = 't' if step == 0 else f't+{step}'
-                ax.set_title(label, fontsize=10, pad=8)  # Increased pad to separate labels from images
-
-        self.ax_pred.set_title('Predictions', fontsize=14, pad=20)  # Increased pad for main title to avoid overlap with top row
-
-        # Latent representation
-        self.ax_rep = self.fig.add_subplot(gs[0, 2])
-        self.im_rep = self.ax_rep.imshow(np.zeros((1, 1)), cmap='viridis', aspect='equal')
-        self.ax_rep.set_title('Latent Representation', fontsize=12, pad=10)
-        self.fig.colorbar(self.im_rep, ax=self.ax_rep)
-
-        plt.tight_layout(rect=[0, 0, 1, 0.95])  # Adjust layout to reduce space taken by tight_layout
-        plt.ion()
-        plt.show()
 
     def setup(self, dummy_data: Optional[CommonRoadData] = None) -> gymnasium.Space:
         render_space = self.render_observer.setup(dummy_data)
@@ -184,20 +154,147 @@ class RepresentationObserver(BaseObserver):
 
         return representation
 
+    def reset(self, ego_vehicle_simulation: EgoVehicleSimulation) -> None:
+        self.obs_buffer.clear()
+        self.ego_state_buffer.clear()
+        self.is_first_observation = True
+        if self.debug:
+            print("RepresentationObserver reset: Cleared observation and ego state buffers.")
+
+    def setup_debug_plot(self):
+        # Set up LaTeX-like plotting style
+        plt.rcParams.update({
+            "font.family": "serif",
+            "font.serif": ["Computer Modern Roman"],
+            "text.usetex": True,
+            "pgf.rcfonts": False,
+        })
+
+        # Increase the default font sizes
+        plt.rcParams.update({
+            'font.size': 12,
+            'axes.titlesize': 14,
+            'axes.labelsize': 12,
+            'xtick.labelsize': 11,
+            'ytick.labelsize': 11,
+        })
+        
+        if SAVE_SEPARATE_PLOTS:
+            self.setup_separate_plots()
+        else:
+            self.setup_combined_plot()
+
+        plt.ion()
+        plt.show()
+
+    def setup_separate_plots(self):
+        # Create three separate figures
+        self.fig_obs = plt.figure(figsize=(5, 5))
+        self.fig_pred = plt.figure(figsize=(10, 10))
+        self.fig_rep = plt.figure(figsize=(5, 5))
+
+        # Current observation
+        self.ax_obs = self.fig_obs.add_subplot(111)
+        self.im_obs = self.ax_obs.imshow(np.zeros((64, 64, 3)))
+        self.ax_obs.axis('off')
+
+        # Predictions grid
+        self.ax_pred = self.fig_pred.add_subplot(111)
+        self.ax_pred.axis('off')
+        self.im_preds = []
+
+        for i in range(3):
+            for j in range(3):
+                ax = self.ax_pred.inset_axes([j/3 + 0.02, (2-i)/3 + 0.02, 0.29, 0.29])
+                im = ax.imshow(np.zeros((64, 64, 3)), cmap='viridis')
+                self.im_preds.append(im)
+                ax.axis('off')
+                rect = patches.Rectangle((0, 0), 1, 1, linewidth=1, edgecolor='black', facecolor='none')
+                ax.add_patch(rect)
+                step = i * 3 + j
+                label = '$t$' if step == 0 else f'$t+{step}$'
+                ax.set_title(label, fontsize=17, pad=8)
+
+        # Latent representation
+        self.ax_rep = self.fig_rep.add_subplot(111)
+        self.im_rep = self.ax_rep.imshow(np.zeros((1, 1)), cmap='viridis', aspect='equal')
+        cbar = self.fig_rep.colorbar(self.im_rep, ax=self.ax_rep)
+        cbar.set_label('Value', fontsize=12)
+
+    def setup_combined_plot(self):
+        self.fig = plt.figure(figsize=(15, 5))
+        gs = self.fig.add_gridspec(1, 3, width_ratios=[1, 2, 1], wspace=0.3)
+
+        # Current observation
+        self.ax_obs = self.fig.add_subplot(gs[0, 0])
+        self.im_obs = self.ax_obs.imshow(np.zeros((64, 64, 3)))
+        self.ax_obs.axis('off')
+
+        # Predictions grid
+        self.ax_pred = self.fig.add_subplot(gs[0, 1])
+        self.ax_pred.axis('off')
+        self.im_preds = []
+
+        for i in range(3):
+            for j in range(3):
+                ax = self.ax_pred.inset_axes([j/3 + 0.02, (2-i)/3 + 0.02, 0.29, 0.29])
+                im = ax.imshow(np.zeros((64, 64, 3)), cmap='viridis')
+                self.im_preds.append(im)
+                ax.axis('off')
+                rect = patches.Rectangle((0, 0), 1, 1, linewidth=1, edgecolor='black', facecolor='none')
+                ax.add_patch(rect)
+                step = i * 3 + j
+                label = '$t$' if step == 0 else f'$t+{step}$'
+                ax.set_title(label, fontsize=14, pad=8)
+
+        # Latent representation
+        self.ax_rep = self.fig.add_subplot(gs[0, 2])
+        self.im_rep = self.ax_rep.imshow(np.zeros((1, 1)), cmap='viridis', aspect='equal')
+        cbar = self.fig.colorbar(self.im_rep, ax=self.ax_rep)
+        cbar.set_label('Value', fontsize=12)
+
     def update_debug_plot(self, current_obs, predictions, representation):
+        if SAVE_SEPARATE_PLOTS:
+            self.update_separate_plots(current_obs, predictions, representation)
+        else:
+            self.update_combined_plot(current_obs, predictions, representation)
+
+    def update_separate_plots(self, current_obs, predictions, representation):
+        # Update current observation
+        self.im_obs.set_data(current_obs)
+        self.fig_obs.canvas.draw()
+        self.fig_obs.savefig(f'./debug_plots/step_{self.call_count}_observation.pdf', dpi=300, bbox_inches='tight')
+
+        # Update predictions
+        for i, im in enumerate(self.im_preds):
+            if i < len(predictions):
+                pred = predictions[i]
+                im.set_data(pred)
+            else:
+                im.set_data(np.zeros_like(current_obs))
+            im.set_extent([0, current_obs.shape[1], current_obs.shape[0], 0])
+        self.fig_pred.canvas.draw()
+        self.fig_pred.savefig(f'./debug_plots/step_{self.call_count}_predictions.pdf', dpi=300, bbox_inches='tight')
+
+        # Update latent representation
+        rep_dim = int(np.sqrt(representation.shape[0]))
+        rep_reshaped = representation.reshape(rep_dim, rep_dim)
+        self.im_rep.set_data(rep_reshaped)
+        self.im_rep.autoscale()
+        self.fig_rep.canvas.draw()
+        self.fig_rep.savefig(f'./debug_plots/step_{self.call_count}_representation.pdf', dpi=300, bbox_inches='tight')
+
+    def update_combined_plot(self, current_obs, predictions, representation):
         # Update current observation
         self.im_obs.set_data(current_obs)
 
         # Update predictions
         for i, im in enumerate(self.im_preds):
             if i < len(predictions):
-                # Ensure the prediction is in the same orientation as the current observation
                 pred = predictions[i]
                 im.set_data(pred)
             else:
                 im.set_data(np.zeros_like(current_obs))
-
-            # Ensure aspect ratio matches the current observation
             im.set_extent([0, current_obs.shape[1], current_obs.shape[0], 0])
 
         # Update latent representation
@@ -207,26 +304,15 @@ class RepresentationObserver(BaseObserver):
         self.im_rep.autoscale()
 
         self.fig.canvas.draw()
-        if False:
-            import os
-            os.makedirs('./debug_plots', exist_ok=True)
-            self.fig.savefig(f'./debug_plots/step_{self.call_count}.pdf')
-        self.fig.canvas.flush_events()
+        self.fig.savefig(f'./debug_plots/step_{self.call_count}_combined.pdf', dpi=300, bbox_inches='tight')
 
-    def reset(self, ego_vehicle_simulation: EgoVehicleSimulation) -> None:
-        self.obs_buffer.clear()
-        self.ego_state_buffer.clear()
-        self.is_first_observation = True
-        if self.debug:
-            print("RepresentationObserver reset: Cleared observation and ego state buffers.")
 
 def create_representation_model(cfg, device):
-    dataset_path = Path(cfg['project_dir']) / "dataset"
     model_save_dir = Path(cfg['project_dir']) / "models"
     model_save_dir.mkdir(parents=True, exist_ok=True)
 
     # Load the full dataset
-    full_dataset = EnvironmentDataset(dataset_path, downsample_factor=cfg['training']['downsample_factor'])
+    full_dataset = EnvironmentDataset(cfg)
 
     # Get data dimensions
     obs_shape, action_dim, ego_state_dim = get_data_dimensions(full_dataset)

@@ -86,8 +86,7 @@ def main():
     print(f"Using device: {device}")
 
     print("Loading dataset...")
-    dataset_path = Path(cfg.project_dir) / "dataset"
-    full_dataset = EnvironmentDataset(dataset_path, downsample_factor=cfg.training.downsample_factor)
+    full_dataset = EnvironmentDataset(cfg)
     print(f"Dataset loaded with {len(full_dataset)} samples.")
 
     print("Getting data dimensions...")
