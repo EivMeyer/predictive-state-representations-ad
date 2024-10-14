@@ -28,7 +28,7 @@ class EnvironmentDataset(Dataset):
         self.update_file_list()
 
     def update_file_list(self):
-        if self.cfg.dataset.preprocess_existing and not cfg.dataset.preprocess_online:
+        if self.cfg.dataset.preprocess_existing and not self.cfg.dataset.preprocess_online:
             self.episode_files = sorted([f for f in os.listdir(self.preprocessed_dir) if f.startswith("batch_") and f.endswith(".pt")])
             self.use_preprocessed = True
         else:
