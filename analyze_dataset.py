@@ -10,14 +10,15 @@ import numpy as np
 from typing import Dict, Any
 
 def visualize_episode(episode: Dict[str, Any]) -> None:
-    observations, next_observations = episode['observations'], episode['next_observations']
+    observations, next_observations, dones = episode['observations'], episode['next_observations'], episode['dones']
     
     # Select first batch if batched
     if observations.ndim == 5:
         observations = observations[0]
         next_observations = next_observations[0]
+        dones = dones[0]
     
-    num_frames = len(observations)
+    num_frames = max(len(observations), len(next_observations))
     
     # Create a figure with two rows: one for observations, one for next_observations
     fig, axs = plt.subplots(2, num_frames, figsize=(4*num_frames, 8))
@@ -25,7 +26,7 @@ def visualize_episode(episode: Dict[str, Any]) -> None:
     
     for i in range(num_frames):
         # Process and display observation
-        obs_image = np.squeeze(observations[i])
+        obs_image = np.squeeze(observations[i]) if i < len(observations) else np.zeros_like(observations[0])
         if obs_image.shape[0] == 3:
             obs_image = np.transpose(obs_image, (1, 2, 0))
         
@@ -37,13 +38,13 @@ def visualize_episode(episode: Dict[str, Any]) -> None:
             axs[0, i].text(0.5, 0.5, 'Invalid shape', ha='center', va='center')
         
         # Process and display next_observation
-        next_obs_image = np.squeeze(next_observations[i])
+        next_obs_image = np.squeeze(next_observations[i]) if i < len(next_observations) else np.zeros_like(next_observations[0])
         if next_obs_image.shape[0] == 3:
             next_obs_image = np.transpose(next_obs_image, (1, 2, 0))
         
         if next_obs_image.ndim == 3:
             axs[1, i].imshow(next_obs_image)
-            axs[1, i].set_title(f'Next Obs {i+1}')
+            axs[1, i].set_title(f'Next Obs {i+1} ' + '(X)' if dones[i].item() else '')
             axs[1, i].axis('off')
         else:
             axs[1, i].text(0.5, 0.5, 'Invalid shape', ha='center', va='center')

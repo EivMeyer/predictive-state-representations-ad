@@ -41,7 +41,7 @@ def setup_visualization(input_seq_len, pred_seq_len):
     plt.show(block=False)  # Show the figure without blocking
     return fig, axes
 
-def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoch, train_predictions, train_ground_truth, metrics):
+def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoch, train_predictions, train_ground_truth, metrics, done_probs=None, target_dones=None):
     def clear_axes(ax_list):
         for ax in ax_list:
             ax.clear()
@@ -75,18 +75,24 @@ def visualize_prediction(fig, axes, observations, ground_truth, prediction, epoc
         for i in range(pred_seq_len):
             gt_np = normalize(prepare_image(ground_truth[sample_num-1, i]))
             pred_np = normalize(prepare_image(prediction[sample_num-1, i]))
+
+            if target_dones is not None:
+                title_gt = f'GT {sample_num} (t+{i+1}) ' + '(X)' if target_dones[sample_num-1, i] else ''
+                title_pred = f'Pred {sample_num} (t+{i+1}) ' + f"({done_probs[sample_num-1, i]:.2f})" if done_probs is not None else ''
+            else:
+                title_gt = f'GT {sample_num} (t+{i+1})'
+                title_pred = f'Pred {sample_num} (t+{i+1})'
             
             axes[f'gt_{sample_num}'][i].imshow(gt_np, cmap='viridis' if gt_np.ndim == 2 else None)
-            axes[f'gt_{sample_num}'][i].set_title(f'GT {sample_num} (t+{i+1})', fontsize=8)
+            axes[f'gt_{sample_num}'][i].set_title(title_gt, fontsize=8)
             
             axes[f'pred_{sample_num}'][i].imshow(pred_np, cmap='viridis' if pred_np.ndim == 2 else None)
-            axes[f'pred_{sample_num}'][i].set_title(f'Pred {sample_num} (t+{i+1})', fontsize=8)
+            axes[f'pred_{sample_num}'][i].set_title(title_pred, fontsize=8)
     
     # Plot samples
     plot_sample(1)
     plot_sample(2)
 
-    
     # Display 3x3 grid of training predictions and ground truths
     num_train_preds = min(9, len(train_predictions))
     for i in range(len(axes['train'])):

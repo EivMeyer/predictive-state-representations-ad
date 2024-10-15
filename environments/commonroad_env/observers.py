@@ -45,12 +45,13 @@ import numpy as np
 from matplotlib import font_manager
 
 # Global configuration
-SAVE_SEPARATE_PLOTS = True  # Set to True for separate plots, False for combined plot
-
+SAVE_SEPARATE_PLOTS = False  # Set to True for separate plots, False for combined plot
+SAVE_PLOTS = False
 
 class RepresentationObserver(BaseObserver):
     def __init__(
         self, 
+        dataset: EnvironmentDataset,
         representation_model, 
         device, 
         render_observer: RenderObserver, 
@@ -60,6 +61,7 @@ class RepresentationObserver(BaseObserver):
         debug_freq: int = 1
     ):
         super().__init__()
+        self.dataset = dataset
         self.representation_model = representation_model
         self.device = device
         self.render_observer = render_observer
@@ -104,7 +106,10 @@ class RepresentationObserver(BaseObserver):
         data: CommonRoadData,
         ego_vehicle_simulation: EgoVehicleSimulation
     ) -> T_Observation:
-        render_obs = self.render_observer.observe(data, ego_vehicle_simulation) / 255.0
+        render_obs_raw = self.render_observer.observe(data, ego_vehicle_simulation)
+        render_obs = self.dataset.preprocess_image(render_obs_raw)
+        if render_obs.ndim == 4:
+            render_obs = render_obs[0, ...]  # Remove the first dimension (batch dimension)
 
         ego_state = np.array([
             ego_vehicle_simulation.ego_vehicle.state.velocity,
@@ -263,7 +268,8 @@ class RepresentationObserver(BaseObserver):
         # Update current observation
         self.im_obs.set_data(current_obs)
         self.fig_obs.canvas.draw()
-        self.fig_obs.savefig(f'./debug_plots/step_{self.call_count}_observation.pdf', dpi=300, bbox_inches='tight')
+        if SAVE_PLOTS:
+            self.fig_obs.savefig(f'./debug_plots/step_{self.call_count}_observation.pdf', dpi=300, bbox_inches='tight')
 
         # Update predictions
         for i, im in enumerate(self.im_preds):
@@ -274,7 +280,8 @@ class RepresentationObserver(BaseObserver):
                 im.set_data(np.zeros_like(current_obs))
             im.set_extent([0, current_obs.shape[1], current_obs.shape[0], 0])
         self.fig_pred.canvas.draw()
-        self.fig_pred.savefig(f'./debug_plots/step_{self.call_count}_predictions.pdf', dpi=300, bbox_inches='tight')
+        if SAVE_PLOTS:
+            self.fig_pred.savefig(f'./debug_plots/step_{self.call_count}_predictions.pdf', dpi=300, bbox_inches='tight')
 
         # Update latent representation
         rep_dim = int(np.sqrt(representation.shape[0]))
@@ -282,7 +289,8 @@ class RepresentationObserver(BaseObserver):
         self.im_rep.set_data(rep_reshaped)
         self.im_rep.autoscale()
         self.fig_rep.canvas.draw()
-        self.fig_rep.savefig(f'./debug_plots/step_{self.call_count}_representation.pdf', dpi=300, bbox_inches='tight')
+        if SAVE_PLOTS:
+            self.fig_rep.savefig(f'./debug_plots/step_{self.call_count}_representation.pdf', dpi=300, bbox_inches='tight')
 
     def update_combined_plot(self, current_obs, predictions, representation):
         # Update current observation
@@ -304,7 +312,9 @@ class RepresentationObserver(BaseObserver):
         self.im_rep.autoscale()
 
         self.fig.canvas.draw()
-        self.fig.savefig(f'./debug_plots/step_{self.call_count}_combined.pdf', dpi=300, bbox_inches='tight')
+        self.fig.canvas.flush_events()
+        if SAVE_PLOTS:
+            self.fig.savefig(f'./debug_plots/step_{self.call_count}_combined.pdf', dpi=300, bbox_inches='tight')
 
 
 def create_representation_model(cfg, device):
@@ -392,5 +402,6 @@ def create_representation_observer(cfg, device):
         device = device
     representation_model = create_representation_model(cfg, device)
     render_observer = create_render_observer(cfg['viewer'])
-    representation_observer = RepresentationObserver(representation_model, device, debug=cfg['debug_mode'], render_observer=render_observer, sequence_length=cfg['dataset']['t_obs'])
+    dataset = EnvironmentDataset(cfg)
+    representation_observer = RepresentationObserver(dataset, representation_model, device, debug=cfg['debug_mode'], render_observer=render_observer, sequence_length=cfg['dataset']['t_obs'])
     return representation_observer

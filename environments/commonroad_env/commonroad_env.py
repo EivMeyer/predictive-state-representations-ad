@@ -14,10 +14,10 @@ class CommonRoadEnv(BaseEnv):
 
     def make_env(self, config, n_envs, seed, rl_mode=False):
         experiment_config = create_base_experiment_config(OmegaConf.to_container(config, resolve=True))
+        experiment_config.termination_criteria = create_termination_criteria()
         if rl_mode:
             experiment_config.env_options.observer = create_representation_observer(config, config['device'])
             experiment_config.rewarder = SumRewardAggregator(create_rewarders())
-            experiment_config.termination_criteria = create_termination_criteria()
             experiment_config.respawner_options['init_steering_angle'] = 0.0
             experiment_config.respawner_options['init_orientation_noise'] = 0.0
             experiment_config.respawner_options['init_position_noise'] = 0.0

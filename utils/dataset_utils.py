@@ -8,9 +8,12 @@ import logging
 from utils.transformations import polar_transform
 from tqdm import tqdm
 from multiprocessing import Pool, cpu_count
+from omegaconf import OmegaConf
 
 class EnvironmentDataset(Dataset):
     def __init__(self, cfg):
+        if isinstance(cfg, dict):
+            cfg = OmegaConf.create(cfg)
         self.cfg = cfg
         self.data_dir = Path(cfg.project_dir) / "dataset"
         self.preprocessed_dir = self.data_dir / "preprocessed"
@@ -64,7 +67,7 @@ class EnvironmentDataset(Dataset):
             
             # Preprocess observations and next_observations
             for key in ['observations', 'next_observations']:
-                data[key] = torch.stack([self._preprocess_image(img) for img in data[key]])
+                data[key] = torch.stack([self.preprocess_image(img) for img in data[key]])
             
             # Save preprocessed data
             preprocessed_path = self.data_dir / "preprocessed" / file_path.name
@@ -73,7 +76,7 @@ class EnvironmentDataset(Dataset):
         except Exception as e:
             print(f"Error preprocessing file {file_path}: {str(e)}")
 
-    def _preprocess_image(self, image):
+    def preprocess_image(self, image, normalize=True):
         # Ensure image is a numpy array
         if not isinstance(image, np.ndarray):
             image = np.array(image)
@@ -90,7 +93,7 @@ class EnvironmentDataset(Dataset):
                               for img in image])
 
         # Convert to float32 and normalize to [0, 1] if necessary
-        if image.dtype == np.uint8:
+        if normalize and image.dtype == np.uint8:
             image = image.astype(np.float32) / 255.0
 
         # Apply polar transform if enabled
@@ -140,10 +143,33 @@ class EnvironmentDataset(Dataset):
             # Apply preprocessing on-the-fly
             for key in ['observations', 'next_observations']:
                 if isinstance(data[key], np.ndarray):
-                    data[key] = torch.stack([self._preprocess_image(img) for img in data[key]])
+                    data[key] = torch.stack([self.preprocess_image(img) for img in data[key]])
                 elif isinstance(data[key], torch.Tensor):
                     if data[key].dtype == torch.uint8:
-                        data[key] = torch.stack([self._preprocess_image(img.numpy()) for img in data[key]])
+                        data[key] = torch.stack([self.preprocess_image(img.numpy()) for img in data[key]])
+
+        else:
+            # Convert to tensors if necessary
+            for key in data:
+                if isinstance(data[key], np.ndarray):
+                    # Normalize observations and next_observations to [0, 1]
+                    if key in ['observations', 'next_observations']:
+                        data[key] = torch.from_numpy(data[key].astype(np.float32) / 255.0)
+                    else:
+                        data[key] = torch.from_numpy(data[key])
+
+        # Remove 3rd dimension if present and has length 1
+        for key in ['observations', 'next_observations']:
+            if data[key].shape[2] == 1:
+                data[key] = data[key].squeeze(2)
+
+        # Permute to (seq_len, batch_size, channels, height, width) if necessary
+        if data['observations'].shape[-1] != data['observations'].shape[-2]:
+            for key in ['observations', 'next_observations']:
+                if isinstance(data[key], np.ndarray):
+                    data[key] = np.transpose(data[key], (0, 1, 4, 2, 3))
+                else:
+                    data[key] = data[key].permute(0, 1, 4, 2, 3).contiguous()
 
         return data
 
@@ -160,8 +186,8 @@ class EnvironmentDataset(Dataset):
 
     def add_episode(self, observations, actions, ego_states, next_observations, next_actions, dones):
         # Preprocess images as uint8 for storage
-        observations = np.stack([self._preprocess_image(obs) for obs in observations])
-        next_observations = np.stack([self._preprocess_image(obs) for obs in next_observations])
+        observations = np.stack([self.preprocess_image(obs, normalize=False) for obs in observations])
+        next_observations = np.stack([self.preprocess_image(obs, normalize=False) for obs in next_observations])
 
         # Convert data to tensors at this stage
         episode_data = {
@@ -235,9 +261,16 @@ class EnvironmentDataset(Dataset):
         self.current_batch = []
 
     def _sanity_check(self, batch_data):
+        # Check for required keys
         assert all(key in batch_data for key in ['observations', 'actions', 'ego_states', 'next_observations', 'next_actions', 'dones']), "Missing keys in batch data"
-        assert all(len(batch_data[key]) == len(batch_data['observations']) for key in batch_data), "Inconsistent batch sizes"
+        
+        # Check for consistent batch sizes
+        assert all(batch_data[key].shape[0] == batch_data['observations'].shape[0] for key in batch_data), "Inconsistent batch sizes"
+        
+        # Check for correct batch size
         assert batch_data['observations'].shape[0] == self.storage_batch_size, f"Incorrect batch size: {batch_data['observations'].shape[0]} vs {self.storage_batch_size}"
+
+        print("Sanity check passed successfully.")
 
     def __len__(self):
         return self.batch_count

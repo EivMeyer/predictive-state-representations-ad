@@ -8,98 +8,120 @@ from environments import get_environment
 
 def collect_episodes(cfg_dict, env, num_episodes):
     dataset = EnvironmentDataset(cfg_dict)
-
     num_envs = env.num_envs if hasattr(env, 'num_envs') else 1
-    
+    t_obs = cfg_dict['dataset']['t_obs']
+    t_pred = cfg_dict['dataset']['t_pred']
+    obs_skip_frames = cfg_dict['dataset']['obs_skip_frames']
+    pred_skip_frames = cfg_dict['dataset']['pred_skip_frames']
+
     episodes_collected = 0
     with tqdm(total=num_episodes, desc="Collecting episodes") as pbar:
         while episodes_collected < num_episodes:
-            obs_sequences, action_sequences, ego_state_sequences = [], [], []
-            next_obs_sequences, next_action_sequences, done_sequences = [], [], []
-            
             obs = env.reset()
             
-            # Collect observations
-            for t in range(cfg_dict['dataset']['t_obs'] * (cfg_dict['dataset']['obs_skip_frames'] + 1)):
-                actions = [env.action_space.sample() for _ in range(num_envs)]
-                step_tuple = env.step(actions)
-                if len(step_tuple) == 4:
-                    new_obs, rewards, dones, infos = env.step(actions)
-                else:
-                    new_obs, rewards, dones, _, infos = env.step(actions)
-                
-                if isinstance(dones, bool):
-                    # Put all return values in a list
-                    new_obs = [new_obs]
-                    rewards = [rewards]
-                    dones = [dones]
-                    infos = [infos]
+            # Initialize sequences
+            obs_sequences = [[] for _ in range(num_envs)]
+            action_sequences = [[] for _ in range(num_envs)]
+            ego_state_sequences = [[] for _ in range(num_envs)]
 
-                try:
-                    ego_states = env.get_attr('ego_vehicle_simulation')
-                    ego_states = [np.array([e.ego_vehicle.state.velocity, 
-                                            e.ego_vehicle.state.acceleration, 
-                                            e.ego_vehicle.state.steering_angle, 
-                                            e.ego_vehicle.state.yaw_rate]) for e in ego_states]
-                except AttributeError: # THIS IS A HACK FOR THE COMMONROAD ENVIRONMENT. REMOVE THIS LATER. REPLACE WITH A BETTER SOLUTION
-                    ego_states = [np.zeros(4) for _ in range(num_envs)]
-                
-                
-                if t % (cfg_dict['dataset']['obs_skip_frames'] + 1) == 0:
+            # Collect observations
+            terminated_during_obs = False
+            for t in range(t_obs * (obs_skip_frames + 1)):
+                actions = [env.action_space.sample() for _ in range(num_envs)]
+                next_obs, rewards, dones, infos = env.step(actions)
+
+                if any(dones):
+                    terminated_during_obs = True
+                    break
+
+                if t % (obs_skip_frames + 1) == 0:
                     for i in range(num_envs):
-                        if len(obs_sequences) <= i:
-                            obs_sequences.append([])
-                            action_sequences.append([])
-                            ego_state_sequences.append([])
-                        
                         obs_sequences[i].append(obs[i])
                         action_sequences[i].append(actions[i])
-                        ego_state_sequences[i].append(ego_states[i])
-                
-                obs = new_obs
-            
-            # Collect predictions
-            for t in range(cfg_dict['dataset']['t_pred'] * (cfg_dict['dataset']['pred_skip_frames'] + 1)):
-                actions = [np.zeros(env.action_space.shape) for _ in range(num_envs)]
-                
-                if len(step_tuple) == 4:
-                    new_obs, rewards, dones, infos = env.step(actions)
-                else:
-                    new_obs, rewards, dones, _, infos = env.step(actions)
+                        ego_states = env.get_attr('ego_vehicle_simulation')
+                        ego_state = np.array([
+                            ego_states[i].ego_vehicle.state.velocity,
+                            ego_states[i].ego_vehicle.state.acceleration,
+                            ego_states[i].ego_vehicle.state.steering_angle,
+                            ego_states[i].ego_vehicle.state.yaw_rate
+                        ])
+                        ego_state_sequences[i].append(ego_state)
 
-                if isinstance(dones, bool):
-                    # Put all return values in a list
-                    new_obs = [new_obs]
-                    rewards = [rewards]
-                    dones = [dones]
-                    infos = [infos]
-                
-                if t % (cfg_dict['dataset']['pred_skip_frames'] + 1) == 0:
+                obs = next_obs
+
+            if terminated_during_obs:
+                continue  # Discard this episode and start a new one
+
+            # Collect predictions
+            next_obs_sequences = [[] for _ in range(num_envs)]
+            next_action_sequences = [[] for _ in range(num_envs)]
+            done_sequences = [[] for _ in range(num_envs)]
+
+            t = 0
+            is_done = False
+            while len(next_obs_sequences[0]) < t_pred:
+                actions = [0.0*env.action_space.sample() for _ in range(num_envs)] # Zero actions for prediction
+                next_obs, rewards, dones, infos = env.step(actions)
+
+                if any(dones):
+                    is_done = True
+
+                if t % (pred_skip_frames + 1) == 0:
                     for i in range(num_envs):
-                        if len(next_obs_sequences) <= i:
-                            next_obs_sequences.append([])
-                            next_action_sequences.append([])
-                            done_sequences.append([])
-                        
-                        next_obs_sequences[i].append(new_obs[i])
-                        next_action_sequences[i].append(actions[i])
-                        done_sequences[i].append(dones[i])
-            
+                        done_sequences[i].append(is_done)
+                        if is_done:
+                            next_obs_sequences[i].append(np.zeros_like(next_obs[i]))
+                            next_action_sequences[i].append(np.zeros_like(actions[i]))
+
+                            # Fill remaining steps with zeros and True for dones
+                            while len(next_obs_sequences[i]) < t_pred:
+                                next_obs_sequences[i].append(np.zeros_like(next_obs[i]))
+                                next_action_sequences[i].append(np.zeros_like(actions[i]))
+                                done_sequences[i].append(True)
+
+                        else:
+                            next_obs_sequences[i].append(next_obs[i])
+                            next_action_sequences[i].append(actions[i])
+                            
+                t += 1
+
+            # Add episodes to dataset
             for i in range(num_envs):
-                dataset.add_episode(
-                    obs_sequences[i], 
-                    action_sequences[i], 
-                    ego_state_sequences[i],
-                    next_obs_sequences[i], 
-                    next_action_sequences[i], 
-                    done_sequences[i]
-                )
+                obs = np.array(obs_sequences[i])
+                actions = np.array(action_sequences[i])
+                ego_states = np.array(ego_state_sequences[i])
+                next_obs = np.array(next_obs_sequences[i])
+                next_actions = np.array(next_action_sequences[i])
+                dones = np.array(done_sequences[i])
+
+                # Assert shapes
+                assert obs.shape == (t_obs, *env.observation_space.shape), f"Unexpected obs shape: {obs.shape}"
+                assert actions.shape == (t_obs, *env.action_space.shape), f"Unexpected actions shape: {actions.shape}"
+                assert ego_states.shape == (t_obs, 4), f"Unexpected ego_states shape: {ego_states.shape}"
+                assert next_obs.shape == (t_pred, *env.observation_space.shape), f"Unexpected next_obs shape: {next_obs.shape}"
+                assert next_actions.shape == (t_pred, *env.action_space.shape), f"Unexpected next_actions shape: {next_actions.shape}"
+                assert dones.shape == (t_pred,), f"Unexpected dones shape: {dones.shape}"
+
+                # Assert dones consistency
+                if np.any(dones):
+                    first_done = np.argmax(dones)
+                    assert np.all(dones[first_done:]), f"Inconsistent dones after first True at index {first_done}"
+
+                    # Assert zeros after first done
+                    assert np.all(next_obs[first_done+1:] == 0), f"Non-zero next_obs after done at index {first_done}"
+                    assert np.all(next_actions[first_done+1:] == 0), f"Non-zero next_actions after done at index {first_done}"
+
+                dataset.add_episode(obs, actions, ego_states, next_obs, next_actions, dones)
+                
                 episodes_collected += 1
                 pbar.update(1)
-                
+
                 if episodes_collected >= num_episodes:
                     break
-    
+
+            if episodes_collected >= num_episodes:
+                break
+
     return dataset
 
 @config_wrapper()

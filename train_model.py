@@ -324,7 +324,12 @@ class Trainer:
     def visualize_predictions(self) -> None:
         self.model.eval()
         with torch.no_grad():
-            hold_out_pred = self.model(self.hold_out_batch)['predictions']
+            hold_out_output = self.model(self.hold_out_batch)
+            hold_out_pred = hold_out_output['predictions']
+            if hasattr(self.model, 'predict_done_probability'):
+                hold_out_done_probs = self.model.predict_done_probability(hold_out_output['hazard'])
+            else:
+                hold_out_done_probs = None
 
         self.wandb.log({
             "hold_out_prediction": self.wandb.Image(self.fig),
@@ -334,7 +339,9 @@ class Trainer:
             'Loss (val)': np.mean(self.val_stats['total_loss']),
         }
         visualize_prediction(self.fig, self.axes, self.hold_out_obs, self.hold_out_target, hold_out_pred, 
-                            self.current_epoch, self.train_predictions, self.train_ground_truth, metrics)
+                            self.current_epoch, self.train_predictions, self.train_ground_truth, metrics,
+                          done_probs=hold_out_done_probs.cpu().numpy() if hold_out_done_probs is not None else None,
+                            target_dones=self.hold_out_batch['dones'][:, -self.model.num_frames_to_predict:].cpu().numpy())
 
     def save_final_model(self) -> None:
         final_model_path = Path(self.cfg.project_dir) / "models" / self.run_name / "final_model.pth"
