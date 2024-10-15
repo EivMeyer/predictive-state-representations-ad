@@ -120,6 +120,34 @@
             }
         },
         {
+            "name": "Python: Analyze Latent Representations (Collect)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analyze_latent_representations.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "collect"
+            ]
+        },
+        {
+            "name": "Python: Analyze Observations",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analyze_observation_transformations.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "run_mode=single"
+            ]
+        },
+        {
             "name": "Python: Current File",
             "type": "debugpy",
             "request": "launch",

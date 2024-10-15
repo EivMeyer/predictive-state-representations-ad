@@ -1,6 +1,8 @@
 # Custom
 output/
 outputs/
+debug_plots/
+latent_analysis/
 settings.json
 wandb/
 *.out
