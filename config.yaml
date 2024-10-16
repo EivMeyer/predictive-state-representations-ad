@@ -61,7 +61,7 @@ wandb:
 
 representation:
   # Type of model to use for encoding
-  model_type: "AutoEncoderModelV0" # AutoEncoderModelV0, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, VQVAEPredictiveModel
+  model_type: "PredictiveModelV9M3" # AutoEncoderModelV0, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, VQVAEPredictiveModel
   # Path to the model
   model_path: "../models/pretrained/autoencoder_model_v0_polar.pth"
 
@@ -69,7 +69,7 @@ models:
   VQVAEPredictiveModel:
     pretrained_model_path: "../models/pretrained/autoencoder_model_v0.pth"
   PredictiveModelV9:
-    pretrained_model_path: "../models/pretrained/autoencoder_model_v0.pth"
+    pretrained_model_path: "../models/pretrained/autoencoder_model_v0_polar.pth"
   AutoEncoderModelV0:
     kl_weight: 0.001
   PredictiveModelV9M1:
