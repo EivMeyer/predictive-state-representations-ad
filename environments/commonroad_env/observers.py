@@ -145,12 +145,25 @@ class RepresentationObserver(BaseObserver):
 
         if self.debug and self.call_count % self.debug_freq == 0:
             with torch.no_grad():
-                decoding = self.representation_model.decode_image(batch, rep)
+                decoding_arr = self.representation_model.decode_image(batch, rep)
+                if isinstance(decoding_arr, (tuple, list)):
+                    decoding = decoding_arr[0]
+                    hazard_preds = decoding_arr[1]
+                    done_preds = decoding_arr[2]
+                else:
+                    decoding = decoding_arr
+                    hazard_preds = None
+                    done_preds = None
                 if decoding.ndim == 5: # If the model returns a sequence of predictions
                     decoding = decoding[0]
-            predictions = decoding.permute(0, 2, 3, 1).cpu().detach().numpy()
+                    hazard_preds = hazard_preds[0] if hazard_preds is not None else None
+                    done_preds = done_preds[0] if done_preds is not None else None
 
-            self.update_debug_plot(render_obs, predictions, representation)
+            predictions = decoding.permute(0, 2, 3, 1).cpu().detach().numpy()
+            hazard_preds = hazard_preds.cpu().detach().numpy() if hazard_preds is not None else None
+            done_preds = done_preds.cpu().detach().numpy() if done_preds is not None else None
+
+            self.update_debug_plot(render_obs, predictions, hazard_preds, done_preds, representation)
 
         if self.include_ego_state:
             representation = np.concatenate([representation, ego_state])
@@ -210,7 +223,7 @@ class RepresentationObserver(BaseObserver):
 
         for i in range(3):
             for j in range(3):
-                ax = self.ax_pred.inset_axes([j/3 + 0.02, (2-i)/3 + 0.02, 0.29, 0.29])
+                ax = self.ax_pred.inset_axes([j/3 + 0.02, (2-i)/3 + 0.08, 0.29, 0.29])
                 im = ax.imshow(np.zeros((64, 64, 3)), cmap='viridis')
                 self.im_preds.append(im)
                 ax.axis('off')
@@ -242,7 +255,7 @@ class RepresentationObserver(BaseObserver):
 
         for i in range(3):
             for j in range(3):
-                ax = self.ax_pred.inset_axes([j/3 + 0.02, (2-i)/3 + 0.02, 0.29, 0.29])
+                ax = self.ax_pred.inset_axes([j/3 + 0.02, (2-i)/3 + 0.08, 0.29, 0.29])  # Adjust the vertical space by changing (2-i)/3 + 0.08 - specifically, the offset value, which is the vertical offset that moves the plots up or down
                 im = ax.imshow(np.zeros((64, 64, 3)), cmap='viridis')
                 self.im_preds.append(im)
                 ax.axis('off')
@@ -250,7 +263,7 @@ class RepresentationObserver(BaseObserver):
                 ax.add_patch(rect)
                 step = i * 3 + j
                 label = '$t$' if step == 0 else f'$t+{step}$'
-                ax.set_title(label, fontsize=14, pad=8)
+                ax.set_title(label, fontsize=14, pad=-20, loc='center')  # Negative pad moves the title below the plot
 
         # Latent representation
         self.ax_rep = self.fig.add_subplot(gs[0, 2])
@@ -258,18 +271,18 @@ class RepresentationObserver(BaseObserver):
         cbar = self.fig.colorbar(self.im_rep, ax=self.ax_rep)
         cbar.set_label('Value', fontsize=12)
 
-    def update_debug_plot(self, current_obs, predictions, representation):
+    def update_debug_plot(self, current_obs, predictions, hazard_preds, done_preds, representation):
         if SAVE_SEPARATE_PLOTS:
-            self.update_separate_plots(current_obs, predictions, representation)
+            self.update_separate_plots(current_obs, predictions, hazard_preds, done_preds, representation)
         else:
-            self.update_combined_plot(current_obs, predictions, representation)
+            self.update_combined_plot(current_obs, predictions, hazard_preds, done_preds, representation)
 
-    def update_separate_plots(self, current_obs, predictions, representation):
+    def update_separate_plots(self, current_obs, predictions, hazard_preds, done_preds, representation):
         # Update current observation
         self.im_obs.set_data(current_obs)
         self.fig_obs.canvas.draw()
         if SAVE_PLOTS:
-            self.fig_obs.savefig(f'./debug_plots/step_{self.call_count}_observation.pdf', dpi=300, bbox_inches='tight')
+            self.fig_obs.savefig(f'./debug_plots/step_{self.call_count}_observation.pdf', dpi=100, bbox_inches='tight')
 
         # Update predictions
         for i, im in enumerate(self.im_preds):
@@ -281,7 +294,7 @@ class RepresentationObserver(BaseObserver):
             im.set_extent([0, current_obs.shape[1], current_obs.shape[0], 0])
         self.fig_pred.canvas.draw()
         if SAVE_PLOTS:
-            self.fig_pred.savefig(f'./debug_plots/step_{self.call_count}_predictions.pdf', dpi=300, bbox_inches='tight')
+            self.fig_pred.savefig(f'./debug_plots/step_{self.call_count}_predictions.pdf', dpi=100, bbox_inches='tight')
 
         # Update latent representation
         rep_dim = int(np.sqrt(representation.shape[0]))
@@ -290,9 +303,9 @@ class RepresentationObserver(BaseObserver):
         self.im_rep.autoscale()
         self.fig_rep.canvas.draw()
         if SAVE_PLOTS:
-            self.fig_rep.savefig(f'./debug_plots/step_{self.call_count}_representation.pdf', dpi=300, bbox_inches='tight')
+            self.fig_rep.savefig(f'./debug_plots/step_{self.call_count}_representation.pdf', dpi=100, bbox_inches='tight')
 
-    def update_combined_plot(self, current_obs, predictions, representation):
+    def update_combined_plot(self, current_obs, predictions, hazard_preds, done_preds, representation):
         # Update current observation
         self.im_obs.set_data(current_obs)
 
@@ -304,6 +317,11 @@ class RepresentationObserver(BaseObserver):
             else:
                 im.set_data(np.zeros_like(current_obs))
             im.set_extent([0, current_obs.shape[1], current_obs.shape[0], 0])
+            
+            done_prob = done_preds[i] if done_preds is not None else 0
+            done_prob_str = f"{done_prob:.2f}"
+            im_title = f"t+{i} ({done_prob_str})"
+            im.axes.set_title(im_title, fontsize=14, pad=-20, loc='center')
 
         # Update latent representation
         rep_dim = int(np.sqrt(representation.shape[0]))
@@ -314,7 +332,7 @@ class RepresentationObserver(BaseObserver):
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
         if SAVE_PLOTS:
-            self.fig.savefig(f'./debug_plots/step_{self.call_count}_combined.pdf', dpi=300, bbox_inches='tight')
+            self.fig.savefig(f'./debug_plots/step_{self.call_count}_combined.pdf', dpi=100, bbox_inches='tight')
 
 
 def create_representation_model(cfg, device):

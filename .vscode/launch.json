@@ -120,10 +120,10 @@
             }
         },
         {
-            "name": "Python: Analyze Latent Representations (Collect)",
+            "name": "Python: Visualize Latent Representations (Collect)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/analyze_latent_representations.py",
+            "program": "${workspaceFolder}/visualize_latent_representations.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "env": {
@@ -134,10 +134,24 @@
             ]
         },
         {
-            "name": "Python: Analyze Observations",
+            "name": "Python: Visualize Latent Representations (Plot)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/analyze_observation_transformations.py",
+            "program": "${workspaceFolder}/visualize_latent_representations.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "plot"
+            ]
+        },
+        {
+            "name": "Python: Visualize Observation Transformations",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/visualize_observation_transformations.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "env": {

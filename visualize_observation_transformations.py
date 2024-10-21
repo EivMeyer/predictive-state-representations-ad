@@ -130,7 +130,7 @@ def main(cfg: DictConfig):
             
             if save_fig:    
                 # Save full figure
-                plt.savefig(output_dir / f'polar_transform_frame_{frame:03d}.pdf', format='pdf', dpi=300, bbox_inches='tight')
+                plt.savefig(output_dir / f'polar_transform_frame_{frame:03d}.pdf', format='pdf', dpi=100, bbox_inches='tight')
                 
                 # Save individual subfigures
                 for i, ax in enumerate(axes):

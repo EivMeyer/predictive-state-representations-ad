@@ -60,7 +60,7 @@ def visualize_latent_space(model, dataset, device, num_samples=1000, perplexity=
     plt.figure(figsize=(10, 8))
     scatter = plt.scatter(latent_2d[:, 0], latent_2d[:, 1], c=labels, cmap='viridis', alpha=0.6)
     plt.colorbar(scatter, label='Ego Vehicle Velocity')
-    plt.title('t-SNE Visualization of Latent Space')
+    # plt.title('t-SNE Visualization of Latent Space')
     plt.xlabel('t-SNE Component 1')
     plt.ylabel('t-SNE Component 2')
     plt.tight_layout()

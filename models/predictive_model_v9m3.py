@@ -165,7 +165,9 @@ class PredictiveModelV9M3(BasePredictiveModel):
         predictions = self.trainable_decoder(predicted_latents.view(-1, self.latent_dim))
         predictions = predictions.view(batch['observations'].shape[0], self.num_frames_to_predict, *self.obs_shape[-3:])
 
-        return predictions, hazard
+        done_probability = self.predict_done_probability(hazard)
+
+        return predictions, hazard, done_probability
 
     def forward(self, batch):
         encoded_state = self.encode(batch)
