@@ -91,7 +91,7 @@ class Trainer:
         val_batch = move_batch_to_device(val_batch, self.device)
         val_batch = {k: v[0:1] for k, v in val_batch.items()}
         
-        running_avg_loss = None
+        running_avg_loss = np.nan
         alpha = 0.01  # Smoothing factor for running average
 
         total_batches = len(self.train_loader) if self.cfg.training.batches_per_epoch is None else self.cfg.training.batches_per_epoch
@@ -136,7 +136,7 @@ class Trainer:
                     # Update running average loss
                     loss_scalar = loss.item()
                     if np.isfinite(loss_scalar):
-                        if running_avg_loss is None:
+                        if running_avg_loss == np.nan:
                             running_avg_loss = loss_scalar
                         else:
                             running_avg_loss = alpha * loss_scalar + (1 - alpha) * running_avg_loss
@@ -473,6 +473,7 @@ def main(cfg: DictConfig) -> None:
     )
     print(f"Training on {device}")
     print(f"Total batches: {len(full_dataset)}")
+    print(f"Internal batch size: {full_dataset[0]['observations'].shape[0]}")
     print(f"Train set: {len(train_loader)}")
     print(f"Validation set: {len(val_loader)}")
     

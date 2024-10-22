@@ -116,7 +116,7 @@ training:
   # Set to true to enable automatic mixed precision
   use_amp: true 
   # Validation set split size (if float, it is the ratio of the dataset, if int, it is the number of samples)
-  val_size: 1
+  val_size: 8
   # Whether to use pinned host memory for faster data copies
   pin_memory: true
   # Number of processes for fetching data in dataloader

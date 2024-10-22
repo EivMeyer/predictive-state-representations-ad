@@ -53,7 +53,7 @@ class AutoEncoderModelV0(BasePredictiveModel):
             latent_l2_weight=0,  # Set to 0 as we're using KL divergence
             temporal_decay=cfg.training.loss.temporal_decay,
             perceptual_weight=cfg.training.loss.perceptual_weight,
-            num_scales=cfg.training.loss.num_scales
+            num_scales=1
         )
 
         # KL divergence weight

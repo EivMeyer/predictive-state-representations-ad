@@ -158,7 +158,7 @@ def plot_3d_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.nd
         
         # Main scatter plot
         scatter = ax.scatter(pca_result[:, 0], pca_result[:, 1], pca_result[:, 2], 
-                             c=sampled_metric_values, cmap='viridis', alpha=0.6)
+                             c=sampled_metric_values, cmap='coolwarm', alpha=0.6)
         
         # Shadow projections and connecting lines
         min_x, min_y, min_z = np.min(pca_result, axis=0)
@@ -166,13 +166,13 @@ def plot_3d_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.nd
         for i in range(len(pca_result)):
             x, y, z = pca_result[i]
             # XY plane projection
-            ax.scatter(x, y, min_z, c=sampled_metric_values[i], cmap='viridis', alpha=0.1)
+            ax.scatter(x, y, min_z, c=sampled_metric_values[i], cmap='coolwarm', alpha=0.1)
             ax.plot([x, x], [y, y], [z, min_z], 'k:', lw=0.5, alpha=0.3)
             # XZ plane projection
-            ax.scatter(x, min_y, z, c=sampled_metric_values[i], cmap='viridis', alpha=0.1)
+            ax.scatter(x, min_y, z, c=sampled_metric_values[i], cmap='coolwarm', alpha=0.1)
             ax.plot([x, x], [y, min_y], [z, z], 'k:', lw=0.5, alpha=0.3)
             # YZ plane projection
-            ax.scatter(min_x, y, z, c=sampled_metric_values[i], cmap='viridis', alpha=0.1)
+            ax.scatter(min_x, y, z, c=sampled_metric_values[i], cmap='coolwarm', alpha=0.1)
             ax.plot([x, min_x], [y, y], [z, z], 'k:', lw=0.5, alpha=0.3)
         
         fig.colorbar(scatter, label=metric_name.capitalize())
@@ -237,7 +237,7 @@ def plot_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.ndarr
         pca_result = pca.fit_transform(sampled_latent_reps)
         
         plt.figure(figsize=(3.5, 2.5))  # Updated figure size for IEEE 2-column format
-        scatter = plt.scatter(pca_result[:, 0], pca_result[:, 1], c=sampled_metric_values, cmap='viridis', alpha=0.6)
+        scatter = plt.scatter(pca_result[:, 0], pca_result[:, 1], c=sampled_metric_values, cmap='coolwarm', alpha=0.6)
         plt.colorbar(scatter, label=metric_name.capitalize())
         # plt.title(f'PCA of Latent Space Colored by {metric_name.capitalize()}')
         plt.xlabel('First Principal Component')
@@ -247,15 +247,23 @@ def plot_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.ndarr
         plt.close()
         
         # UMAP projection
-        # umap_model = umap.UMAP(n_neighbors=15, min_dist=0.1, n_components=2, metric='euclidean')
-        # umap_result = umap_model.fit_transform(sampled_latent_reps)
+        umap_model = umap.UMAP(n_neighbors=15, min_dist=0.1, n_components=2, metric='euclidean')
+        umap_result = umap_model.fit_transform(sampled_latent_reps)
+        plt.figure(figsize=(3.5, 2.5))  # Updated figure size for IEEE 2-column format
+        scatter = plt.scatter(umap_result[:, 0], umap_result[:, 1], c=sampled_metric_values, cmap='coolwarm', alpha=0.6)
+        plt.colorbar(scatter, label=metric_name.capitalize())
+        # plt.title(f'UMAP Projection of Latent Space Colored by {metric_name.capitalize()}')
+        plt.xlabel('UMAP-1')
+        plt.ylabel('UMAP-2')
+        plt.tight_layout()
+        plt.savefig(output_dir / f'latent_umap_{metric_name}.pdf', dpi=100, bbox_inches='tight')
+        plt.close()
+
 
         n_samples = sampled_latent_reps.shape[0]  # Number of samples in your dataset
         perplexity = min(30, n_samples - 1)  # Adjust perplexity to be less than n_samples
-
         tsne = TSNE(n_components=2, random_state=42, perplexity=perplexity)
         tsne_result = tsne.fit_transform(sampled_latent_reps)
-        
         plt.figure(figsize=(3.5, 2.5))  # Updated figure size for IEEE 2-column format
         scatter = plt.scatter(tsne_result[:, 0], tsne_result[:, 1], c=sampled_metric_values, cmap='coolwarm', alpha=0.6)
         plt.colorbar(scatter, label=metric_name.capitalize())
@@ -285,7 +293,7 @@ def plot_latent_trajectory(latent_reps: np.ndarray, episode_indices: np.ndarray,
     plt.figure(figsize=(3.5, 2.5))  # Updated figure size for IEEE 2-column format
     
     # Plot trajectory for the first episode
-    colors = plt.cm.viridis(np.linspace(0, 1, len(tsne_result)))
+    colors = plt.cm.coolwarm(np.linspace(0, 1, len(tsne_result)))
     
     for i in range(len(tsne_result) - 1):
         plt.plot(tsne_result[i:i+2, 0], tsne_result[i:i+2, 1], c=colors[i])
@@ -321,7 +329,7 @@ def plot_3d_latent_trajectory(latent_reps: np.ndarray, episode_indices: np.ndarr
     ax = fig.add_subplot(111, projection='3d')
     
     # Plot trajectory for the first episode
-    colors = plt.cm.viridis(np.linspace(0, 1, len(tsne_result)))
+    colors = plt.cm.coolwarm(np.linspace(0, 1, len(tsne_result)))
     
     for i in range(len(tsne_result) - 1):
         ax.plot(tsne_result[i:i+2, 0], tsne_result[i:i+2, 1], tsne_result[i:i+2, 2], c=colors[i])
@@ -349,7 +357,7 @@ def plot_3d_latent_trajectory(latent_reps: np.ndarray, episode_indices: np.ndarr
     ax.set_ylabel('t-SNE 2')
     ax.set_zlabel('t-SNE 3')
     ax.legend()
-    plt.title('3D Latent Trajectory for First Episode')
+    # plt.title('3D Latent Trajectory for First Episode')
     plt.tight_layout()
     plt.savefig(output_dir / 'latent_trajectory_3d_first_episode.pdf', dpi=300, bbox_inches='tight')
     plt.close()
@@ -384,7 +392,7 @@ def plot_latent_correlations(latent_reps: np.ndarray, driving_metrics: Dict[str,
     sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', xticklabels=list(driving_metrics.keys()),
                 yticklabels=[f'PC {i+1}' for i in range(n_components)], fmt='.2f', cbar=True)
     plt.yticks(rotation=0)  # Ensure y-axis labels are not rotated
-    plt.title('Correlation between PCs and Driving Metrics')
+    # plt.title('Correlation between PCs and Driving Metrics')
     plt.tight_layout()
     plt.savefig(output_dir / 'latent_correlation_heatmap.pdf', dpi=100, bbox_inches='tight')
     plt.close()
@@ -394,7 +402,7 @@ def plot_latent_correlations(latent_reps: np.ndarray, driving_metrics: Dict[str,
     plt.bar(range(1, n_components + 1), explained_variance, align='center', alpha=0.8)
     plt.xlabel('Principal Component')
     plt.ylabel('Explained Variance (%)')
-    plt.title('Explained Variance by Principal Component')
+    # plt.title('Explained Variance by Principal Component')
     plt.xticks(range(1, n_components + 1), [f'{i}' for i in range(1, n_components + 1)])
     
     # Add percentage labels on top of each bar
@@ -447,7 +455,7 @@ def main(cfg):
             'speed': data['speeds'],
             'steering': data['steering_angles'],
             'acceleration': data['accelerations'],
-            'min. distance': data['min_obstacle_distances'],
+            'log. min. distance': np.log(data['min_obstacle_distances'] + 0.01),
             'close vehicles': data['num_close_obstacles']
         }
         
