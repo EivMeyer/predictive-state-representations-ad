@@ -45,7 +45,7 @@ dataset:
   # Number of frames to skip between each recorded prediction frame
   pred_skip_frames: 3
   # Whether to use polar transform for observations
-  use_polar_transform: true
+  use_polar_transform: false
   # Whether to preprocess an existing dataset
   preprocess_existing: false
   # Whether to preprocess online (i.e. during training)
@@ -90,7 +90,7 @@ evaluation:
 # Training configuration
 training:
   # Type of model to use for training
-  model_type: "PredictiveModelV9M3" # AutoEncoderModelV0, AutoEncoderModelV0M1, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, PredictiveModelV9M2, VQVAEPredictiveModel
+  model_type: "AutoEncoderModelV2LW" # AutoEncoderModelV0, AutoEncoderModelV0M1, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, PredictiveModelV9M2, VQVAEPredictiveModel
   # Set this to the path of a checkpoint to resume training
   warmstart_model: null # "../models/pretrained/predictive_model_v9m1.pth"
   # Whether to continue from the last scheduler state

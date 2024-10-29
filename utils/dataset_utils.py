@@ -173,14 +173,7 @@ class EnvironmentDataset(Dataset):
 
         return data
 
-    def _remove_corrupted_file(self, idx):
-        file_to_remove = self.episode_files[idx]
-        file_path = self.data_dir / file_to_remove
-        try:
-            os.remove(file_path)
-        except OSError as e:
-            logging.error(f"Error removing file {file_to_remove}: {str(e)}")
-        
+    def _remove_corrupted_file(self, idx):        
         del self.episode_files[idx]
         self.batch_count -= 1
 

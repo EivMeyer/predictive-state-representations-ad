@@ -393,7 +393,8 @@ def create_renderer_options(view_range, window_size):
                 from_graph=False,
                 obstacle_fill_color=Color("red"),
                 obstacle_color=Color("red"),
-                obstacle_line_width=0.0
+                obstacle_line_width=0.0,
+                vehicle_expansion=1.8
             ),
         ],
         viewer_options=GLViewerOptions(
