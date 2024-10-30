@@ -114,8 +114,8 @@ class RepresentationObserver(BaseObserver):
         ego_state = np.array([
             ego_vehicle_simulation.ego_vehicle.state.velocity,
             0.0,
-            ego_vehicle_simulation.ego_vehicle.state.steering_angle,
-            ego_vehicle_simulation.ego_vehicle.state.yaw_rate
+            ego_vehicle_simulation.ego_vehicle.state.__dict__.get('steering_angle', 0.0),
+            ego_vehicle_simulation.ego_vehicle.state.__dict__.get('yaw_rate', 0.0)
         ])
 
         self.obs_buffer.append(render_obs)
@@ -334,38 +334,6 @@ class RepresentationObserver(BaseObserver):
         if SAVE_PLOTS:
             self.fig.savefig(f'./debug_plots/step_{self.call_count}_combined.pdf', dpi=100, bbox_inches='tight')
 
-
-def create_representation_model(cfg, device):
-    model_save_dir = Path(cfg['project_dir']) / "models"
-    model_save_dir.mkdir(parents=True, exist_ok=True)
-
-    # Load the full dataset
-    full_dataset = EnvironmentDataset(cfg)
-
-    # Get data dimensions
-    obs_shape, action_dim, ego_state_dim = get_data_dimensions(full_dataset)
-    obs_shape = (cfg.dataset.t_pred, 3, cfg.viewer.window_size, cfg.viewer.window_size) # TODO
-
-    # Get the model class based on the config
-    ModelClass = get_model_class(cfg['representation']['model_type'])
-    if ModelClass is None:
-        raise ValueError(f"Invalid model type: {cfg['representation']['model_type']}")
-
-    model = ModelClass(obs_shape=obs_shape, action_dim=action_dim, ego_state_dim=ego_state_dim, cfg=cfg)
-
-    # Find the correct model path
-    model_path = find_model_path(cfg['project_dir'], cfg['representation']['model_path'])
-    if model_path is None:
-        raise FileNotFoundError(f"Model file not found: {cfg['representation']['model_path']}. "
-                                f"Searched in {cfg['project_dir']} and its subdirectories.")
-    
-    print(f"Using model file: {model_path}")
-
-    model.load_state_dict(torch.load(model_path, map_location=device)['model_state_dict'], strict=False)
-    model.to(device)
-
-    return model
-
 def create_renderer_options(view_range, window_size):
     renderer_options = TrafficSceneRendererOptions(
         camera=EgoVehicleCamera(
@@ -394,7 +362,7 @@ def create_renderer_options(view_range, window_size):
                 obstacle_fill_color=Color("red"),
                 obstacle_color=Color("red"),
                 obstacle_line_width=0.0,
-                vehicle_expansion=1.8
+                vehicle_expansion=1.4
             ),
         ],
         viewer_options=GLViewerOptions(
@@ -419,6 +387,12 @@ def create_representation_observer(cfg, device):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else:
         device = device
+    if not torch.cuda.is_available():
+        print("CUDA is not available. Using CPU.")
+        device = torch.device("cpu")
+    cfg['device'] = str(device)
+
+    from utils.rl_utils import create_representation_model
     representation_model = create_representation_model(cfg, device)
     render_observer = create_render_observer(cfg['viewer'])
     dataset = EnvironmentDataset(cfg)

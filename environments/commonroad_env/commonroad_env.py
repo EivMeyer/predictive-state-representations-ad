@@ -4,6 +4,7 @@ from environments.commonroad_env.observers import create_representation_observer
 from environments.commonroad_env.rewarders import create_rewarders
 from environments.commonroad_env.termination_criteria import create_termination_criteria
 from environments.commonroad_env.callbacks import CommonRoadWandbCallback
+from environments.commonroad_env.control_space import TrackVehicleControlSpace
 from commonroad_geometric.learning.reinforcement.rewarder.reward_aggregator.implementations import SumRewardAggregator
 from omegaconf import DictConfig, OmegaConf
 
@@ -14,9 +15,10 @@ class CommonRoadEnv(BaseEnv):
 
     def make_env(self, config, n_envs, seed, rl_mode=False):
         experiment_config = create_base_experiment_config(OmegaConf.to_container(config, resolve=True))
-        experiment_config.termination_criteria = create_termination_criteria()
+        experiment_config.termination_criteria = create_termination_criteria(terminate_on_collision=True)
         if rl_mode:
-            experiment_config.env_options.observer = create_representation_observer(config, config['device'])
+            if not config['rl_training']['online_srl']:
+                experiment_config.env_options.observer = create_representation_observer(config, config['device'])
             experiment_config.rewarder = SumRewardAggregator(create_rewarders())
             experiment_config.respawner_options['init_steering_angle'] = 0.0
             experiment_config.respawner_options['init_orientation_noise'] = 0.0

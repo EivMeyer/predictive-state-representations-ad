@@ -5,6 +5,8 @@ import numpy as np
 class CommonRoadWandbCallback(BaseWandbCallback):
     def __init__(self, cfg, verbose: int = 0):
         self.enabled = cfg['wandb']['enabled']
+        self.n_calls = 0
+        self.n_rollouts = 0
         if not self.enabled:
             return
         super(CommonRoadWandbCallback, self).__init__(verbose)

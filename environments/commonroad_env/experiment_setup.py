@@ -19,9 +19,11 @@ from commonroad_geometric.simulation.ego_simulation.respawning.implementations i
 from commonroad_geometric.dataset.extraction.traffic.traffic_extractor import TrafficExtractorOptions
 from commonroad.common.solution import VehicleType, VehicleModel
 from functools import partial
+from environments.commonroad_env.control_space import TrackVehicleControlSpace
 from environments.commonroad_env.rewarders import create_rewarders
 from environments.commonroad_env.termination_criteria import create_termination_criteria
-from environments.commonroad_env.observers import create_representation_observer, create_render_observer, create_renderer_options, create_representation_model
+from utils.rl_utils import create_representation_model
+from environments.commonroad_env.observers import create_render_observer, create_renderer_options
 
 
 def create_scenario_preprocessors():
@@ -56,10 +58,13 @@ def create_base_experiment_config(config):
         view_range=150,
         window_size=800
     )
+
+    control_space_cls = SteeringAccelerationSpace
+    control_space_options = commonroad_config['control_space']
     
     experiment_config = RLExperimentConfig(
-        control_space_cls=SteeringAccelerationSpace,
-        control_space_options=commonroad_config['control_space'],
+        control_space_cls=control_space_cls,
+        control_space_options=control_space_options,
         ego_vehicle_simulation_options=EgoVehicleSimulationOptions(
             vehicle_model=VehicleModel.KS,
             vehicle_type=VehicleType.BMW_320i
@@ -112,10 +117,13 @@ def setup_rl_experiment(cfg):
     """
     Configures the downstream RL experiment by modifying the base experiment.
     """
-    representation_observer_constructor = partial(create_representation_observer, cfg=cfg)
 
     experiment_config = create_base_experiment_config(OmegaConf.to_container(cfg, resolve=True))
-    experiment_config.env_options.observer = representation_observer_constructor
+
+    if not cfg.rl_training.online_srl:
+        representation_observer_constructor = partial(create_representation_observer, cfg=cfg)
+        experiment_config.env_options.observer = representation_observer_constructor
+
     experiment_config.respawner_options['init_steering_angle'] = 0.0
     experiment_config.respawner_options['init_orientation_noise'] = 0.0
     experiment_config.respawner_options['init_position_noise'] = 0.0
@@ -126,7 +134,7 @@ def setup_rl_experiment(cfg):
     experiment_config.control_space_options['lower_bound_acceleration'] = -10.0
     experiment_config.control_space_options['upper_bound_acceleration'] = 10.0
     experiment_config.rewarder = SumRewardAggregator(create_rewarders())
-    experiment_config.termination_criteria = create_termination_criteria()
+    experiment_config.termination_criteria = create_termination_criteria(terminate_on_collision=not cfg['dataset']['collect_from_trajectories'])
 
     experiment = RLExperiment(config=experiment_config)
 

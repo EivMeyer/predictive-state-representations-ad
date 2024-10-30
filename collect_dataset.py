@@ -9,6 +9,7 @@ from environments import get_environment
 def collect_episodes(cfg_dict, env, num_episodes):
     dataset = EnvironmentDataset(cfg_dict)
     num_envs = env.num_envs if hasattr(env, 'num_envs') else 1
+
     t_obs = cfg_dict['dataset']['t_obs']
     t_pred = cfg_dict['dataset']['t_pred']
     obs_skip_frames = cfg_dict['dataset']['obs_skip_frames']
@@ -29,23 +30,23 @@ def collect_episodes(cfg_dict, env, num_episodes):
             for t in range(t_obs * (obs_skip_frames + 1)):
                 actions = [env.action_space.sample() for _ in range(num_envs)]
                 next_obs, rewards, dones, infos = env.step(actions)
+                ego_simulation = env.get_attr('ego_vehicle_simulation')[0]
 
                 if any(dones):
                     terminated_during_obs = True
                     break
 
                 if t % (obs_skip_frames + 1) == 0:
-                    for i in range(num_envs):
-                        obs_sequences[i].append(obs[i])
-                        action_sequences[i].append(actions[i])
-                        ego_states = env.get_attr('ego_vehicle_simulation')
-                        ego_state = np.array([
-                            ego_states[i].ego_vehicle.state.velocity,
-                            ego_states[i].ego_vehicle.state.acceleration,
-                            ego_states[i].ego_vehicle.state.steering_angle,
-                            ego_states[i].ego_vehicle.state.yaw_rate
-                        ])
-                        ego_state_sequences[i].append(ego_state)
+                    obs_sequences[0].append(obs[0])
+                    action_sequences[0].append(actions[0])
+                    
+                    ego_state = np.array([
+                        ego_simulation.ego_vehicle.state.velocity,
+                        ego_simulation.ego_vehicle.state.acceleration,
+                        ego_simulation.ego_vehicle.state.__dict__.get('steering_angle', 0.0),
+                        ego_simulation.ego_vehicle.state.__dict__.get('yaw_rate', 0.0)
+                    ])
+                    ego_state_sequences[0].append(ego_state)
 
                 obs = next_obs
 

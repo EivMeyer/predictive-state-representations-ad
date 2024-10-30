@@ -8,8 +8,7 @@ import torch
 from utils.file_utils import find_model_path
 from utils.config_utils import config_wrapper
 from environments import get_environment
-from utils.rl_utils import VideoRecorderEvalCallback, DebugCallback, BaseWandbCallback
-
+from utils.rl_utils import VideoRecorderEvalCallback, DebugCallback, BaseWandbCallback, create_representation_model
 
 def initialize_ppo_model(cfg, env, device):
     model = None
@@ -41,13 +40,16 @@ def initialize_ppo_model(cfg, env, device):
     if model is None:
         print("No warmstart model loaded. Training from scratch")
 
+
         model = PPO(
             "MlpPolicy",
             env,
             verbose=1,
             device=device,
             learning_rate=cfg.rl_training.learning_rate,
-            policy_kwargs={"net_arch": OmegaConf.to_container(cfg.rl_training.net_arch, resolve=True)},
+            policy_kwargs={
+                "net_arch": OmegaConf.to_container(cfg.rl_training.net_arch, resolve=True)
+            },
             n_steps=cfg.rl_training.n_steps,
             batch_size=cfg.rl_training.batch_size,
             n_epochs=cfg.rl_training.n_epochs,
@@ -90,6 +92,10 @@ def main(cfg: DictConfig) -> None:
     env = env_instance.make_env(cfg, n_envs=cfg.rl_training.num_envs, seed=cfg.seed, rl_mode=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() and cfg.device == "auto" else cfg.device)
+    if not torch.cuda.is_available():
+        print("CUDA is not available. Training on CPU.")
+        device = torch.device("cpu")
+    cfg.device = str(device)
 
     model = initialize_ppo_model(cfg, env, device)
 
@@ -128,6 +134,14 @@ def main(cfg: DictConfig) -> None:
         callbacks.append(debug_callback)
     custom_callbacks = env_instance.custom_callbacks(cfg_dict)
     callbacks.extend(custom_callbacks)
+
+    if cfg.rl_training.online_srl:
+        from utils.baselines_utils import DetachedSRLCallback
+        representation_model = create_representation_model(cfg, device)
+        callbacks.append(DetachedSRLCallback(
+            cfg,
+            representation_model
+        ))
 
     # Train the agent
     model.learn(total_timesteps=cfg.rl_training.total_timesteps, callback=callbacks,
