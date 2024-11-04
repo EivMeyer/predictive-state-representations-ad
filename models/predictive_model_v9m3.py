@@ -32,9 +32,13 @@ class PredictiveModelV9M3(BasePredictiveModel):
         self.autoencoder.load_state_dict(torch.load(pretrained_model_path, map_location=device)['model_state_dict'], strict=False)
         self.autoencoder.eval()
         
-        # Freeze the encoder part of the autoencoder
+        # Determine if encoder should be trainable based on config
+        encoder_lr = getattr(cfg.models.PredictiveModelV9M3, 'encoder_learning_rate', 0.0)
+        self.encoder_trainable = encoder_lr > 0
+        
+        # Set encoder parameters trainability
         for param in self.autoencoder.encoder.parameters():
-            param.requires_grad = False
+            param.requires_grad = self.encoder_trainable
 
         # Create a trainable copy of the decoder
         self.trainable_decoder = copy.deepcopy(self.autoencoder.decoder)
@@ -99,7 +103,8 @@ class PredictiveModelV9M3(BasePredictiveModel):
 
         # Create parameter groups for different learning rates
         self.decoder_params = list(self.trainable_decoder.parameters())
-        self.other_params = [p for n, p in self.named_parameters() if not any(p is dp for dp in self.decoder_params)]
+        self.encoder_params = list(self.autoencoder.encoder.parameters()) if self.encoder_trainable else []
+        self.other_params = [p for n, p in self.named_parameters() if not any(p is dp for dp in self.decoder_params + self.encoder_params)]
 
     def _initialize_weights(self):
         for m in self.modules():
@@ -116,10 +121,16 @@ class PredictiveModelV9M3(BasePredictiveModel):
 
         # Process observations
         observations_reshaped = observations.view(-1, channels, height, width)
-        with torch.no_grad():
+        
+        # Only use no_grad if encoder is not trainable
+        if not self.encoder_trainable:
+            with torch.no_grad():
+                latent_features = self.autoencoder.encode({'observations': observations_reshaped, 'ego_states': ego_states.view(-1, ego_states.shape[-1])})
+        else:
             latent_features = self.autoencoder.encode({'observations': observations_reshaped, 'ego_states': ego_states.view(-1, ego_states.shape[-1])})
-            if isinstance(latent_features, tuple):
-                latent_features = latent_features[0]
+            
+        if isinstance(latent_features, tuple):
+            latent_features = latent_features[0]
         latent_features = latent_features.view(batch_size, seq_len, -1)
         latent_features = self.latent_projector(latent_features)
 
@@ -196,19 +207,25 @@ class PredictiveModelV9M3(BasePredictiveModel):
         valid_mask = torch.cumprod(1 - target_done.int(), dim=1)
 
         # Get target latents using the pretrained autoencoder
-        with torch.no_grad():
-            batch_size, seq_len, channels, height, width = target_observations.shape
-            target_observations_reshaped = target_observations.view(-1, channels, height, width)
-            target_ego_states = batch['ego_states'][:, -self.num_frames_to_predict:, :]
-            target_ego_states_reshaped = target_ego_states.view(-1, target_ego_states.shape[-1])
-            target_batch = {
-                'observations': target_observations_reshaped,
-                'ego_states': target_ego_states_reshaped
-            }
+        batch_size, seq_len, channels, height, width = target_observations.shape
+        target_observations_reshaped = target_observations.view(-1, channels, height, width)
+        target_ego_states = batch['ego_states'][:, -self.num_frames_to_predict:, :]
+        target_ego_states_reshaped = target_ego_states.view(-1, target_ego_states.shape[-1])
+        target_batch = {
+            'observations': target_observations_reshaped,
+            'ego_states': target_ego_states_reshaped
+        }
+        
+        # Only use no_grad if encoder is not trainable
+        if not self.encoder_trainable:
+            with torch.no_grad():
+                target_latents = self.autoencoder.encode(target_batch)
+        else:
             target_latents = self.autoencoder.encode(target_batch)
-            if isinstance(target_latents, tuple):
-                target_latents = target_latents[0]
-            target_latents = target_latents.view(batch_size, seq_len, -1)
+            
+        if isinstance(target_latents, tuple):
+            target_latents = target_latents[0]
+        target_latents = target_latents.view(batch_size, seq_len, -1)
 
         # Calculate losses with masking
         loss_obs, loss_components_obs = self.loss_function_observations(
@@ -254,3 +271,18 @@ class PredictiveModelV9M3(BasePredictiveModel):
         survival_probability = self.predict_survival_probability(hazard)
         done_probability = 1 - survival_probability
         return done_probability
+
+    def get_parameter_groups(self):
+        groups = [
+            {'params': self.other_params},
+            {'params': self.decoder_params, 'lr': self.cfg.models.PredictiveModelV9M3.decoder_learning_rate}
+        ]
+        
+        # Add encoder parameter group if trainable
+        if self.encoder_trainable:
+            groups.append({
+                'params': self.encoder_params,
+                'lr': self.cfg.models.PredictiveModelV9M3.encoder_learning_rate
+            })
+            
+        return groups

@@ -77,6 +77,9 @@ models:
   PredictiveModelV9M1:
     encoder_learning_rate: 5e-6
     decoder_learning_rate: 2e-5
+  PredictiveModelV9M3:
+    encoder_learning_rate: 5e-6
+    decoder_learning_rate: 2e-5
   PredictiveModelV9M2:
     pretrained_model_path: "../models/pretrained/autoencoder_model_v0m1.pth"
     decoder_learning_rate: 2e-5
