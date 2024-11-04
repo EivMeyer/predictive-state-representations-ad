@@ -1,5 +1,6 @@
 # Custom
 output/
+output-single/
 outputs/
 debug_plots/
 latent_analysis/

@@ -26,17 +26,6 @@ from utils.rl_utils import create_representation_model
 from environments.commonroad_env.observers import create_render_observer, create_renderer_options
 
 
-def create_scenario_preprocessors():
-    scenario_preprocessors = [
-        # MergeLaneletsPreprocessor()
-        # VehicleFilterPreprocessor(),
-        # RemoveIslandsPreprocessor()
-        # SegmentLaneletsPreprocessor(100.0),
-        # ComputeVehicleVelocitiesPreprocessor(),
-        # (DepopulateScenarioPreprocessor(1), 1),
-    ]
-    return scenario_preprocessors
-
 def create_base_experiment_config(config):
     """Create an RLExperimentConfig based on the provided configuration."""
     rewarder = SumRewardAggregator([])  # Add reward computers as needed
@@ -74,7 +63,15 @@ def create_base_experiment_config(config):
             raise_exceptions=True,
             renderer_options=renderer_options_render,
             observer=create_render_observer(config['viewer']),
-            preprocessor=chain_preprocessors(*create_scenario_preprocessors()),
+            preprocessor=chain_preprocessors(*[
+                DepopulateScenarioPreprocessor(commonroad_config["spawn_rate"])
+                # MergeLaneletsPreprocessor()
+                # VehicleFilterPreprocessor(),
+                # RemoveIslandsPreprocessor()
+                # SegmentLaneletsPreprocessor(100.0),
+                # ComputeVehicleVelocitiesPreprocessor(),
+                # (DepopulateScenarioPreprocessor(1), 1),
+            ]),
         ),
         respawner_cls=RandomRespawner,
         respawner_options=commonroad_config['respawner'],

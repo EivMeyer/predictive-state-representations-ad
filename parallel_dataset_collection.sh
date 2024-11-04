@@ -22,6 +22,7 @@ total_episodes=""
 episodes_per_restart=""
 config_overrides=""
 append_mode=false
+base_dir="./output"  # Default value
 
 # Parse command line options
 while [[ $# -gt 0 ]]; do
@@ -29,9 +30,10 @@ while [[ $# -gt 0 ]]; do
         -w) num_workers="$2"; shift 2 ;;
         -e) total_episodes="$2"; shift 2 ;;
         -r) episodes_per_restart="$2"; shift 2 ;;
+        -o|--output-dir) base_dir="$2"; shift 2 ;;
         --append) append_mode=true; shift ;;
         *=*) config_overrides="$config_overrides $1"; shift ;;
-        *) echo "Usage: $0 [-w num_workers] [-e total_episodes] [-r episodes_per_restart] [--append] [CONFIG_OVERRIDES]" >&2
+        *) echo "Usage: $0 [-w num_workers] [-e total_episodes] [-r episodes_per_restart] [-o|--output-dir base_directory] [--append] [CONFIG_OVERRIDES]" >&2
            exit 1 ;;
     esac
 done
@@ -51,20 +53,21 @@ if [ -z "$episodes_per_restart" ]; then
     episodes_per_restart=$(get_integer_input "Enter the number of episodes to collect before restarting a worker: ")
 fi
 
+dataset_dir="$base_dir/dataset"
+
 echo "Number of workers: $num_workers"
 echo "Total number of episodes: $total_episodes"
 echo "Episodes per restart: $episodes_per_restart"
+echo "Output directory: $dataset_dir"
 echo "Append mode: $append_mode"
 
-base_dir="./output/dataset"
-
-# Create base directory if it doesn't exist
-mkdir -p "$base_dir"
+# Create dataset directory if it doesn't exist
+mkdir -p "$dataset_dir"
 
 # Delete existing dataset only if not in append mode
 if [ "$append_mode" = false ]; then
     echo "Deleting existing dataset..."
-    rm -rf "$base_dir"/*
+    rm -rf "$dataset_dir"/*
 else
     echo "Appending to existing dataset..."
 fi
@@ -80,7 +83,7 @@ collect_dataset() {
     worker_id=$1
     episodes=$2
     run_id=$3
-    project_dir="${base_dir}/worker_${worker_id}/run_${run_id}"
+    project_dir="${dataset_dir}/worker_${worker_id}/run_${run_id}"
     mkdir -p "$project_dir"
     
     append_flag=""
@@ -131,7 +134,7 @@ wait
 
 echo "All dataset collection jobs completed."
 
-# Call the merge_datasets.sh script
-./merge_datasets.sh
+# Call the merge_datasets.sh script with the same base directory
+./merge_datasets.sh -o "$base_dir"
 
 echo "Script completed. Dataset collection and merging are done."

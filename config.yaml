@@ -318,5 +318,8 @@ commonroad:
     # Include lanelet vertices in extraction
     include_lanelet_vertices: false
 
+  # Traffic generation options
+  spawn_rate: 0.5
+
 image_cartpole:
   max_episode_steps: 500
