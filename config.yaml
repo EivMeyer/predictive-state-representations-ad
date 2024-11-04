@@ -71,7 +71,7 @@ models:
   VQVAEPredictiveModel:
     pretrained_model_path: "../models/pretrained/autoencoder_model_v0.pth"
   PredictiveModelV9:
-    pretrained_model_path: "../models/pretrained/autoencoder_model_v0_polar.pth"
+    pretrained_model_path: "../models/pretrained/autoencoder_model_v0.pth"
   AutoEncoderModelV0:
     kl_weight: 0.001
   PredictiveModelV9M1:
