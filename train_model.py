@@ -309,10 +309,11 @@ class Trainer:
             train_stats = self.train_epoch()
             
             # Only run validation at specified intervals
-            validation_interval = self.cfg.training.validation_interval.interval if hasattr(self.cfg.training, 'validation') else 1
-            should_validate = (epoch % validation_interval == 0)
+            should_validate = (epoch % self.cfg.training.validation_interval == 0)
             
             if should_validate:
+                if self.cfg.verbose:
+                    print("Validating...")
                 self.val_stats = self.validate()
                 val_loss = np.mean(self.val_stats['total_loss'])
                 
