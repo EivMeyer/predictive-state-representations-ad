@@ -96,10 +96,16 @@ class Trainer:
 
         total_batches = len(self.train_loader) if self.cfg.training.batches_per_epoch is None else self.cfg.training.batches_per_epoch
 
-        pbar = tqdm(enumerate(self.train_loader), total=total_batches, leave=False, disable=not self.cfg.verbose)
+        pbar = tqdm(enumerate(self.train_loader), total=total_batches, leave=False, disable=not self.cfg.verbose, desc="Batches")
         for iteration, full_batch in pbar:
             full_batch = move_batch_to_device(full_batch, self.device)
             batch_size = full_batch['observations'].shape[0]
+            
+            # Calculate total minibatches for this batch
+            total_minibatches = (batch_size + self.cfg.training.minibatch_size - 1) // self.cfg.training.minibatch_size
+            total_inner_iterations = self.cfg.training.iterations_per_batch * total_minibatches
+            
+            inner_pbar = tqdm(total=total_inner_iterations, leave=False, disable=not self.cfg.verbose, desc="Minibatches")
             
             for _ in range(self.cfg.training.iterations_per_batch):
                 for start_idx in range(0, batch_size, self.cfg.training.minibatch_size):
@@ -136,7 +142,7 @@ class Trainer:
                     # Update running average loss
                     loss_scalar = loss.item()
                     if np.isfinite(loss_scalar):
-                        if running_avg_loss == np.nan:
+                        if np.isnan(running_avg_loss):
                             running_avg_loss = loss_scalar
                         else:
                             running_avg_loss = alpha * loss_scalar + (1 - alpha) * running_avg_loss
@@ -147,24 +153,28 @@ class Trainer:
                             val_outputs = self.model.forward(val_batch)
                             val_loss, _ = self.model.compute_loss(val_batch, val_outputs)
                     
+                    # Update progress bars
                     if self.cfg.verbose:
-                        # Get current learning rate and optimizer info
                         param_group = self.optimizer.param_groups[0]
                         current_lr = param_group['lr']
                         optimizer_type = self.optimizer.__class__.__name__
                         
-                        # Prepare optimizer info string
+                        status_text = f"Loss: {loss.item():.6f}, Avg: {running_avg_loss:.6f}"
+                        if self.cfg.training.track_val_loss:
+                            status_text += f", Val: {val_loss.item():.6f}"
+                            
                         optimizer_info = f"Optimizer: {optimizer_type}, LR: {current_lr:.6f}"
                         if 'betas' in param_group:
                             optimizer_info += f", Betas: {param_group['betas']}"
                         if 'momentum' in param_group:
                             optimizer_info += f", Momentum: {param_group['momentum']:.4f}"
 
-                        # Update progress bar
-                        pbar.set_description(
-                            f"Train Loss: {loss.item():.6f}, Avg Loss: {running_avg_loss:.6f}, {optimizer_info}" +
-                            (f", Val Loss: {val_loss.item():.6f}" if self.cfg.training.track_val_loss else "")
-                        )
+                        pbar.set_description(f"Batches ({status_text})")
+                        inner_pbar.set_description(f"Minibatches ({optimizer_info})")
+                    
+                    inner_pbar.update(1)
+            
+            inner_pbar.close()
             
             if self.cfg.training.create_plots and iteration == len(self.train_loader) - 1:
                 self.train_predictions = predictions[:9].detach()

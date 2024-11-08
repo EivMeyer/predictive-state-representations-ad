@@ -115,6 +115,7 @@ class EnvironmentDataset(Dataset):
             self._remove_corrupted_batch(idx)
             
             # Recursively try the next file
+            idx = min(idx, self.batch_count - 1)
             if idx < self.batch_count:
                 return self.__getitem__(idx)
             else:
