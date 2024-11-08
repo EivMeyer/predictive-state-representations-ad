@@ -110,9 +110,9 @@ training:
   # Batch size for training
   batch_size: 1
   # Minibatch size
-  minibatch_size: 16
+  minibatch_size: 8
   # Number of training iterations per batch
-  iterations_per_batch: 4
+  iterations_per_batch: 1
   # Whether to compute and print a validation error at each minibatch (slow)
   track_val_loss: false
   # Factor to downsample input images
