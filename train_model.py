@@ -243,25 +243,28 @@ class Trainer:
                 values_cpu = np.array(values)
             return values_cpu
 
+        # Log training stats
         for key, values in train_stats.items():
-            values_cpu =  process_values(values)
+            values_cpu = process_values(values)
             mean_value = np.mean(values_cpu)
             std_value = np.std(values_cpu)
             epoch_averages[f"train/{key}"] = {"mean": mean_value, "std": std_value}
             if self.cfg.verbose:
                 print(f"  Mean train {key}: {mean_value:.4f} (±{std_value:.4f})")
 
-        if self.cfg.verbose:
-            print("Validation results:")
-        for key, values in val_stats.items():
-            values_cpu =  process_values(values)
-            mean_value = np.mean(values)
-            epoch_averages[f"val/{key}"] = mean_value
+        # Log validation stats only if we have them
+        if val_stats:
             if self.cfg.verbose:
-                print(f"  Val {key}: {mean_value:.4f}")
+                print("Validation results:")
+            for key, values in val_stats.items():
+                values_cpu = process_values(values)
+                mean_value = np.mean(values)
+                epoch_averages[f"val/{key}"] = mean_value
+                if self.cfg.verbose:
+                    print(f"  Val {key}: {mean_value:.4f}")
 
         self.wandb.log(epoch_averages, step=self.current_epoch)
-
+        
     def save_model(self, is_best: bool = False) -> None:
         save_dict = {
             'epoch': self.current_epoch,
@@ -294,8 +297,25 @@ class Trainer:
             start_time = time.time()
 
             train_stats = self.train_epoch()
-            self.val_stats = self.validate()
-            self.log_epoch_stats(train_stats, self.val_stats)
+            
+            # Only run validation at specified intervals
+            validation_interval = self.cfg.training.validation_interval.interval if hasattr(self.cfg.training, 'validation') else 1
+            should_validate = (epoch % validation_interval == 0)
+            
+            if should_validate:
+                self.val_stats = self.validate()
+                val_loss = np.mean(self.val_stats['total_loss'])
+                
+                # Log validation stats
+                self.log_epoch_stats(train_stats, self.val_stats)
+                
+                # Save best model based on validation loss
+                if val_loss < self.best_val_loss:
+                    self.best_val_loss = val_loss
+                    self.save_model(is_best=True)
+            else:
+                # Log only training stats when not validating
+                self.log_epoch_stats(train_stats, {})
 
             self.scheduler.step()
             current_lr = self.scheduler.get_last_lr()[0]
@@ -309,15 +329,12 @@ class Trainer:
                 print(f"Epoch speed: {epoch_speed:.2f} iterations/second")
             self.wandb.log({"epoch_speed": epoch_speed}, step=epoch)
 
-            if self.cfg.training.create_plots:
+            if self.cfg.training.create_plots and should_validate:
                 self.visualize_predictions()
 
-            val_loss = np.mean(self.val_stats['total_loss'])
-            if val_loss < self.best_val_loss:
-                self.best_val_loss = val_loss
-                self.save_model(is_best=True)
-
-            self.save_model()
+            # Save model checkpoint at regular intervals
+            if epoch % self.cfg.training.save_interval == 0:
+                self.save_model()
 
         self.save_final_model()
 

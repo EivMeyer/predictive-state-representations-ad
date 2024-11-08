@@ -123,6 +123,8 @@ training:
   use_amp: true 
   # Validation set split size (if float, it is the ratio of the dataset, if int, it is the number of samples)
   val_size: 8
+  # How often to validate
+  validation_interval: 100
   # Whether to use pinned host memory for faster data copies
   pin_memory: true
   # Number of processes for fetching data in dataloader
@@ -134,7 +136,7 @@ training:
   # Whether to log training metrics to stdout
   stdout_logging: true
   # Interval for saving model checkpoints
-  save_interval: 10
+  save_interval: 100
   # Whether to overwrite existing model checkpoints
   overwrite_checkpoints: true
   # Loss function to use for training
