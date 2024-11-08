@@ -112,10 +112,7 @@ class EnvironmentDataset(Dataset):
             return self._shuffle_batch(data)
         except Exception as e:
             logging.error(f"Error loading file {file}: {str(e)}. Removing it from the dataset.")
-            self._remove_corrupted_file(idx)
-            
-            # Update the file list and batch count
-            self.update_file_list()
+            self._remove_corrupted_batch(idx)
             
             # Recursively try the next file
             if idx < self.batch_count:
@@ -173,7 +170,7 @@ class EnvironmentDataset(Dataset):
 
         return data
 
-    def _remove_corrupted_file(self, idx):        
+    def _remove_corrupted_batch(self, idx):        
         del self.episode_files[idx]
         self.batch_count -= 1
 

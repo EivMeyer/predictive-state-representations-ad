@@ -251,7 +251,7 @@ class PredictiveModelV9M3(BasePredictiveModel):
         loss_survival = -torch.log(survival_likelihood + 1e-8).mean()
 
         # Combine losses
-        total_loss = loss_obs + loss_latent + loss_survival
+        total_loss = loss_obs + loss_latent + self.cfg.models.PredictiveModelV9M3.survival_loss_weight*loss_survival
 
         # Combine loss components
         loss_components = {

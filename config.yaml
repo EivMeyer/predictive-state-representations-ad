@@ -65,7 +65,7 @@ representation:
   # Type of model to use for encoding
   model_type: "PredictiveModelV9M3" # AutoEncoderModelV0, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, PredictiveModelV9M3, VQVAEPredictiveModel
   # Path to the model
-  model_path: "../models/pretrained/predictive_model_v9m3_polar.pth"
+  model_path: "../models/pretrained/predictive_model_v9m3.pth"
 
 models:
   VQVAEPredictiveModel:
@@ -80,6 +80,7 @@ models:
   PredictiveModelV9M3:
     encoder_learning_rate: 5e-6
     decoder_learning_rate: 2e-5
+    survival_loss_weight: 0.1
   PredictiveModelV9M2:
     pretrained_model_path: "../models/pretrained/autoencoder_model_v0m1.pth"
     decoder_learning_rate: 2e-5
