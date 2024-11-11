@@ -13,7 +13,7 @@ import numpy as np
 import time
 from utils.visualization_utils import setup_visualization, visualize_prediction
 import torch.multiprocessing as mp
-from utils.training_utils import analyze_predictions, init_wandb, NoScheduler, load_model_state
+from utils.training_utils import analyze_predictions, init_wandb, NoScheduler, load_model_state, load_checkpoint
 from datetime import datetime
 from torch.cuda.amp import autocast, GradScaler
 from typing import Dict, List, Tuple, Any, Optional
@@ -383,30 +383,25 @@ class Trainer:
         self.wandb.save(str(final_model_path))
 
     def load_checkpoint(self, checkpoint_path: Path, load_scheduler: bool, device):
-        checkpoint = load_model_state(checkpoint_path, self.model, device)
+        results = load_checkpoint(
+            checkpoint_path=checkpoint_path,
+            model=self.model,
+            optimizer=self.optimizer,
+            scheduler=self.scheduler if load_scheduler else None,
+            hyperparameters={
+                'lr': self.cfg.training.optimizer.learning_rate,
+                'weight_decay': self.cfg.training.optimizer.weight_decay,
+                'betas': (self.cfg.training.optimizer.beta1, self.cfg.training.optimizer.beta2)
+            },
+            map_location=device,
+            verbose=self.cfg.verbose
+        )
         
-        # Recreate optimizer
-        self.optimizer = get_optimizer(self.model, self.cfg)
-        
-        # Load optimizer state if possible
-        if 'optimizer_state_dict' in checkpoint:
-            try:
-                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            except ValueError as e:
-                print(f"Could not load optimizer state: {e}")
-                print("Using fresh optimizer state")
-
-        # Recreate and potentially load scheduler
-        self.scheduler = get_scheduler(self.optimizer, self.cfg)
-        if load_scheduler and 'scheduler_state_dict' in checkpoint:
-            try:
-                self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-                print("Successfully loaded scheduler state")
-            except ValueError:
-                print("Using fresh scheduler state")
-
-        self.start_epoch = checkpoint['epoch'] + 1
-        print(f"Resuming training from epoch {self.start_epoch}")
+        if results['success']:
+            self.start_epoch = results['epoch'] + 1
+            print(f"Resuming training from epoch {self.start_epoch}")
+        else:
+            print("Failed to load checkpoint, starting from scratch")
 
 def get_optimizer(model, cfg):
     optimizer_type = cfg.training.optimizer.type
