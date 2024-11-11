@@ -13,14 +13,13 @@ import numpy as np
 import time
 from utils.visualization_utils import setup_visualization, visualize_prediction
 import torch.multiprocessing as mp
-from utils.training_utils import analyze_predictions, init_wandb, NoScheduler
+from utils.training_utils import analyze_predictions, init_wandb, NoScheduler, load_model_state
 from datetime import datetime
 from torch.cuda.amp import autocast, GradScaler
 from typing import Dict, List, Tuple, Any, Optional
 import os
 from torch.optim import Adam, AdamW, SGD, RMSprop
 from torch.optim.lr_scheduler import StepLR, ExponentialLR, CosineAnnealingLR, ReduceLROnPlateau
-
 
 
 class Trainer:
@@ -278,7 +277,7 @@ class Trainer:
     def save_model(self, is_best: bool = False) -> None:
         save_dict = {
             'epoch': self.current_epoch,
-            'model_state_dict': self.model.state_dict(),
+            'model_save_state': self.model.get_save_state(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'scheduler_state_dict': self.scheduler.state_dict(),
             'val_loss': np.mean(self.val_stats['total_loss']),
@@ -299,7 +298,7 @@ class Trainer:
             torch.save(save_dict, path)
             if self.cfg.verbose:
                 print(f"Model saved to {path}")
-            self.wandb.save(str(path))
+            self.wandb.save(str(path))   
 
     def train(self) -> None:
         for epoch in range(self.start_epoch, self.cfg.training.epochs):
@@ -384,65 +383,22 @@ class Trainer:
         self.wandb.save(str(final_model_path))
 
     def load_checkpoint(self, checkpoint_path: Path, load_scheduler: bool, device):
-        checkpoint = torch.load(checkpoint_path, map_location=device)
+        checkpoint = load_model_state(checkpoint_path, self.model, device)
         
-        # Safely load model state - only matching parameters
-        checkpoint_state = checkpoint['model_state_dict']
-        model_state = self.model.state_dict()
-        matched_state_dict = {}
-        for name, param in checkpoint_state.items():
-            if name in model_state and param.shape == model_state[name].shape:
-                matched_state_dict[name] = param
-            else:
-                print(f"Skipping model parameter {name}: checkpoint shape {param.shape} != model shape {model_state[name].shape if name in model_state else 'Not in model'}")
-        
-        self.model.load_state_dict(matched_state_dict, strict=False)
-
-        # Recreate the optimizer with current configuration
+        # Recreate optimizer
         self.optimizer = get_optimizer(self.model, self.cfg)
         
-        # Try to load optimizer state if it exists and matches
-        try:
-            optimizer_state = checkpoint['optimizer_state_dict']
-            # Check if all shapes match before loading anything
-            current_shapes = {name: param.shape for name, param in self.model.named_parameters()}
-            state_shapes = {}
-            for group in optimizer_state['param_groups']:
-                for param in group['params']:
-                    if param in optimizer_state['state']:
-                        state = optimizer_state['state'][param]
-                        if 'exp_avg' in state:
-                            state_shapes[param] = state['exp_avg'].shape
-                            
-            # Only load if all shapes match
-            mismatch = False
-            for param_id, shape in state_shapes.items():
-                param_name = next((name for name, p in self.model.named_parameters() 
-                                if id(p) == param_id), None)
-                if param_name and shape != current_shapes[param_name]:
-                    print(f"Optimizer state shape mismatch for {param_name}: {shape} vs {current_shapes[param_name]}")
-                    mismatch = True
-                    break
-                    
-            if not mismatch:
-                self.optimizer.load_state_dict(optimizer_state)
-                print("Successfully loaded matching optimizer state")
-            else:
-                print("Using fresh optimizer state due to shape mismatches")
-                
-            # Override optimizer hyperparameters
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = self.cfg.training.optimizer.learning_rate
-                if 'betas' in param_group:
-                    param_group['betas'] = (self.cfg.training.optimizer.beta1, self.cfg.training.optimizer.beta2)
-                param_group['weight_decay'] = self.cfg.training.optimizer.weight_decay
-                
-        except (KeyError, ValueError) as e:
-            print(f"Using fresh optimizer state due to error: {str(e)}")
+        # Load optimizer state if possible
+        if 'optimizer_state_dict' in checkpoint:
+            try:
+                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            except ValueError as e:
+                print(f"Could not load optimizer state: {e}")
+                print("Using fresh optimizer state")
 
-        # Recreate the scheduler
+        # Recreate and potentially load scheduler
         self.scheduler = get_scheduler(self.optimizer, self.cfg)
-        if load_scheduler and 'scheduler_state_dict' in checkpoint and not mismatch:
+        if load_scheduler and 'scheduler_state_dict' in checkpoint:
             try:
                 self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
                 print("Successfully loaded scheduler state")

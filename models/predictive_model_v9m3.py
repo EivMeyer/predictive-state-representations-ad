@@ -35,13 +35,14 @@ class PredictiveModelV9M3(BasePredictiveModel):
         # Determine if encoder should be trainable based on config
         encoder_lr = getattr(cfg.models.PredictiveModelV9M3, 'encoder_learning_rate', 0.0)
         self.encoder_trainable = encoder_lr > 0
+
+        # Set decoder parameters trainability
+        for param in self.autoencoder.decoder.parameters():
+            param.requires_grad = True
         
         # Set encoder parameters trainability
         for param in self.autoencoder.encoder.parameters():
             param.requires_grad = self.encoder_trainable
-
-        # Create a trainable copy of the decoder
-        self.trainable_decoder = copy.deepcopy(self.autoencoder.decoder)
 
         # Determine the size of the latent space
         with torch.no_grad():
@@ -102,7 +103,7 @@ class PredictiveModelV9M3(BasePredictiveModel):
         self._initialize_weights()
 
         # Create parameter groups for different learning rates
-        self.decoder_params = list(self.trainable_decoder.parameters())
+        self.decoder_params = list(self.autoencoder.decoder.parameters())
         self.encoder_params = list(self.autoencoder.encoder.parameters()) if self.encoder_trainable else []
         self.other_params = [p for n, p in self.named_parameters() if not any(p is dp for dp in self.decoder_params + self.encoder_params)]
 
@@ -173,7 +174,7 @@ class PredictiveModelV9M3(BasePredictiveModel):
     def decode_image(self, batch, encoded_state):
         predicted_latents, hazard = self.decode(batch, encoded_state)
 
-        predictions = self.trainable_decoder(predicted_latents.view(-1, self.latent_dim))
+        predictions = self.autoencoder.decoder(predicted_latents.view(-1, self.latent_dim))
         predictions = predictions.view(batch['observations'].shape[0], self.num_frames_to_predict, *self.obs_shape[-3:])
 
         done_probability = self.predict_done_probability(hazard)
@@ -185,7 +186,7 @@ class PredictiveModelV9M3(BasePredictiveModel):
         predicted_latents, hazard = self.decode(batch, encoded_state)
 
         # Decode latents to observations using the trainable decoder
-        predictions = self.trainable_decoder(predicted_latents.view(-1, self.latent_dim))
+        predictions = self.autoencoder.decoder(predicted_latents.view(-1, self.latent_dim))
         predictions = predictions.view(batch['observations'].shape[0], self.num_frames_to_predict, *self.obs_shape[-3:])
 
         return {

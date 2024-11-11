@@ -1,6 +1,10 @@
 import torch
 from omegaconf import DictConfig, OmegaConf
 from torch.optim.lr_scheduler import _LRScheduler
+from pathlib import Path
+from torch import nn
+from typing import Any, Dict
+
 
 class NoScheduler(_LRScheduler):
     def __init__(self, optimizer):
@@ -83,3 +87,30 @@ def analyze_predictions(predictions, targets, calculate_diversity=False):
     result["target_std"] = target_std
     
     return result
+
+def load_model_state(model_path: Path, model: nn.Module, device: torch.device, strict: bool = False) -> Dict[str, Any]:
+    """
+    Helper function to load a model's state from a checkpoint.
+    
+    Args:
+        model_path: Path to the checkpoint file
+        model: Model instance to load state into
+        device: Device to load the state to
+        strict: Whether to strictly enforce state_dict key matching
+        
+    Returns:
+        Dict containing checkpoint data
+    """
+    checkpoint = torch.load(model_path, map_location=device)
+    
+    if 'model_save_state' in checkpoint:
+        # New format with nested states
+        model.load_save_state(checkpoint['model_save_state'], strict=strict)
+        return checkpoint
+    elif 'model_state_dict' in checkpoint:
+        # Legacy format
+        model.load_state_dict(checkpoint['model_state_dict'], strict=strict)
+        return checkpoint
+    else:
+        raise ValueError(f"Unrecognized checkpoint format in {model_path}")
+

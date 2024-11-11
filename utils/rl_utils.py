@@ -13,6 +13,7 @@ from omegaconf import DictConfig, OmegaConf
 from commonroad_geometric.learning.reinforcement.experiment import RLExperiment, RLExperimentConfig
 from utils.dataset_utils import EnvironmentDataset, get_data_dimensions
 from utils.file_utils import find_model_path
+from utils.training_utils import load_model_state
 import wandb
 from functools import partial
 from models import get_model_class
@@ -243,32 +244,40 @@ class VideoRecorderEvalCallback(EvalCallback):
     
 
 def create_representation_model(cfg, device):
-        model_save_dir = Path(cfg['project_dir']) / "models"
-        model_save_dir.mkdir(parents=True, exist_ok=True)
+    """
+    Create and load a representation model based on configuration.
+    """
+    model_save_dir = Path(cfg['project_dir']) / "models"
+    model_save_dir.mkdir(parents=True, exist_ok=True)
 
-        # Load the full dataset
-        full_dataset = EnvironmentDataset(cfg)
+    # Load the full dataset for dimensions
+    full_dataset = EnvironmentDataset(cfg)
+    obs_shape, action_dim, ego_state_dim = get_data_dimensions(full_dataset)
+    obs_shape = (cfg.dataset.t_pred, 3, cfg.viewer.window_size, cfg.viewer.window_size)
 
-        # Get data dimensions
-        obs_shape, action_dim, ego_state_dim = get_data_dimensions(full_dataset)
-        obs_shape = (cfg.dataset.t_pred, 3, cfg.viewer.window_size, cfg.viewer.window_size) # TODO
+    # Initialize model
+    ModelClass = get_model_class(cfg['representation']['model_type'])
+    if ModelClass is None:
+        raise ValueError(f"Invalid model type: {cfg['representation']['model_type']}")
 
-        # Get the model class based on the config
-        ModelClass = get_model_class(cfg['representation']['model_type'])
-        if ModelClass is None:
-            raise ValueError(f"Invalid model type: {cfg['representation']['model_type']}")
+    model = ModelClass(
+        obs_shape=obs_shape, 
+        action_dim=action_dim, 
+        ego_state_dim=ego_state_dim,
+        cfg=cfg
+    )
 
-        model = ModelClass(obs_shape=obs_shape, action_dim=action_dim, ego_state_dim=ego_state_dim, cfg=cfg)
+    # Find and load model weights
+    model_path = find_model_path(cfg['project_dir'], cfg['representation']['model_path'])
+    if model_path is None:
+        raise FileNotFoundError(
+            f"Model file not found: {cfg['representation']['model_path']}. "
+            f"Searched in {cfg['project_dir']} and its subdirectories."
+        )
+    
+    print(f"Loading model from: {model_path}")
+    load_model_state(model_path, model, device)
+    model.to(device)
+    model.eval()  # Set to evaluation mode by default
 
-        # Find the correct model path
-        model_path = find_model_path(cfg['project_dir'], cfg['representation']['model_path'])
-        if model_path is None:
-            raise FileNotFoundError(f"Model file not found: {cfg['representation']['model_path']}. "
-                                    f"Searched in {cfg['project_dir']} and its subdirectories.")
-        
-        print(f"Using model file: {model_path}")
-
-        model.load_state_dict(torch.load(model_path, map_location=device)['model_state_dict'], strict=False)
-        model.to(device)
-
-        return model
+    return model
