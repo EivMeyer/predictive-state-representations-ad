@@ -58,7 +58,7 @@ def create_rewarders():
         # SteeringAnglePenaltyRewardComputer(weight=0.0005, loss_type=RewardLossMetric.L1),
         StillStandingPenaltyRewardComputer(penalty=-0.05, velocity_threshold=2.0),
         TimeToCollisionPenaltyRewardComputer(weight=0.1), # requires incoming edges
-        OffroadPenaltyRewardComputer(penalty=-3.5),
+        OffroadPenaltyRewardComputer(penalty=-5.0),
         VelocityPenaltyRewardComputer(
             reference_velocity=33.0,
             weight=0.002,
