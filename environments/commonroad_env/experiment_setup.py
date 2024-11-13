@@ -18,6 +18,7 @@ from commonroad_geometric.simulation.interfaces.static.scenario_simulation impor
 from commonroad_geometric.simulation.ego_simulation.respawning.implementations import *
 from commonroad_geometric.dataset.extraction.traffic.traffic_extractor import TrafficExtractorOptions
 from commonroad.common.solution import VehicleType, VehicleModel
+from environments.commonroad_env.observers import create_representation_observer
 from functools import partial
 from environments.commonroad_env.control_space import TrackVehicleControlSpace
 from environments.commonroad_env.rewarders import create_rewarders

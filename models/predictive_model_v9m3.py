@@ -17,32 +17,16 @@ class PositionalEncoding(nn.Module):
 
 class PredictiveModelV9M3(BasePredictiveModel):
     def __init__(self, obs_shape, action_dim, ego_state_dim, cfg, 
-                 pretrained_model_path=None, nhead=16, num_encoder_layers=8, num_decoder_layers=8):
+                 pretrained_model_path=None, nhead=16, num_encoder_layers=8, num_decoder_layers=8, eval_mode: bool = False):
         super().__init__(obs_shape, action_dim, ego_state_dim, cfg)
-
-        pretrained_model_path = find_model_path(cfg.project_dir, cfg.models.PredictiveModelV9.pretrained_model_path) if pretrained_model_path is None else pretrained_model_path
-        assert pretrained_model_path is not None, "Pretrained model path must be provided"
 
         # Load pre-trained autoencoder
         if cfg.device == 'auto':
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         else:
             device = cfg.device
-        self.autoencoder = AutoEncoderModelV0(obs_shape, action_dim, ego_state_dim, cfg)
-        self.autoencoder.load_state_dict(torch.load(pretrained_model_path, map_location=device)['model_state_dict'], strict=False)
-        self.autoencoder.eval()
-        
-        # Determine if encoder should be trainable based on config
-        encoder_lr = getattr(cfg.models.PredictiveModelV9M3, 'encoder_learning_rate', 0.0)
-        self.encoder_trainable = encoder_lr > 0
 
-        # Set decoder parameters trainability
-        for param in self.autoencoder.decoder.parameters():
-            param.requires_grad = True
-        
-        # Set encoder parameters trainability
-        for param in self.autoencoder.encoder.parameters():
-            param.requires_grad = self.encoder_trainable
+        self.autoencoder = AutoEncoderModelV0(obs_shape, action_dim, ego_state_dim, cfg)
 
         # Determine the size of the latent space
         with torch.no_grad():
@@ -100,12 +84,35 @@ class PredictiveModelV9M3(BasePredictiveModel):
             use_sample_weights=False
         )
 
-        self._initialize_weights()
+        if eval_mode:
+            self.encoder_trainable = False
+            self.eval()
+        else:
+            self._initialize_weights()
 
-        # Create parameter groups for different learning rates
-        self.decoder_params = list(self.autoencoder.decoder.parameters())
-        self.encoder_params = list(self.autoencoder.encoder.parameters()) if self.encoder_trainable else []
-        self.other_params = [p for n, p in self.named_parameters() if not any(p is dp for dp in self.decoder_params + self.encoder_params)]
+            pretrained_model_path = find_model_path(cfg.project_dir, cfg.models.PredictiveModelV9.pretrained_model_path) if pretrained_model_path is None else pretrained_model_path
+            if pretrained_model_path is None:
+                print("Warning: Pretrained model path not provided")
+            else:
+                self.autoencoder.load_state_dict(torch.load(pretrained_model_path, map_location=device)['model_state_dict'], strict=False)
+            self.autoencoder.eval()
+        
+            # Determine if encoder should be trainable based on config
+            encoder_lr = getattr(cfg.models.PredictiveModelV9M3, 'encoder_learning_rate', 0.0)
+            self.encoder_trainable = encoder_lr > 0
+
+            # Set decoder parameters trainability
+            for param in self.autoencoder.decoder.parameters():
+                param.requires_grad = True
+            
+            # Set encoder parameters trainability
+            for param in self.autoencoder.encoder.parameters():
+                param.requires_grad = self.encoder_trainable
+
+            # Create parameter groups for different learning rates
+            self.decoder_params = list(self.autoencoder.decoder.parameters())
+            self.encoder_params = list(self.autoencoder.encoder.parameters()) if self.encoder_trainable else []
+            self.other_params = [p for n, p in self.named_parameters() if not any(p is dp for dp in self.decoder_params + self.encoder_params)]
 
     def _initialize_weights(self):
         for m in self.modules():
@@ -195,18 +202,11 @@ class PredictiveModelV9M3(BasePredictiveModel):
             "predictions": predictions,
             "hazard": hazard
         }
-
-    def compute_loss(self, batch, model_output):
-        predictions = model_output['predictions']
-        predicted_latents = model_output['predicted_latents']
-        encoded_state = model_output['encoded_state']
-        hazard = model_output['hazard']
+    
+    def calculate_target_latents(self, batch):
         target_observations = batch['next_observations']
-        target_done = batch['dones'][:, -self.num_frames_to_predict:]
-
-        # Create a mask for valid (not done) timesteps
-        valid_mask = torch.cumprod(1 - target_done.int(), dim=1)
-
+        batch_size, seq_len, channels, height, width = target_observations.shape
+        
         # Get target latents using the pretrained autoencoder
         batch_size, seq_len, channels, height, width = target_observations.shape
         target_observations_reshaped = target_observations.view(-1, channels, height, width)
@@ -227,6 +227,22 @@ class PredictiveModelV9M3(BasePredictiveModel):
         if isinstance(target_latents, tuple):
             target_latents = target_latents[0]
         target_latents = target_latents.view(batch_size, seq_len, -1)
+
+        return target_latents
+
+    def compute_loss(self, batch, model_output):
+        predictions = model_output['predictions']
+        predicted_latents = model_output['predicted_latents']
+        encoded_state = model_output['encoded_state']
+        hazard = model_output['hazard']
+        target_observations = batch['next_observations']
+        target_done = batch['dones'][:, -self.num_frames_to_predict:]
+
+        # Create a mask for valid (not done) timesteps
+        valid_mask = torch.cumprod(1 - target_done.int(), dim=1)
+
+        # Calculate target latents
+        target_latents = self.calculate_target_latents(batch)
 
         # Calculate losses with masking
         loss_obs, loss_components_obs = self.loss_function_observations(

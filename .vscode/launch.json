@@ -179,6 +179,38 @@
             ]
         },
         {
+            "name": "Python: Visualize Loss Time Horizons",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/visualize_loss_time_horizons.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "--model-type", "PredictiveModelV9M3",
+                "--model-path", "models/pretrained/model_latest.pth"
+            ]
+        },
+        {
+            "name": "Python: Visualize Model",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/visualize_model.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "--model-type",
+                "PredictiveModelV9M3",
+                "--model-path",
+                "models/pretrained/model_latest.pth"
+            ]
+        },
+        {
             "name": "Python: Current File",
             "type": "debugpy",
             "request": "launch",

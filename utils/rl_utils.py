@@ -264,7 +264,8 @@ def create_representation_model(cfg, device):
         obs_shape=obs_shape, 
         action_dim=action_dim, 
         ego_state_dim=ego_state_dim,
-        cfg=cfg
+        cfg=cfg,
+        eval_mode=False
     )
 
     # Find and load model weights
