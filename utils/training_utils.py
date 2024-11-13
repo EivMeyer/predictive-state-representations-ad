@@ -7,6 +7,12 @@ import torch
 from typing import Any, Dict, Optional
 from torch.optim import Optimizer
 import logging
+import torch
+import hashlib
+from collections import OrderedDict
+import numpy as np
+from typing import Union, Dict, Optional
+import json
 
 class NoScheduler(_LRScheduler):
     def __init__(self, optimizer):
@@ -339,3 +345,155 @@ def load_checkpoint(
     except Exception as e:
         log_msg(f"Error loading checkpoint: {str(e)}")
         return results
+    
+
+def compute_model_checksum(model: Union[torch.nn.Module, Dict], include_names: bool = True, verbose: bool = False) -> str:
+    """
+    Compute a checksum for a PyTorch model's state.
+    
+    Args:
+        model: Either a PyTorch model or a state dict
+        include_names: Whether to include parameter names in the hash
+        verbose: Whether to print detailed parameter information
+    
+    Returns:
+        str: Hexadecimal checksum of the model state
+    """
+    if isinstance(model, torch.nn.Module):
+        state_dict = model.state_dict()
+    else:
+        state_dict = model
+
+    # Initialize hasher
+    hasher = hashlib.sha256()
+    
+    # Sort parameters by name for consistency
+    sorted_items = sorted(state_dict.items())
+    
+    total_params = 0
+    param_stats = OrderedDict()
+    
+    for name, param in sorted_items:
+        if isinstance(param, torch.Tensor):
+            # Convert tensor to numpy and flatten
+            param_np = param.detach().cpu().numpy().flatten()
+            total_params += param_np.size
+            
+            # Compute statistics for this parameter
+            param_stats[name] = {
+                'shape': list(param.shape),
+                'mean': float(np.mean(param_np)),
+                'std': float(np.std(param_np)),
+                'min': float(np.min(param_np)),
+                'max': float(np.max(param_np)),
+                'num_params': param_np.size
+            }
+            
+            # Update hash with parameter values
+            hasher.update(param_np.tobytes())
+            
+            # Optionally include parameter name in hash
+            if include_names:
+                hasher.update(name.encode())
+    
+    if verbose:
+        print("\nModel Parameter Statistics:")
+        print(f"Total parameters: {total_params:,}")
+        for name, stats in param_stats.items():
+            print(f"\n{name}:")
+            print(f"  Shape: {stats['shape']}")
+            print(f"  Parameters: {stats['num_params']:,}")
+            print(f"  Mean: {stats['mean']:.6f}")
+            print(f"  Std: {stats['std']:.6f}")
+            print(f"  Range: [{stats['min']:.6f}, {stats['max']:.6f}]")
+    
+    checksum = hasher.hexdigest()
+    
+    return checksum
+
+def verify_model_compatibility(model1: torch.nn.Module, model2: torch.nn.Module, 
+                             verbose: bool = False) -> bool:
+    """
+    Verify that two models have compatible architectures by comparing their state dict keys.
+    
+    Args:
+        model1: First PyTorch model
+        model2: Second PyTorch model
+        verbose: Whether to print detailed information about differences
+    
+    Returns:
+        bool: True if models are compatible, False otherwise
+    """
+    state_dict1 = model1.state_dict()
+    state_dict2 = model2.state_dict()
+    
+    keys1 = set(state_dict1.keys())
+    keys2 = set(state_dict2.keys())
+    
+    missing_keys = keys1 - keys2
+    unexpected_keys = keys2 - keys1
+    
+    if verbose:
+        if missing_keys:
+            print("\nMissing keys in second model:")
+            for key in sorted(missing_keys):
+                print(f"  {key}")
+        
+        if unexpected_keys:
+            print("\nUnexpected keys in second model:")
+            for key in sorted(unexpected_keys):
+                print(f"  {key}")
+        
+        common_keys = keys1 & keys2
+        print(f"\nCommon parameters: {len(common_keys)}")
+        
+        shape_mismatches = []
+        for key in common_keys:
+            shape1 = tuple(state_dict1[key].shape)
+            shape2 = tuple(state_dict2[key].shape)
+            if shape1 != shape2:
+                shape_mismatches.append((key, shape1, shape2))
+        
+        if shape_mismatches:
+            print("\nShape mismatches:")
+            for key, shape1, shape2 in shape_mismatches:
+                print(f"  {key}: {shape1} vs {shape2}")
+    
+    return len(missing_keys) == 0 and len(unexpected_keys) == 0
+
+def save_model_metadata(model: torch.nn.Module, filepath: str, 
+                       extra_info: Optional[Dict] = None) -> None:
+    """
+    Save model metadata including checksum and parameter statistics.
+    
+    Args:
+        model: PyTorch model
+        filepath: Where to save the metadata JSON
+        extra_info: Additional information to include in metadata
+    """
+    state_dict = model.state_dict()
+    
+    metadata = {
+        'checksum': compute_model_checksum(model),
+        'total_parameters': sum(p.numel() for p in model.parameters()),
+        'parameter_shapes': {name: list(param.shape) 
+                           for name, param in state_dict.items()},
+        'parameter_stats': {}
+    }
+    
+    # Compute statistics for each parameter
+    for name, param in state_dict.items():
+        if isinstance(param, torch.Tensor):
+            param_np = param.detach().cpu().numpy()
+            metadata['parameter_stats'][name] = {
+                'mean': float(np.mean(param_np)),
+                'std': float(np.std(param_np)),
+                'min': float(np.min(param_np)),
+                'max': float(np.max(param_np))
+            }
+    
+    if extra_info:
+        metadata.update(extra_info)
+    
+    with open(filepath, 'w') as f:
+        json.dump(metadata, f, indent=2)
