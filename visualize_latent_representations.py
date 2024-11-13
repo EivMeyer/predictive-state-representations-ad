@@ -43,28 +43,7 @@ plt.rcParams['grid.linewidth'] = 0.5
 # DPI (dots per inch) for clarity in publications
 plt.rcParams['figure.dpi'] = 100
 
-FONT_SIZE = 12
-
-def setup_plot_style():
-    plt.style.use('default')  # Reset to default style
-    plt.rcParams.update({
-        "font.family": "serif",
-        "font.serif": ["Computer Modern Roman"],
-        "text.usetex": True,
-        "pgf.rcfonts": False,
-        "font.size": FONT_SIZE,
-        "axes.titlesize": FONT_SIZE,
-        "axes.labelsize": FONT_SIZE,
-        "xtick.labelsize": FONT_SIZE,
-        "ytick.labelsize": FONT_SIZE,
-        "axes.grid": True,
-        "grid.alpha": 0.3,
-        "axes.axisbelow": True,
-        "axes.linewidth": 0.8,
-        "axes.edgecolor": "#CCCCCC",
-    })
-
-setup_plot_style()
+from plotting_setup import setup_plotting
 
 def random_sample_indices(data_length, sample_size):
     """Randomly sample indices."""
@@ -141,6 +120,9 @@ from scipy.stats import pearsonr
 # ... (keep all the existing imports and plot style configurations)
 
 def plot_3d_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.ndarray], output_dir: Path):
+
+    setup_plotting(font_size=8)
+
     sample_size = int(0.1 * len(latent_reps))  # 10% of the data
     sampled_indices = random_sample_indices(len(latent_reps), sample_size)
     
@@ -224,6 +206,9 @@ def plot_3d_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.nd
         print(f"Enhanced 3D plots with connecting lines saved for {metric_name.capitalize()}")
 
 def plot_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.ndarray], output_dir: Path):
+
+    setup_plotting(font_size=8)
+    
     sample_size = int(0.1 * len(latent_reps))  # 10% of the data
     sampled_indices = random_sample_indices(len(latent_reps), sample_size)
     
@@ -277,6 +262,8 @@ def plot_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.ndarr
         print(f"Plots saved for {metric_name.capitalize()}")
 
 def plot_latent_trajectory(latent_reps: np.ndarray, episode_indices: np.ndarray, output_dir: Path):
+    setup_plotting(font_size=8)
+
     os.makedirs(output_dir, exist_ok=True)
 
     # Filter data for the first episode
@@ -312,6 +299,8 @@ def plot_latent_trajectory(latent_reps: np.ndarray, episode_indices: np.ndarray,
     print("Latent trajectory plot for the first episode saved.")
 
 def plot_3d_latent_trajectory(latent_reps: np.ndarray, episode_indices: np.ndarray, output_dir: Path):
+    setup_plotting(font_size=8)
+
     os.makedirs(output_dir, exist_ok=True)
 
     # Filter data for the first episode
@@ -365,6 +354,8 @@ def plot_3d_latent_trajectory(latent_reps: np.ndarray, episode_indices: np.ndarr
     print("3D Latent trajectory plot for the first episode saved.")
 
 def plot_latent_correlations(latent_reps: np.ndarray, driving_metrics: Dict[str, np.ndarray], output_dir: Path, n_components: int = 6):
+    setup_plotting(font_size=6)
+
     sample_size = int(0.35 * len(latent_reps))  # 35% of the data
     sampled_indices = np.random.choice(len(latent_reps), size=sample_size, replace=False)
 

@@ -11,6 +11,9 @@ import argparse
 import time
 import os
 
+from plotting_setup import setup_plotting
+setup_plotting()
+
 def visualize_latent_space(model, dataset, device, num_samples=1000, perplexity=30, n_iter=1000):
     print(f"Starting latent space visualization with {num_samples} samples...")
     model.eval()

@@ -7,6 +7,9 @@ from omegaconf import DictConfig
 from utils.config_utils import config_wrapper
 from environments import get_environment
 
+from plotting_setup import setup_plotting
+setup_plotting()
+
 prev_observation, prev_polar_observation = None, None
 
 def cartesian_to_polar(x, y):
