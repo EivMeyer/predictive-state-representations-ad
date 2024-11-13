@@ -8,7 +8,7 @@ import torch
 from utils.file_utils import find_model_path
 from utils.config_utils import config_wrapper
 from environments import get_environment
-from utils.rl_utils import VideoRecorderEvalCallback, DebugCallback, BaseWandbCallback, create_representation_model
+from utils.rl_utils import VideoRecorderEvalCallback, DebugCallback, BaseWandbCallback, LatestModelCallback, create_representation_model
 
 def initialize_ppo_model(cfg, env, device):
     model = None
@@ -111,6 +111,17 @@ def main(cfg: DictConfig) -> None:
     video_folder = Path(cfg.project_dir) / cfg.rl_training.video_folder
     video_folder.mkdir(parents=True, exist_ok=True)
 
+    # Setup saving paths
+    save_path = Path(cfg.project_dir) / cfg.rl_training.save_path
+    save_path.mkdir(parents=True, exist_ok=True)
+    
+    # Setup latest model callback
+    latest_model_callback = LatestModelCallback(
+        save_freq=cfg.rl_training.eval_freq,
+        save_path=save_path,
+        verbose=1
+    )
+
     # Setup evaluation callback with video recording
     eval_callback = VideoRecorderEvalCallback(
         eval_env=eval_env,
@@ -118,7 +129,7 @@ def main(cfg: DictConfig) -> None:
         video_freq=cfg.rl_training.video_freq,
         video_length=cfg.rl_training.video_length,
         n_eval_episodes=cfg.rl_training.n_eval_episodes,
-        best_model_save_path=Path(cfg.project_dir) / cfg.rl_training.save_path,
+        best_model_save_path=save_path,
         log_path=Path(cfg.project_dir) / cfg.rl_training.log_path,
         eval_freq=cfg.rl_training.eval_freq,
         deterministic=True,
@@ -126,7 +137,7 @@ def main(cfg: DictConfig) -> None:
     )
 
     # Setup callbacks
-    callbacks = [eval_callback]
+    callbacks = [eval_callback, latest_model_callback]
     if cfg.wandb.enabled:
         callbacks.append(BaseWandbCallback())
     if cfg.debug_mode:

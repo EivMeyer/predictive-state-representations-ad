@@ -158,6 +158,25 @@ class DebugCallback(BaseCallback):
             avg_reward = np.mean(self.rewards[-1:])
             print(f"Step {self.n_calls}, Reward: {avg_reward:.2f}")
         return True
+    
+# Custom callback to save the latest model
+class LatestModelCallback(BaseCallback):
+    def __init__(self, save_freq: int, save_path: str, verbose: int = 1):
+        super().__init__(verbose)
+        self.save_freq = save_freq
+        self.save_path = Path(save_path)
+        
+    def _init_callback(self) -> None:
+        # Create save directory if it doesn't exist
+        self.save_path.mkdir(parents=True, exist_ok=True)
+        
+    def _on_step(self) -> bool:
+        if self.n_calls % self.save_freq == 0:
+            latest_path = self.save_path / "latest_model.zip"
+            self.model.save(latest_path)
+            if self.verbose > 0:
+                print(f"Saving latest model to {latest_path}")
+        return True
 
 class VideoRecorderEvalCallback(EvalCallback):
     def __init__(self, eval_env, video_folder, video_freq, video_length, n_eval_episodes, *args, **kwargs):
