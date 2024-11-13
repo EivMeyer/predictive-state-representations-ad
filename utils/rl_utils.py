@@ -295,9 +295,10 @@ def create_representation_model(cfg, device):
             f"Searched in {cfg['project_dir']} and its subdirectories."
         )
     
-    print(f"Loading model from: {model_path}")
     load_model_state(model_path, model, device)
     model.to(device)
-    model.eval()  # Set to evaluation mode by default
+    model.eval()
+
+    print(f"Loaded {ModelClass.__name__} model from: {model_path}")
 
     return model

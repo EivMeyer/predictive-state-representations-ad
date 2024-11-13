@@ -18,8 +18,8 @@ from typing import List, Tuple, Dict
 import pandas as pd
 from scipy.stats import pearsonr
 
-# Set figure dimensions (width = 3.5 inches for 2-column format)
-plt.rcParams['figure.figsize'] = [3.5, 2.5]  # Width and height in inches
+# Set figure dimensions (width = 3.4 inches for 2-column format)
+plt.rcParams['figure.figsize'] = [3.4, 2.5]  # Width and height in inches
 
 # Set font sizes for improved readability
 plt.rcParams['font.size'] = 9                # General font size
@@ -57,35 +57,59 @@ def collect_latent_representations(model, env, num_episodes: int = 1000) -> Dict
     episode_indices = []
     min_obstacle_distances = []
     num_close_obstacles = []
+    time_until_termination = []
     
     for episode in tqdm(range(num_episodes), desc="Collecting episodes"):
+        # Lists to store episode data temporarily
+        episode_latent_reps = []
+        episode_speeds = []
+        episode_steering = []
+        episode_accel = []
+        episode_distances = []
+        episode_obstacles = []
+        
         obs = env.reset()
         done = False
         step = 0
+        
+        # Collect the full episode
         while not done:
-            action, _ = model.predict(obs, deterministic=True)
+            # action, _ = model.predict(obs, deterministic=True)
+            # Instead sample random actions for exploration
+            action = [env.action_space.sample()]
             new_obs, _, done, info = env.step(action)
 
             current_time_step = env.get_attr('ego_vehicle_simulation')[0].current_time_step
             ego_position = env.get_attr('ego_vehicle_simulation')[0].ego_vehicle.state.position
             non_ego_obstacles = env.get_attr('ego_vehicle_simulation')[0].current_non_ego_obstacles
             distances_from_ego = [np.linalg.norm(ego_position - obstacle.state_at_time(current_time_step).position) for obstacle in non_ego_obstacles]
-            min_distance = min(distances_from_ego)
+            min_distance = min(distances_from_ego) if distances_from_ego else float('inf')
             num_obstacles_within_25_meter_radius = sum([1 for distance in distances_from_ego if distance <= 25.0])
             
-            latent_rep = obs[0]  # Assuming the latent representation is the first element of the observation
-            latent_reps.append(latent_rep)
-            
-            # Collect driving metrics (you may need to adjust these based on your environment)
-            min_obstacle_distances.append(min_distance)
-            num_close_obstacles.append(num_obstacles_within_25_meter_radius)
-            speeds.append(info[0]['vehicle_current_state']['velocity'])
-            steering_angles.append(info[0]['vehicle_current_state']['steering_angle'])
-            accelerations.append(info[0]['vehicle_current_state']['acceleration'])
-            episode_indices.append(episode)
+            # Store all episode data
+            episode_latent_reps.append(obs[0])  # Assuming the latent representation is the first element
+            episode_speeds.append(info[0]['vehicle_current_state']['velocity'])
+            episode_steering.append(info[0]['vehicle_current_state']['steering_angle'])
+            episode_accel.append(info[0]['vehicle_current_state']['acceleration'])
+            episode_distances.append(min_distance)
+            episode_obstacles.append(num_obstacles_within_25_meter_radius)
             
             obs = new_obs
             step += 1
+        
+        # Now we know the episode length, calculate time until termination for each step
+        episode_length = len(episode_latent_reps)
+        episode_time_to_term = [episode_length - t - 1 for t in range(episode_length)]
+        
+        # Add all episode data to main lists
+        latent_reps.extend(episode_latent_reps)
+        speeds.extend(episode_speeds)
+        steering_angles.extend(episode_steering)
+        accelerations.extend(episode_accel)
+        min_obstacle_distances.extend(episode_distances)
+        num_close_obstacles.extend(episode_obstacles)
+        time_until_termination.extend(episode_time_to_term)
+        episode_indices.extend([episode] * episode_length)
     
     return {
         'latent_reps': np.array(latent_reps),
@@ -94,36 +118,16 @@ def collect_latent_representations(model, env, num_episodes: int = 1000) -> Dict
         'accelerations': np.array(accelerations),
         'episode_indices': np.array(episode_indices),
         'min_obstacle_distances': np.array(min_obstacle_distances),
-        'num_close_obstacles': np.array(num_close_obstacles)
+        'num_close_obstacles': np.array(num_close_obstacles),
+        'time_until_termination': np.array(time_until_termination)
     }
 
-import argparse
-import numpy as np
-import torch
-from pathlib import Path
-from stable_baselines3 import PPO
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
-from sklearn.preprocessing import StandardScaler
-import umap
-import os
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import seaborn as sns
-from tqdm import tqdm
-from utils.config_utils import config_wrapper
-from environments import get_environment
-from typing import List, Tuple, Dict
-import pandas as pd
-from scipy.stats import pearsonr
-
-# ... (keep all the existing imports and plot style configurations)
 
 def plot_3d_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.ndarray], output_dir: Path):
 
     setup_plotting(font_size=8)
 
-    sample_size = int(0.1 * len(latent_reps))  # 10% of the data
+    sample_size = int(0.05 * len(latent_reps))  # 10% of the data
     sampled_indices = random_sample_indices(len(latent_reps), sample_size)
     
     sampled_latent_reps = latent_reps[sampled_indices]
@@ -157,11 +161,11 @@ def plot_3d_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.nd
             ax.scatter(min_x, y, z, c=sampled_metric_values[i], cmap='coolwarm', alpha=0.1)
             ax.plot([x, min_x], [y, y], [z, z], 'k:', lw=0.5, alpha=0.3)
         
-        fig.colorbar(scatter, label=metric_name.capitalize())
+        fig.colorbar(scatter, label=metric_name)
         ax.set_xlabel('PC 1')
         ax.set_ylabel('PC 2')
         ax.set_zlabel('PC 3')
-        ax.set_title(f'3D PCA of Latent Space: {metric_name.capitalize()}')
+        ax.set_title(f'3D PCA of Latent Space: {metric_name}')
         plt.tight_layout()
         plt.savefig(output_dir / f'latent_pca_3d_{metric_name}.pdf', dpi=300, bbox_inches='tight')
         plt.close()
@@ -194,22 +198,22 @@ def plot_3d_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.nd
             ax.scatter(min_x, y, z, c=sampled_metric_values[i], cmap='coolwarm', alpha=0.1)
             ax.plot([x, min_x], [y, y], [z, z], 'k:', lw=0.5, alpha=0.3)
         
-        fig.colorbar(scatter, label=metric_name.capitalize())
+        fig.colorbar(scatter, label=metric_name)
         ax.set_xlabel('t-SNE 1')
         ax.set_ylabel('t-SNE 2')
         ax.set_zlabel('t-SNE 3')
-        ax.set_title(f'3D t-SNE of Latent Space: {metric_name.capitalize()}')
+        ax.set_title(f'3D t-SNE of Latent Space: {metric_name}')
         plt.tight_layout()
         plt.savefig(output_dir / f'latent_tsne_3d_{metric_name}.pdf', dpi=300, bbox_inches='tight')
         plt.close()
 
-        print(f"Enhanced 3D plots with connecting lines saved for {metric_name.capitalize()}")
+        print(f"Enhanced 3D plots with connecting lines saved for {metric_name}")
 
 def plot_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.ndarray], output_dir: Path):
 
     setup_plotting(font_size=8)
     
-    sample_size = int(0.1 * len(latent_reps))  # 10% of the data
+    sample_size = min(300, len(latent_reps))  # 300  samples or less
     sampled_indices = random_sample_indices(len(latent_reps), sample_size)
     
     sampled_latent_reps = latent_reps[sampled_indices]
@@ -223,43 +227,42 @@ def plot_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.ndarr
         
         plt.figure(figsize=(3.5, 2.5))  # Updated figure size for IEEE 2-column format
         scatter = plt.scatter(pca_result[:, 0], pca_result[:, 1], c=sampled_metric_values, cmap='coolwarm', alpha=0.6)
-        plt.colorbar(scatter, label=metric_name.capitalize())
-        # plt.title(f'PCA of Latent Space Colored by {metric_name.capitalize()}')
-        plt.xlabel('First Principal Component')
-        plt.ylabel('Second Principal Component')
+        plt.colorbar(scatter, label=metric_name)
+        # plt.title(f'PCA of Latent Space Colored by {metric_name}')
+        plt.xlabel('PCA1')
+        plt.ylabel('PCA2')
         plt.tight_layout()
         plt.savefig(output_dir / f'latent_pca_{metric_name}.pdf', dpi=100, bbox_inches='tight')
         plt.close()
         
         # UMAP projection
-        umap_model = umap.UMAP(n_neighbors=15, min_dist=0.1, n_components=2, metric='euclidean')
-        umap_result = umap_model.fit_transform(sampled_latent_reps)
-        plt.figure(figsize=(3.5, 2.5))  # Updated figure size for IEEE 2-column format
-        scatter = plt.scatter(umap_result[:, 0], umap_result[:, 1], c=sampled_metric_values, cmap='coolwarm', alpha=0.6)
-        plt.colorbar(scatter, label=metric_name.capitalize())
-        # plt.title(f'UMAP Projection of Latent Space Colored by {metric_name.capitalize()}')
-        plt.xlabel('UMAP-1')
-        plt.ylabel('UMAP-2')
-        plt.tight_layout()
-        plt.savefig(output_dir / f'latent_umap_{metric_name}.pdf', dpi=100, bbox_inches='tight')
-        plt.close()
+        # umap_model = umap.UMAP(n_neighbors=15, min_dist=0.1, n_components=2, metric='euclidean')
+        # umap_result = umap_model.fit_transform(sampled_latent_reps)
+        # plt.figure(figsize=(3.4, 2.5))  # Updated figure size for IEEE 2-column format
+        # scatter = plt.scatter(umap_result[:, 0], umap_result[:, 1], c=sampled_metric_values, cmap='coolwarm', alpha=0.6)
+        # plt.colorbar(scatter, label=metric_name)
+        # # plt.title(f'UMAP Projection of Latent Space Colored by {metric_name}')
+        # plt.xlabel('UMAP-1')
+        # plt.ylabel('UMAP-2')
+        # plt.tight_layout()
+        # plt.savefig(output_dir / f'latent_umap_{metric_name}.pdf', dpi=100, bbox_inches='tight')
+        # plt.close()
 
+        # n_samples = sampled_latent_reps.shape[0]  # Number of samples in your dataset
+        # perplexity = min(30, n_samples - 1)  # Adjust perplexity to be less than n_samples
+        # tsne = TSNE(n_components=2, random_state=42, perplexity=perplexity)
+        # tsne_result = tsne.fit_transform(sampled_latent_reps)
+        # plt.figure(figsize=(3.4, 2.5))  # Updated figure size for IEEE 2-column format
+        # scatter = plt.scatter(tsne_result[:, 0], tsne_result[:, 1], c=sampled_metric_values, cmap='coolwarm', alpha=0.6)
+        # plt.colorbar(scatter, label=metric_name)
+        # # plt.title(f'UMAP Projection of Latent Space Colored by {metric_name}')
+        # plt.xlabel('t-SNE 1')
+        # plt.ylabel('t-SNE 2')
+        # plt.tight_layout()
+        # plt.savefig(output_dir / f'latent_tsne_{metric_name}.pdf', dpi=100, bbox_inches='tight')
+        # plt.close()
 
-        n_samples = sampled_latent_reps.shape[0]  # Number of samples in your dataset
-        perplexity = min(30, n_samples - 1)  # Adjust perplexity to be less than n_samples
-        tsne = TSNE(n_components=2, random_state=42, perplexity=perplexity)
-        tsne_result = tsne.fit_transform(sampled_latent_reps)
-        plt.figure(figsize=(3.5, 2.5))  # Updated figure size for IEEE 2-column format
-        scatter = plt.scatter(tsne_result[:, 0], tsne_result[:, 1], c=sampled_metric_values, cmap='coolwarm', alpha=0.6)
-        plt.colorbar(scatter, label=metric_name.capitalize())
-        # plt.title(f'UMAP Projection of Latent Space Colored by {metric_name.capitalize()}')
-        plt.xlabel('t-SNE 1')
-        plt.ylabel('t-SNE 2')
-        plt.tight_layout()
-        plt.savefig(output_dir / f'latent_tsne_{metric_name}.pdf', dpi=100, bbox_inches='tight')
-        plt.close()
-
-        print(f"Plots saved for {metric_name.capitalize()}")
+        print(f"Plots saved for {metric_name}")
 
 def plot_latent_trajectory(latent_reps: np.ndarray, episode_indices: np.ndarray, output_dir: Path):
     setup_plotting(font_size=8)
@@ -277,7 +280,7 @@ def plot_latent_trajectory(latent_reps: np.ndarray, episode_indices: np.ndarray,
     tsne = TSNE(n_components=2, random_state=42, perplexity=perplexity)
     tsne_result = tsne.fit_transform(latent_reps)
     
-    plt.figure(figsize=(3.5, 2.5))  # Updated figure size for IEEE 2-column format
+    plt.figure(figsize=(3.4, 2.5))  # Updated figure size for IEEE 2-column format
     
     # Plot trajectory for the first episode
     colors = plt.cm.coolwarm(np.linspace(0, 1, len(tsne_result)))
@@ -353,7 +356,7 @@ def plot_3d_latent_trajectory(latent_reps: np.ndarray, episode_indices: np.ndarr
 
     print("3D Latent trajectory plot for the first episode saved.")
 
-def plot_latent_correlations(latent_reps: np.ndarray, driving_metrics: Dict[str, np.ndarray], output_dir: Path, n_components: int = 6):
+def plot_latent_correlations(latent_reps: np.ndarray, driving_metrics: Dict[str, np.ndarray], output_dir: Path, n_components_heatmap: int = 12, n_components_variance: int = 12):
     setup_plotting(font_size=6)
 
     sample_size = int(0.35 * len(latent_reps))  # 35% of the data
@@ -369,32 +372,35 @@ def plot_latent_correlations(latent_reps: np.ndarray, driving_metrics: Dict[str,
     normalized_latent_reps = scaler.fit_transform(sampled_latent_reps)
     
     # Perform PCA and get explained variance
-    pca = PCA(n_components=n_components)
-    top_latent_dims = pca.fit_transform(normalized_latent_reps)
-    explained_variance = pca.explained_variance_ratio_ * 100  # Convert to percentage
+    pca_heatmap = PCA(n_components=n_components_heatmap)
+    top_latent_dims = pca_heatmap.fit_transform(normalized_latent_reps)
     
-    correlation_matrix = np.zeros((n_components, len(driving_metrics)))
+    correlation_matrix = np.zeros((n_components_heatmap, len(driving_metrics)))
     for i, (metric_name, metric_values) in enumerate(sampled_metrics.items()):
-        for j in range(n_components):
+        for j in range(n_components_heatmap):
             correlation_matrix[j, i], _ = pearsonr(top_latent_dims[:, j], metric_values)
     
     # Plot correlation heatmap
-    plt.figure(figsize=(4.0, 3.0))
+    plt.figure(figsize=(4.0, 2.0))
     sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', xticklabels=list(driving_metrics.keys()),
-                yticklabels=[f'PC {i+1}' for i in range(n_components)], fmt='.2f', cbar=True)
+                yticklabels=[f'PC {i+1}' for i in range(n_components_heatmap)], fmt='.2f', cbar=True)
     plt.yticks(rotation=0)  # Ensure y-axis labels are not rotated
     # plt.title('Correlation between PCs and Driving Metrics')
     plt.tight_layout()
     plt.savefig(output_dir / 'latent_correlation_heatmap.pdf', dpi=100, bbox_inches='tight')
     plt.close()
 
+    pca_explained_variance = PCA(n_components=n_components_variance)
+    pca_explained_variance.fit(normalized_latent_reps)
+    explained_variance = pca_explained_variance.explained_variance_ratio_ * 100  # Convert to percentage
+
     # Plot explained variance
-    plt.figure(figsize=(4.0, 3.0))
-    plt.bar(range(1, n_components + 1), explained_variance, align='center', alpha=0.8)
+    plt.figure(figsize=(4.0, 1.6))
+    plt.bar(range(1, n_components_variance + 1), explained_variance, align='center', alpha=0.8)
     plt.xlabel('Principal Component')
     plt.ylabel('Explained Variance (%)')
     # plt.title('Explained Variance by Principal Component')
-    plt.xticks(range(1, n_components + 1), [f'{i}' for i in range(1, n_components + 1)])
+    plt.xticks(range(1, n_components_variance + 1), [f'{i}' for i in range(1, n_components_variance + 1)])
     
     # Add percentage labels on top of each bar
     for i, v in enumerate(explained_variance):
@@ -423,9 +429,15 @@ def main(cfg):
         env = env_class().make_env(cfg, n_envs=1, seed=cfg.seed, rl_mode=True)
 
         # Load the trained model
-        model_path = sorted(Path(cfg.project_dir).rglob('*.zip'), key=lambda x: x.stat().st_mtime, reverse=True)[0]
-        print(f"Loading model from: {model_path}")
-        model = PPO.load(model_path, env=env)
+        # model_path = sorted(Path(cfg.project_dir).rglob('*.zip'), key=lambda x: x.stat().st_mtime, reverse=True)[0]
+        # print(f"Loading model from: {model_path}")
+        # model = PPO.load(model_path, env=env)
+
+        # Create new model
+        model = PPO(
+            "MlpPolicy",
+            env
+        )
 
         # Collect latent representations and driving metrics
         data = collect_latent_representations(model, env, args.num_episodes)
@@ -438,16 +450,22 @@ def main(cfg):
         # Load the collected data
         data = np.load(output_dir / 'latent_data.npz')
         print("Data loaded successfully")
+
         latent_reps = data['latent_reps']
         episode_indices = data['episode_indices']
+        num_episodes = len(np.unique(episode_indices))
+        print(f"Number of episodes: {num_episodes}")
+        print(f"Number of samples: {len(latent_reps)}")
+        print(f"Average samples per episode: {len(latent_reps) / num_episodes:.2f}")
 
         # Generate plots for each metric
         metrics = {
             'speed': data['speeds'],
+            # 'acceleration': data['accelerations'],
             'steering': data['steering_angles'],
-            'acceleration': data['accelerations'],
-            'log. min. distance': np.log(data['min_obstacle_distances'] + 0.01),
-            'close vehicles': data['num_close_obstacles']
+            'log NVD': np.log10(data['min_obstacle_distances'] + 0.01),
+            # 'close vehicles': data['num_close_obstacles'],
+            'log TTT': np.log10(data['time_until_termination']*0.04 + 0.1)
         }
         
         plot_latent_projections(latent_reps, metrics, output_dir)
