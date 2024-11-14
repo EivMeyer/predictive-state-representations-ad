@@ -49,7 +49,7 @@ def create_base_experiment_config(config):
         window_size=800
     )
 
-    control_space_cls = SteeringAccelerationSpace
+    control_space_cls = PIDControlSpace if commonroad_config['pid_control'] else SteeringAccelerationSpace
     control_space_options = commonroad_config['control_space']
     
     experiment_config = RLExperimentConfig(

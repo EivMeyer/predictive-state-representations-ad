@@ -39,7 +39,7 @@ def create_rewarders():
         # ),
         CustomReachedEndRewardComputer(
             arclength_threshold=1.0,
-            reward=3.5
+            reward=5.0
         ),
         CollisionPenaltyRewardComputer(
             penalty=-2.0,
@@ -57,17 +57,17 @@ def create_rewarders():
         # OvershotGoalRewardComputer(reward=0.0),
         # SteeringAnglePenaltyRewardComputer(weight=0.0005, loss_type=RewardLossMetric.L1),
         StillStandingPenaltyRewardComputer(penalty=-0.05, velocity_threshold=2.0),
-        TimeToCollisionPenaltyRewardComputer(weight=0.1), # requires incoming edges
+        TimeToCollisionPenaltyRewardComputer(weight=0.1), 
         OffroadPenaltyRewardComputer(penalty=-5.0),
         VelocityPenaltyRewardComputer(
-            reference_velocity=33.0,
+            reference_velocity=34.0,
             weight=0.002,
             loss_type=RewardLossMetric.L2,
             only_upper=True
         ),
 
         # LateralErrorPenaltyRewardComputer(weight=0.0001, loss_type=RewardLossMetric.L1),
-        YawratePenaltyRewardComputer(weight=0.01),
+        # YawratePenaltyRewardComputer(weight=0.01),
         # HeadingErrorPenaltyRewardComputer(
         #     weight=0.01,
         #     loss_type=RewardLossMetric.L2,

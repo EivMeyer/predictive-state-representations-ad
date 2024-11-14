@@ -48,7 +48,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/train_rl_agent.py",
             "console": "integratedTerminal",
-            "justMyCode": true,
+            "justMyCode": false,
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             },
