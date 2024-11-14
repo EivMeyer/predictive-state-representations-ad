@@ -51,6 +51,17 @@ def create_base_experiment_config(config):
 
     control_space_cls = PIDControlSpace if commonroad_config['pid_control'] else SteeringAccelerationSpace
     control_space_options = commonroad_config['control_space']
+
+    preprocessors = [
+        # MergeLaneletsPreprocessor()
+        # VehicleFilterPreprocessor(),
+        # RemoveIslandsPreprocessor()
+        # SegmentLaneletsPreprocessor(100.0),
+        # ComputeVehicleVelocitiesPreprocessor(),
+        # (DepopulateScenarioPreprocessor(1), 1),
+    ]
+    if commonroad_config['spawn_rate'] < 1.0:
+        preprocessors.append(DepopulateScenarioPreprocessor(commonroad_config["spawn_rate"]))
     
     experiment_config = RLExperimentConfig(
         control_space_cls=control_space_cls,
@@ -64,15 +75,7 @@ def create_base_experiment_config(config):
             raise_exceptions=True,
             renderer_options=renderer_options_render,
             observer=create_render_observer(config['viewer']),
-            preprocessor=chain_preprocessors(*[
-                DepopulateScenarioPreprocessor(commonroad_config["spawn_rate"])
-                # MergeLaneletsPreprocessor()
-                # VehicleFilterPreprocessor(),
-                # RemoveIslandsPreprocessor()
-                # SegmentLaneletsPreprocessor(100.0),
-                # ComputeVehicleVelocitiesPreprocessor(),
-                # (DepopulateScenarioPreprocessor(1), 1),
-            ]),
+            preprocessor=chain_preprocessors(*preprocessors) if preprocessors else None,
         ),
         respawner_cls=RandomRespawner,
         respawner_options=commonroad_config['respawner'],

@@ -5,10 +5,43 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.utils import configure_logger
 import wandb
 import torch
+from torch import nn
 from utils.file_utils import find_model_path
 from utils.config_utils import config_wrapper
 from environments import get_environment
 from utils.rl_utils import VideoRecorderEvalCallback, DebugCallback, BaseWandbCallback, LatestModelCallback, create_representation_model
+from utils.policy_utils import PPOWithNoise
+
+def create_new_ppo_model(cfg, env, device, tensorboard_log=None):
+    return PPO(
+        policy="MlpPolicy",
+        env=env,
+        verbose=1,
+        device=device,
+        learning_rate=cfg.rl_training.learning_rate,
+        policy_kwargs={
+            "net_arch": OmegaConf.to_container(cfg.rl_training.net_arch, resolve=True),
+            "log_std_init": cfg.rl_training.log_std_init,
+            "full_std": cfg.rl_training.full_std,
+            "use_expln": cfg.rl_training.use_expln,
+            "squash_output": cfg.rl_training.squash_output,
+            "activation_fn": nn.ReLU,  # ReLU often works well for control tasks
+            "ortho_init": True,  # Orthogonal initialization helps with training stability
+        },
+        n_steps=cfg.rl_training.n_steps,
+        batch_size=cfg.rl_training.batch_size,
+        n_epochs=cfg.rl_training.n_epochs,
+        gamma=cfg.rl_training.gamma,
+        target_kl=cfg.rl_training.target_kl,
+        normalize_advantage=cfg.rl_training.normalize_advantage,
+        gae_lambda=cfg.rl_training.gae_lambda,
+        clip_range=cfg.rl_training.clip_range,
+        clip_range_vf=cfg.rl_training.clip_range_vf,
+        ent_coef=cfg.rl_training.ent_coef,
+        vf_coef=cfg.rl_training.vf_coef,
+        max_grad_norm=cfg.rl_training.max_grad_norm,
+        tensorboard_log=tensorboard_log
+    )
 
 def initialize_ppo_model(cfg, env, device):
     model = None
@@ -39,28 +72,7 @@ def initialize_ppo_model(cfg, env, device):
 
     if model is None:
         print("No warmstart model loaded. Training from scratch")
-
-
-        model = PPO(
-            "MlpPolicy",
-            env,
-            verbose=1,
-            device=device,
-            learning_rate=cfg.rl_training.learning_rate,
-            policy_kwargs={
-                "net_arch": OmegaConf.to_container(cfg.rl_training.net_arch, resolve=True)
-            },
-            n_steps=cfg.rl_training.n_steps,
-            batch_size=cfg.rl_training.batch_size,
-            n_epochs=cfg.rl_training.n_epochs,
-            gamma=cfg.rl_training.gamma,
-            gae_lambda=cfg.rl_training.gae_lambda,
-            clip_range=cfg.rl_training.clip_range,
-            ent_coef=cfg.rl_training.ent_coef,
-            vf_coef=cfg.rl_training.vf_coef,
-            max_grad_norm=cfg.rl_training.max_grad_norm,
-            tensorboard_log=tensorboard_log
-        )
+        model = create_new_ppo_model(cfg, env, device, tensorboard_log=tensorboard_log)
 
     return model
 

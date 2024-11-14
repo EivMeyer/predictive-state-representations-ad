@@ -199,29 +199,43 @@ rl_training:
   # Total number of timesteps for training
   total_timesteps: 10000000
   # Learning rate for the optimizer
-  learning_rate: 5e-5
+  learning_rate: 3e-4
   # Number of steps to collect samples for each update
-  n_steps: 1024
+  n_steps: 256
+  # Target value for the KL divergence
+  target_kl: 0.01
   # Batch size for each update
-  batch_size: 256
+  batch_size: 64
+  # Uses state-dependent std instead of parameter-only std
+  full_std: true
+  # Uses numerically stable exponential for action std
+  use_expln: true
+  # Ensures actions stay within [-1,1] bounds
+  squash_output: false # // AssertionError: squash_output=True is only available when using gSDE (use_sde=True)
+  # Whether to normalize the advantages
+  normalize_advantage: true
   # Number of epochs to train the model
   n_epochs: 4
   # Discount factor for future rewards
   gamma: 0.99
   # Lambda parameter for Generalized Advantage Estimation
-  gae_lambda: 0.8
+  gae_lambda: 0.95
   # Clipping range for the surrogate objective
-  clip_range: 0.15
+  clip_range: 0.2
+  # Clip range for the value function
+  clip_range_vf: 0.2
+  # Initial value for the log std of the policy
+  log_std_init: -2.0
   # Coefficient for the entropy loss
   ent_coef: 0.03
   # Coefficient for the value function loss
   vf_coef: 0.5
   # Maximum norm for gradient clipping
-  max_grad_norm: 10.0
+  max_grad_norm: 0.5
   # Network architecture for the policy and value function
   net_arch:
-    pi: [256, 256, 128]
-    vf: [256, 256, 128]
+    pi: [256, 256]
+    vf: [256, 256]
   # Enable online state representation learning
   online_srl: false
 
@@ -244,6 +258,9 @@ commonroad:
     linear_lanelet_projection: true
     # Whether to sort lanelet assignments
     sort_lanelet_assignments: false
+
+  # Whether to enable PID control (more high-level control with enhanced stability)
+  pid_control: true
 
   # Control space options
   control_space:
