@@ -25,10 +25,10 @@ class NoScheduler(_LRScheduler):
         return [group['lr'] for group in self.optimizer.param_groups]
 
 
-def init_wandb(cfg: DictConfig):
+def init_wandb(cfg: DictConfig, project_postfix: str = ""):
     if cfg.wandb.enabled:
         import wandb
-        wandb.init(project=cfg.wandb.project + "-" + cfg.environment, config=OmegaConf.to_container(cfg, resolve=True))
+        wandb.init(project=cfg.wandb.project + "-" + cfg.environment + '-' + project_postfix, config=OmegaConf.to_container(cfg, resolve=True))
         print(f"Initialized wandb project: {cfg.wandb.project}")
         return wandb
     else:

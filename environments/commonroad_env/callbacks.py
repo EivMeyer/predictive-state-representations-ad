@@ -12,13 +12,13 @@ class CommonRoadWandbCallback(BaseWandbCallback):
         super(CommonRoadWandbCallback, self).__init__(verbose)
 
     def _on_training_start(self) -> None:
-        if not self.enabled:
+        if not self.enabled or not wandb.run:
             return
         super()._on_training_start()
         self._termination_reasons = self.training_env.get_attr('termination_reasons')[0]
 
     def _log_episode_metrics(self, rollout_buffer, n_episodes_done_step, n_steps, last_done_array, last_info):
-        if not self.enabled:
+        if not self.enabled or not wandb.run:
             return
         super()._log_episode_metrics(rollout_buffer, n_episodes_done_step, n_steps, last_done_array, last_info)
 

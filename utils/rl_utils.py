@@ -33,10 +33,14 @@ class BaseWandbCallback(BaseCallback):
         pass
 
     def _on_rollout_start(self) -> None:
+        if not wandb.run:
+            return
         self._info_buffer = {}
         self._log_policy_metrics()
 
     def _on_step(self) -> bool:
+        if not wandb.run:
+            return True
         assert self.logger is not None
 
         n_steps = self.locals.get('n_steps')
@@ -59,6 +63,8 @@ class BaseWandbCallback(BaseCallback):
         return True
 
     def _on_rollout_end(self) -> None:
+        if not wandb.run:
+            return
         rollout_buffer = self.locals.get('rollout_buffer')
         if rollout_buffer is not None:
             try:
@@ -68,6 +74,8 @@ class BaseWandbCallback(BaseCallback):
         self.n_rollouts += 1
 
     def _log_episode_metrics(self, rollout_buffer, n_episodes_done_step, n_steps, last_done_array, last_info):
+        if not wandb.run:
+            return
         for attr in ['actions', 'log_probs', 'rewards', 'values']:
             buffer_metrics = self._analyze_buffer_array_masked(
                 buffer=getattr(rollout_buffer, attr),
@@ -85,6 +93,8 @@ class BaseWandbCallback(BaseCallback):
         wandb.log({"info/n_episodes": float(self.n_episodes)}, step=self.num_timesteps)
 
     def _log_rollout_metrics(self, rollout_buffer):
+        if not wandb.run:
+            return
         for attr in ['advantages', 'values']:
             buffer_metrics = self._analyze_buffer_array(getattr(rollout_buffer, attr))
             for metric_name, value in buffer_metrics.items():
@@ -95,7 +105,7 @@ class BaseWandbCallback(BaseCallback):
                     wandb.log({f"train/{attr}_ep_{metric_name}": value}, step=self.num_timesteps)
 
     def _log_policy_metrics(self):
-        if self.num_timesteps == 0:
+        if self.num_timesteps == 0 or not wandb.run:
             return
 
         for name, param in self.model.policy.named_parameters():
@@ -171,6 +181,8 @@ class LatestModelCallback(BaseCallback):
         self.save_path.mkdir(parents=True, exist_ok=True)
         
     def _on_step(self) -> bool:
+        if self.save_freq <= 0:
+            return True
         if self.n_calls % self.save_freq == 0:
             latest_path = self.save_path / "latest_model.zip"
             self.model.save(latest_path)
@@ -260,7 +272,6 @@ class VideoRecorderEvalCallback(EvalCallback):
                 }, step=self.num_timesteps)
 
         return True
-    
 
 def create_representation_model(cfg, device):
     """

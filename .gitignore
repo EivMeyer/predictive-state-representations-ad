@@ -4,6 +4,7 @@ output-single/
 outputs/
 debug_plots/
 latent_analysis/
+sweep_checkpoints/
 settings.json
 wandb/
 *.out

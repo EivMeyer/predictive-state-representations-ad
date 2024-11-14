@@ -272,7 +272,8 @@ class Trainer:
                 if self.cfg.verbose:
                     print(f"  Val {key}: {mean_value:.4f}")
 
-        self.wandb.log(epoch_averages, step=self.current_epoch)
+        if self.wandb.run:
+            self.wandb.log(epoch_averages, step=self.current_epoch)
         
     def save_model(self, is_best: bool = False) -> None:
         save_dict = {
@@ -331,13 +332,15 @@ class Trainer:
             current_lr = self.scheduler.get_last_lr()[0]
             if self.cfg.verbose:
                 print(f"Current learning rate: {current_lr}")
-            self.wandb.log({"learning_rate": current_lr}, step=epoch)
+            if self.wandb.run:
+                self.wandb.log({"learning_rate": current_lr}, step=epoch)
 
             epoch_time = time.time() - start_time
             epoch_speed = len(self.train_loader) / epoch_time
             if self.cfg.verbose:
                 print(f"Epoch speed: {epoch_speed:.2f} iterations/second")
-            self.wandb.log({"epoch_speed": epoch_speed}, step=epoch)
+            if self.wandb.run:
+                self.wandb.log({"epoch_speed": epoch_speed}, step=epoch)
 
             if self.cfg.training.create_plots and should_validate:
                 self.visualize_predictions()
@@ -358,9 +361,10 @@ class Trainer:
             else:
                 hold_out_done_probs = None
 
-        self.wandb.log({
-            "hold_out_prediction": self.wandb.Image(self.fig),
-        }, step=self.current_epoch)
+        if self.wandb.run:
+            self.wandb.log({
+                "hold_out_prediction": self.wandb.Image(self.fig),
+            }, step=self.current_epoch)
 
         metrics = {
             'Loss (val)': np.mean(self.val_stats['total_loss']),

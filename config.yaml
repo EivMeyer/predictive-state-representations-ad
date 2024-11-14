@@ -189,7 +189,7 @@ rl_training:
   # Number of episodes for evaluation
   n_eval_episodes: 20
   # Frequency of video recording (in steps)
-  video_freq: 30000  
+  video_freq: 20000  
   # Length of each video (in steps)
   video_length: 6000 
   # Folder to save videos (relative to project_dir)
