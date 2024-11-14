@@ -96,7 +96,7 @@ evaluation:
 # Training configuration
 training:
   # Type of model to use for training
-  model_type: "AutoEncoderModelV2LW" # AutoEncoderModelV0, AutoEncoderModelV0M1, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, PredictiveModelV9M2, VQVAEPredictiveModel
+  model_type: "PredictiveModelV9M3" # AutoEncoderModelV0, AutoEncoderModelV0M1, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, PredictiveModelV9M2, PredictiveModelV9M3 VQVAEPredictiveModel
   # Set this to the path of a checkpoint to resume training
   warmstart_model: null # "../models/pretrained/predictive_model_v9m1.pth"
   # Whether to continue from the last scheduler state
@@ -225,9 +225,9 @@ rl_training:
   # Clip range for the value function
   clip_range_vf: 0.2
   # Initial value for the log std of the policy
-  log_std_init: -2.0
+  log_std_init: -1.5
   # Coefficient for the entropy loss
-  ent_coef: 0.03
+  ent_coef: 0.01
   # Coefficient for the value function loss
   vf_coef: 0.5
   # Maximum norm for gradient clipping
