@@ -199,13 +199,13 @@ rl_training:
   # Total number of timesteps for training
   total_timesteps: 10000000
   # Learning rate for the optimizer
-  learning_rate: 3e-4
+  learning_rate: 1e-4
   # Number of steps to collect samples for each update
-  n_steps: 256
+  n_steps: 512
   # Target value for the KL divergence
   target_kl: 0.01
   # Batch size for each update
-  batch_size: 64
+  batch_size: 256
   # Uses state-dependent std instead of parameter-only std
   full_std: true
   # Uses numerically stable exponential for action std
@@ -215,9 +215,9 @@ rl_training:
   # Whether to normalize the advantages
   normalize_advantage: true
   # Number of epochs to train the model
-  n_epochs: 4
+  n_epochs: 10
   # Discount factor for future rewards
-  gamma: 0.99
+  gamma: 0.95
   # Lambda parameter for Generalized Advantage Estimation
   gae_lambda: 0.95
   # Clipping range for the surrogate objective

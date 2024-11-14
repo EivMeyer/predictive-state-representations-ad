@@ -25,8 +25,8 @@ def create_new_ppo_model(cfg, env, device, tensorboard_log=None):
             "full_std": cfg.rl_training.full_std,
             "use_expln": cfg.rl_training.use_expln,
             "squash_output": cfg.rl_training.squash_output,
-            "activation_fn": nn.ReLU,  # ReLU often works well for control tasks
-            "ortho_init": True,  # Orthogonal initialization helps with training stability
+            "activation_fn": nn.Tanh, 
+            "ortho_init": True,
         },
         n_steps=cfg.rl_training.n_steps,
         batch_size=cfg.rl_training.batch_size,
