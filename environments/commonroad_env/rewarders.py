@@ -75,7 +75,7 @@ def create_rewarders():
             reward=100
         ),
         CollisionPenaltyRewardComputer(
-            penalty=-100.0,
+            penalty=-500.0,
         ),
         # FrictionViolationPenaltyRewardComputer(penalty=-0.01),
         TrajectoryProgressionRewardComputer(
@@ -92,7 +92,7 @@ def create_rewarders():
         # SteeringAnglePenaltyRewardComputer(weight=0.0005, loss_type=RewardLossMetric.L1),
         # StillStandingPenaltyRewardComputer(penalty=-0.05, velocity_threshold=2.0),
         # TimeToCollisionPenaltyRewardComputer(weight=0.1), 
-        OffroadPenaltyRewardComputer(penalty=-100.0),
+        OffroadPenaltyRewardComputer(penalty=-500.0),
         # VelocityPenaltyRewardComputer(
         #     reference_velocity=34.0,
         #     weight=0.2,
