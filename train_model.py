@@ -62,6 +62,12 @@ class Trainer:
 
         self.val_batch_size = self._calculate_val_batch_size()
 
+        # Add early stopping parameters
+        self.patience = cfg.training.early_stopping.patience
+        self.min_delta = cfg.training.early_stopping.min_delta if hasattr(cfg.training.early_stopping, 'min_delta') else 0
+        self.patience_counter = 0
+        self.best_monitored_value = float('inf')
+
     def _calculate_val_batch_size(self) -> int:
         if self.device.type == 'cuda':
             total_memory = torch.cuda.get_device_properties(self.device).total_memory
