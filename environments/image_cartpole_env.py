@@ -2,7 +2,6 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 from environments.base_env import BaseEnv
-import cv2
 
 class ImageCartPoleEnv(gym.Wrapper, BaseEnv):
     def __init__(self, cfg):
@@ -28,6 +27,7 @@ class ImageCartPoleEnv(gym.Wrapper, BaseEnv):
         return self._get_obs(), reward, terminated, truncated, info
 
     def _get_obs(self):
+        import cv2
         img = self.env.render()
         img = cv2.resize(img, (self.cfg.viewer.window_size, self.cfg.viewer.window_size))
         img = img.transpose(2, 0, 1)
