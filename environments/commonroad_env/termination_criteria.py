@@ -35,12 +35,31 @@ class CustomReachedEndCriterion(BaseTerminationCriterion):
         return {'ReachedEnd'}
     
 
+class OverspeedCriterion(BaseTerminationCriterion):
+    def __init__(self, max_speed: float):
+        self.max_speed = max_speed
+        super().__init__()
+
+    def __call__(
+        self,
+        simulation: EgoVehicleSimulation
+    ) -> Tuple[bool, Optional[str]]:
+        overspeed = simulation.ego_vehicle.state.velocity > self.max_speed
+        # print(f"Current speed: {simulation.ego_vehicle.state.velocity}", f"Max speed: {self.max_speed}")
+        return overspeed, 'Overspeed' if overspeed else None
+
+    @property
+    def reasons(self) -> Set[str]:
+        return {'Overspeed'}
+    
+
 def create_termination_criteria(terminate_on_collision: bool) -> List[BaseTerminationCriterion]:
     termination_criteria = [
         TimeoutCriterion(max_timesteps=500),
         # # ReachedGoalCriterion(),
         # # OvershotGoalCriterion(),
-        CustomReachedEndCriterion(remaining_dist_threshold=40.0)
+        CustomReachedEndCriterion(remaining_dist_threshold=40.0),
+        OverspeedCriterion(max_speed=50.0)
     ]
     if terminate_on_collision:
         termination_criteria.append(OffroadCriterion())

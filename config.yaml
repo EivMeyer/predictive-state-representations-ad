@@ -217,7 +217,7 @@ rl_training:
   # Number of epochs to train the model
   n_epochs: 10
   # Discount factor for future rewards
-  gamma: 0.95
+  gamma: 0.99
   # Lambda parameter for Generalized Advantage Estimation
   gae_lambda: 0.95
   # Clipping range for the surrogate objective
@@ -225,7 +225,7 @@ rl_training:
   # Clip range for the value function
   clip_range_vf: 0.2
   # Initial value for the log std of the policy
-  log_std_init: -1.5
+  log_std_init: -1.0
   # Coefficient for the entropy loss
   ent_coef: 0.01
   # Coefficient for the value function loss
