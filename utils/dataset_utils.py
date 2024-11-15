@@ -3,7 +3,6 @@ from torch.utils.data import Dataset, DataLoader, random_split, Sampler
 from pathlib import Path
 import numpy as np
 import os
-import cv2
 import logging
 from utils.transformations import polar_transform
 from tqdm import tqdm
@@ -87,6 +86,7 @@ class EnvironmentDataset(Dataset):
 
         # Downsample if necessary
         if self.downsample_factor > 1:
+            import cv2
             new_h, new_w = image.shape[2] // self.downsample_factor, image.shape[3] // self.downsample_factor
             image = np.stack([cv2.resize(img.transpose(1, 2, 0), (new_w, new_h), 
                                          interpolation=cv2.INTER_AREA).transpose(2, 0, 1) 
