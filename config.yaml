@@ -60,6 +60,8 @@ wandb:
   enabled: true
   # Project name for Weights & Biases
   project: PredictiveStateRepresentations-AD
+  # Offline mode
+  offline: false
 
 representation:
   # Type of model to use for encoding
@@ -102,9 +104,12 @@ training:
   # Whether to continue from the last scheduler state
   warmstart_load_scheduler_state: false
   # Latent representation size
-  hidden_dim: 64
-  # Number of training epochs
-  epochs: 100000
+  hidden_dim: 1024
+  # Number of gradient updates in total
+  total_training_steps: 100
+  early_stopping:
+    patience: 10  # Number of validation checks without improvement before stopping
+    min_delta: 0.000  # Minimum change in monitored value to qualify as an improvement
   # Number of batches to use per epoch (set to null to use all batches)
   batches_per_epoch: 1
   # Batch size for training
@@ -158,15 +163,15 @@ training:
   optimizer:
     type: "AdamW"
     beta1: 0.9
-    beta2: 0.999
+    beta2: 0.98
     learning_rate: 1e-4
-    weight_decay: 1e-5
+    weight_decay: 1e-2
     momentum: 0.9
     alpha: 0.99
 
   # Scheduler configuration
   scheduler:
-    type: "NoScheduler"  # Options: "StepLR", "ExponentialLR", "CosineAnnealingLR", "ReduceLROnPlateau", "NoScheduler"
+    type: "LinearWarmupCosineAnnealingLR"  # Options: "StepLR", "ExponentialLR", "CosineAnnealingLR", "ReduceLROnPlateau", "NoScheduler" LinearWarmupCosineAnnealingLR
     T_max: 100  # Period of cosine annealing in epochs
     eta_min: 1e-5  # Minimum learning rate
     # Other scheduler options (uncomment if needed):
@@ -260,7 +265,7 @@ commonroad:
     sort_lanelet_assignments: false
 
   # Whether to enable PID control (more high-level control with enhanced stability)
-  pid_control: false
+  pid_control: true
 
   # Control space options
   control_space:

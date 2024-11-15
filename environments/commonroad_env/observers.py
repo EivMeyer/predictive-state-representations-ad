@@ -4,6 +4,7 @@ from omegaconf import DictConfig, OmegaConf
 from commonroad_geometric.learning.reinforcement.experiment import RLExperiment, RLExperimentConfig
 from utils.dataset_utils import EnvironmentDataset, get_data_dimensions
 from utils.file_utils import find_model_path
+from utils.training_utils import print_parameter_summary
 
 from commonroad_geometric.learning.reinforcement.observer.implementations import RenderObserver
 from commonroad_geometric.rendering.traffic_scene_renderer import TrafficSceneRenderer, TrafficSceneRendererOptions
@@ -394,6 +395,7 @@ def create_representation_observer(cfg, device):
 
     from utils.rl_utils import create_representation_model
     representation_model = create_representation_model(cfg, device)
+    print_parameter_summary(representation_model)
     render_observer = create_render_observer(cfg['viewer'])
     dataset = EnvironmentDataset(cfg)
     representation_observer = RepresentationObserver(dataset, representation_model, device, debug=cfg['debug_mode'], render_observer=render_observer, sequence_length=cfg['dataset']['t_obs'])

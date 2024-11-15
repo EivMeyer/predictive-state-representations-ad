@@ -17,7 +17,9 @@ class PositionalEncoding(nn.Module):
 
 class PredictiveModelV9M3(BasePredictiveModel):
     def __init__(self, obs_shape, action_dim, ego_state_dim, cfg, 
-                 pretrained_model_path=None, nhead=16, num_encoder_layers=8, num_decoder_layers=8, eval_mode: bool = False):
+                 pretrained_model_path=None, nhead=16, 
+                 representation_dim=64,
+                 num_encoder_layers=8, num_decoder_layers=8, eval_mode: bool = False):
         super().__init__(obs_shape, action_dim, ego_state_dim, cfg)
 
         # Load pre-trained autoencoder
@@ -55,6 +57,10 @@ class PredictiveModelV9M3(BasePredictiveModel):
         # Transformer encoder and decoder
         encoder_layers = nn.TransformerEncoderLayer(d_model=self.hidden_dim, nhead=nhead, dim_feedforward=1024, norm_first=True)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers=num_encoder_layers)
+
+        # Downscaling layer for readout token
+        self.readout_downscaler = nn.Linear(self.hidden_dim, representation_dim)
+        self.readout_upscaler = nn.Linear(representation_dim, self.hidden_dim)
 
         decoder_layers = nn.TransformerDecoderLayer(d_model=self.hidden_dim, nhead=nhead, dim_feedforward=1024, norm_first=True)
         self.transformer_decoder = nn.TransformerDecoder(decoder_layers, num_layers=num_decoder_layers)
@@ -159,9 +165,17 @@ class PredictiveModelV9M3(BasePredictiveModel):
         memory = self.transformer_encoder(src)
 
         # Return only the readout token's final state
-        return memory[-1]
+        last_memory = memory[-1]
+
+        # Downscale readout token
+        encoded_state = self.readout_downscaler(last_memory)
+
+        return encoded_state
 
     def decode(self, batch, memory):
+        # Upscale readout token
+        memory = self.readout_upscaler(memory)
+        
         batch_size, hidden_dim = memory.shape
 
         # Prepare decoder input
@@ -190,6 +204,7 @@ class PredictiveModelV9M3(BasePredictiveModel):
 
     def forward(self, batch):
         encoded_state = self.encode(batch)
+
         predicted_latents, hazard = self.decode(batch, encoded_state)
 
         # Decode latents to observations using the trainable decoder

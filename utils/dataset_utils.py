@@ -359,3 +359,39 @@ def move_batch_to_device(batch, device):
     # Move entire batch to GPU at once
     batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
     return batch
+
+def tensor_memory_usage(tensor):
+    """
+    Calculates and prints the memory usage of a given PyTorch tensor, 
+    whether on GPU or CPU.
+
+    Args:
+        tensor (torch.Tensor): The tensor to calculate memory usage for.
+
+    Returns:
+        dict: A dictionary containing memory usage in bytes, KB, MB, and GB.
+    """
+    # Calculate memory usage in bytes
+    memory_bytes = tensor.element_size() * tensor.nelement()
+    
+    # Convert to human-readable formats
+    memory_kb = memory_bytes / 1024
+    memory_mb = memory_kb / 1024
+    memory_gb = memory_mb / 1024
+
+    # Format results
+    memory_info = {
+        "bytes": memory_bytes,
+        "KB": memory_kb,
+        "MB": memory_mb,
+        "GB": memory_gb,
+    }
+
+    # Identify if tensor is on GPU or CPU
+    device = "GPU" if tensor.is_cuda else "RAM"
+    
+    print(f"Tensor memory usage ({device}):")
+    for key, value in memory_info.items():
+        print(f"{key}: {value:.2f}")
+
+    return memory_info
