@@ -91,6 +91,9 @@ collect_dataset() {
         append_flag="--append"
     fi
     
+    # Print the config_overrides for debugging
+    echo "Config overrides: $config_overrides"
+    
     python3 collect_dataset.py project_dir="${project_dir}" dataset.num_episodes=${episodes} $append_flag $config_overrides
 }
 
