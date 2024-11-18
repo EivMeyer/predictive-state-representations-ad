@@ -11,26 +11,6 @@ from commonroad_geometric.learning.reinforcement.rewarder.reward_computer.base_r
 from commonroad_geometric.learning.reinforcement.rewarder.reward_computer.types import RewardLossMetric
 from commonroad_geometric.learning.reinforcement.observer.base_observer import BaseObserver, T_Observation
 from environments.commonroad_env.termination_criteria import has_reached_end
-from typing import Optional
-
-class CustomReachedEndRewardComputer(BaseRewardComputer):
-    def __init__(self, arclength_threshold: float, reward: float):
-        self.arclength_threshold = arclength_threshold
-        self.reward = reward
-        super().__init__()
-
-    def __call__(
-        self,
-        action: np.ndarray,
-        simulation: EgoVehicleSimulation,
-        data: CommonRoadData,
-        observation: T_Observation
-    ) -> float:
-        reached_end = has_reached_end(simulation, self.arclength_threshold)
-        if reached_end:
-            return self.reward
-        return 0.0
-
 
 class GoalDistanceRewardComputer(BaseRewardComputer):
    def __init__(
@@ -63,6 +43,23 @@ class GoalDistanceRewardComputer(BaseRewardComputer):
    def _reset(self) -> None:
        pass
 
+class CustomReachedEndRewardComputer(BaseRewardComputer):
+    def __init__(self, arclength_threshold: float, reward: float):
+        self.arclength_threshold = arclength_threshold
+        self.reward = reward
+        super().__init__()
+
+    def __call__(
+        self,
+        action: np.ndarray,
+        simulation: EgoVehicleSimulation,
+        data: CommonRoadData,
+        observation: T_Observation
+    ) -> float:
+        reached_end = has_reached_end(simulation, self.arclength_threshold)
+        if reached_end:
+            return self.reward
+        return 0.0
 
 def create_rewarders():
     rewarders = [
@@ -72,33 +69,32 @@ def create_rewarders():
         # ),
         CustomReachedEndRewardComputer(
             arclength_threshold=1.0,
-            reward=100
+            reward=5.0
         ),
         CollisionPenaltyRewardComputer(
-            penalty=-100.0,
+            penalty=-2.0,
         ),
         # FrictionViolationPenaltyRewardComputer(penalty=-0.01),
         TrajectoryProgressionRewardComputer(
-            weight=1.0,
+            weight=0.05,
             delta_threshold=3,
             relative_arclength=False,
             linear_path_projection=True
         ),
-        # ConstantRewardComputer(reward=-0.2),
-        GoalDistanceRewardComputer(weight=1/500),
+        ConstantRewardComputer(reward=-0.001),
         #
         # ReachedGoalRewardComputer(reward=3.5),
         # OvershotGoalRewardComputer(reward=0.0),
         # SteeringAnglePenaltyRewardComputer(weight=0.0005, loss_type=RewardLossMetric.L1),
-        # StillStandingPenaltyRewardComputer(penalty=-0.05, velocity_threshold=2.0),
-        # TimeToCollisionPenaltyRewardComputer(weight=0.1), 
-        OffroadPenaltyRewardComputer(penalty=-100.0),
-        # VelocityPenaltyRewardComputer(
-        #     reference_velocity=34.0,
-        #     weight=0.2,
-        #     loss_type=RewardLossMetric.L2,
-        #     only_upper=True
-        # ),
+        StillStandingPenaltyRewardComputer(penalty=-0.05, velocity_threshold=2.0),
+        TimeToCollisionPenaltyRewardComputer(weight=0.1), 
+        OffroadPenaltyRewardComputer(penalty=-5.0),
+        VelocityPenaltyRewardComputer(
+            reference_velocity=34.0,
+            weight=0.002,
+            loss_type=RewardLossMetric.L2,
+            only_upper=True
+        ),
 
         # LateralErrorPenaltyRewardComputer(weight=0.0001, loss_type=RewardLossMetric.L1),
         # YawratePenaltyRewardComputer(weight=0.01),
