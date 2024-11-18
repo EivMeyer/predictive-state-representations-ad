@@ -92,7 +92,7 @@ def compute_mutual_information(X: np.ndarray, y: np.ndarray, n_bins: int = 20) -
 
 def linear_probe_analysis(latent_reps: np.ndarray, target: np.ndarray, n_splits: int = 5) -> Dict[str, List[float]]:
     """Perform linear probing analysis with multiple train-test splits."""
-    metrics = {'r2': [], 'mae': [], 'rmse': [], 'mi': []}
+    metrics = {'r2': [], 'mae': [], 'rmse': []} #, 'mi': []}
     
     for _ in range(n_splits):
         # Split data
@@ -109,7 +109,7 @@ def linear_probe_analysis(latent_reps: np.ndarray, target: np.ndarray, n_splits:
         metrics['r2'].append(r2_score(y_test, y_pred))
         metrics['mae'].append(mean_absolute_error(y_test, y_pred))
         metrics['rmse'].append(np.sqrt(mean_squared_error(y_test, y_pred)))
-        metrics['mi'].append(compute_mutual_information(X_test, y_test))
+        # metrics['mi'].append(compute_mutual_information(X_test, y_test))
     
     return metrics
 
@@ -127,7 +127,7 @@ def generate_linear_probe_results(latent_reps: np.ndarray, metrics: Dict[str, np
             'R2': f"{np.mean(probe_results['r2']):.3f}±{np.std(probe_results['r2']):.3f}",
             'MAE': f"{np.mean(probe_results['mae']):.3f}±{np.std(probe_results['mae']):.3f}",
             'RMSE': f"{np.mean(probe_results['rmse']):.3f}±{np.std(probe_results['rmse']):.3f}",
-            'MI': f"{np.mean(probe_results['mi']):.3f}±{np.std(probe_results['mi']):.3f}"
+            # 'MI': f"{np.mean(probe_results['mi']):.3f}±{np.std(probe_results['mi']):.3f}"
         }
         results.append(result)
     
@@ -140,11 +140,11 @@ def generate_latex_table(df: pd.DataFrame) -> str:
     latex_table += "\\label{tab:linear_probe}\n"
     latex_table += "\\begin{tabular}{lcccc}\n"
     latex_table += "\\hline\n"
-    latex_table += "Metric & $R^2$ & MAE & RMSE & MI \\\\\n"
+    latex_table += "Metric & $R^2$ & MAE & RMSE\\\\\n"
     latex_table += "\\hline\n"
     
     for _, row in df.iterrows():
-        latex_table += f"{row['Metric']} & {row['R2']} & {row['MAE']} & {row['RMSE']} & {row['MI']} \\\\\n"
+        latex_table += f"{row['Metric']} & {row['R2']} & {row['MAE']} & {row['RMSE']}\\\\\n"
     
     latex_table += "\\hline\n"
     latex_table += "\\end{tabular}\n"

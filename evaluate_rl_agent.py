@@ -12,7 +12,7 @@ from collections import defaultdict
 def main(cfg: DictConfig) -> None:
     # Create the environment
     env_class = get_environment(cfg.environment)
-    env = env_class().make_env(cfg, n_envs=1, seed=cfg.seed, rl_mode=True)
+    env = env_class().make_env(cfg, n_envs=1, seed=cfg.seed, rl_mode=True, eval_mode=True)
 
     # Load the model
     model_path = sorted(Path(cfg.project_dir).rglob('*.zip'), key=lambda x: x.stat().st_mtime, reverse=True)[0]
