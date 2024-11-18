@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Tuple
 
 class BasePredictiveModel(nn.Module, ABC):
-    def __init__(self, obs_shape, action_dim, ego_state_dim, cfg):
+    def __init__(self, obs_shape, action_dim, ego_state_dim, cfg, **kwargs):
         super().__init__()
         self.obs_shape = obs_shape
         self.action_dim = action_dim

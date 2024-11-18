@@ -25,8 +25,8 @@ class ResidualBlock(nn.Module):
         return F.leaky_relu(out)
 
 class AutoEncoderModelV0(BasePredictiveModel):
-    def __init__(self, obs_shape, action_dim, ego_state_dim, cfg):
-        super().__init__(obs_shape, action_dim, ego_state_dim, cfg)
+    def __init__(self, obs_shape, action_dim, ego_state_dim, cfg, **kwargs):
+        super().__init__(obs_shape, action_dim, ego_state_dim, cfg, **kwargs)
 
         self.encoder = self._make_encoder(obs_shape)
 
