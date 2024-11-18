@@ -11,6 +11,9 @@ This project develops and evaluates predictive models for autonomous vehicle nav
    python collect_dataset.py
    ```
 
+# How to describe that we need export PYGLET_HEADLESS=1?
+# A: 
+
 2. Train representation model:
    ```
    python train_model.py

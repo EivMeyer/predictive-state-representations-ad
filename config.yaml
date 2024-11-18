@@ -104,7 +104,7 @@ training:
   # Whether to continue from the last scheduler state
   warmstart_load_scheduler_state: false
   # Latent representation size
-  hidden_dim: 1024
+  hidden_dim: 64
   # Number of gradient updates in total
   total_training_steps: 100
   early_stopping:

@@ -1,0 +1,22 @@
+name: myenv
+channels:
+  - pytorch
+  - nvidia
+  - pyg
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pytorch
+  - torchvision
+  - pytorch-cuda=12.1
+  - pyg
+  - pytorch-scatter
+  - pytorch-sparse
+  - pytorch-cluster
+  - pytorch-spline-conv
+  - cmake
+  - boost-cpp
+  - eigen
+  - libomp
+  - pip
