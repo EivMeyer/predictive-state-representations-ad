@@ -78,6 +78,8 @@ def main(cfg: DictConfig) -> None:
         for comp in reward_components:
             metrics[f'avg_{comp}'].append(np.mean(episode_reward_components[comp]))
 
+        print(f"\nEpisode {valid_episodes + 1} completed with reward {episode_reward:.2f} and length {episode_length}. Termination reason: {termination_reason}")
+
         valid_episodes += 1
         pbar.update(1)
 
