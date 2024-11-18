@@ -94,6 +94,8 @@ models:
 evaluation:
   # Number of episodes to evaluate
   num_episodes: 100
+  # Minimum episode length for evaluation (mitigate unfortunate respawning and obs. buffer not filled)
+  min_episode_length: 100
 
 # Training configuration
 training:
@@ -265,7 +267,7 @@ commonroad:
     sort_lanelet_assignments: false
 
   # Whether to enable PID control (more high-level control with enhanced stability)
-  pid_control: true
+  pid_control: false
 
   # Control space options
   control_space:

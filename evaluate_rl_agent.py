@@ -23,16 +23,19 @@ def main(cfg: DictConfig) -> None:
     metrics = defaultdict(list)
     reward_components = set()
     termination_reasons = set()
+    min_episode_length = cfg.evaluation.get('min_episode_length', 10)  # Default to 10 if not specified
+    valid_episodes = 0
 
     num_episodes = cfg.evaluation.num_episodes
     pbar = tqdm(total=num_episodes, desc="Evaluating")
 
-    for episode in range(num_episodes):
+    while valid_episodes < num_episodes:
         obs = env.reset()
         done = False
         episode_reward = 0
         episode_length = 0
         episode_reward_components = defaultdict(list)
+        episode_metrics = defaultdict(list)
         
         while not done:
             action, _ = model.predict(obs, deterministic=True)
@@ -45,6 +48,11 @@ def main(cfg: DictConfig) -> None:
             for comp, value in info[0]['reward_components'].items():
                 reward_components.add(comp)
                 episode_reward_components[comp].append(value)
+
+        # Check if episode meets minimum length requirement
+        if episode_length < min_episode_length:
+            print(f"\nSkipping episode {valid_episodes + 1} (length {episode_length} < minimum {min_episode_length})")
+            continue
 
         # Extract final episode info
         final_info = info[0]
@@ -70,9 +78,14 @@ def main(cfg: DictConfig) -> None:
         for comp in reward_components:
             metrics[f'avg_{comp}'].append(np.mean(episode_reward_components[comp]))
 
+        valid_episodes += 1
         pbar.update(1)
 
     pbar.close()
+
+    print(f"\nCompleted evaluation with {valid_episodes} valid episodes (minimum length: {min_episode_length})")
+    total_episodes = valid_episodes + (num_episodes - valid_episodes)
+    print(f"Skipped {total_episodes - valid_episodes} episodes due to length requirement")
 
     # Calculate aggregate metrics
     aggregate_metrics = {
@@ -80,12 +93,15 @@ def main(cfg: DictConfig) -> None:
         'std_episode_reward': np.std(metrics['episode_reward']),
         'mean_episode_length': np.mean(metrics['episode_length']),
         'std_episode_length': np.std(metrics['episode_length']),
+        'min_episode_length_threshold': min_episode_length,
+        'episodes_skipped': total_episodes - valid_episodes,
+        'skipped_episode_rate': (total_episodes - valid_episodes) / total_episodes
     }
 
     # Calculate rates for each termination reason
     for reason in termination_reasons:
         if reason is not None:
-            rate = sum(1 for r in metrics['termination_reason'] if r == reason) / num_episodes
+            rate = sum(1 for r in metrics['termination_reason'] if r == reason) / valid_episodes
             aggregate_metrics[f'{reason}_rate'] = rate
 
     # Calculate mean for all averaged metrics
@@ -96,7 +112,10 @@ def main(cfg: DictConfig) -> None:
     # Print aggregate metrics
     print("\nAggregate Metrics:")
     for metric, value in aggregate_metrics.items():
-        print(f"{metric}: {value:.4f}")
+        if isinstance(value, float):
+            print(f"{metric}: {value:.4f}")
+        else:
+            print(f"{metric}: {value}")
 
     # Save detailed metrics to CSV
     df = pd.DataFrame(metrics)
