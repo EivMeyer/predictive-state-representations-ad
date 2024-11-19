@@ -257,6 +257,9 @@ viewer:
 commonroad: 
   scenario_dir: "scenarios"
 
+  # Number of episodes to collect per scenario
+  num_respawns_per_scenario: 500
+
   # Simulation options
   simulation:
     # Steps for lanelet graph conversion (if any)

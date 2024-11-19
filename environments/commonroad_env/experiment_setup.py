@@ -74,6 +74,7 @@ def create_base_experiment_config(config):
             disable_graph_extraction=True,
             raise_exceptions=True,
             renderer_options=renderer_options_render,
+            num_respawns_per_scenario=commonroad_config['num_respawns_per_scenario'],
             observer=create_render_observer(config['viewer']),
             preprocessor=chain_preprocessors(*preprocessors) if preprocessors else None,
         ),
