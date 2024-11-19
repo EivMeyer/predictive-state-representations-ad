@@ -13,7 +13,7 @@ import numpy as np
 import time
 from utils.visualization_utils import setup_visualization, visualize_prediction
 import torch.multiprocessing as mp
-from utils.training_utils import analyze_predictions, init_wandb, NoScheduler, load_model_state, load_checkpoint
+from utils.training_utils import analyze_predictions, init_wandb, NoScheduler, load_model_state, load_checkpoint, get_linear_warmup_cosine_decay_scheduler
 from datetime import datetime
 from torch.cuda.amp import autocast, GradScaler
 from typing import Dict, List, Tuple, Any, Optional
@@ -39,6 +39,7 @@ class Trainer:
         self.best_val_loss: float = float('inf')
         self.start_epoch: int = 0
         self.current_epoch: int = 0
+        self.current_training_step: int = 0
         self.run_name: str = ""
 
         self.optimizer = get_optimizer(model, self.cfg)
@@ -60,6 +61,12 @@ class Trainer:
         self.scaler = GradScaler(init_scale=2**10, growth_factor=2**(1/4), backoff_factor=0.5, growth_interval=100)  if self.use_amp else None
 
         self.val_batch_size = self._calculate_val_batch_size()
+
+        # Add early stopping parameters
+        self.patience = cfg.training.early_stopping.patience
+        self.min_delta = cfg.training.early_stopping.min_delta if hasattr(cfg.training.early_stopping, 'min_delta') else 0
+        self.patience_counter = 0
+        self.best_monitored_value = float('inf')
 
     def _calculate_val_batch_size(self) -> int:
         if self.device.type == 'cuda':
@@ -96,8 +103,8 @@ class Trainer:
         total_batches = len(self.train_loader) if self.cfg.training.batches_per_epoch is None else self.cfg.training.batches_per_epoch
 
         pbar = tqdm(enumerate(self.train_loader), total=total_batches, leave=False, disable=not self.cfg.verbose, desc="Batches")
+
         for iteration, full_batch in pbar:
-            full_batch = move_batch_to_device(full_batch, self.device)
             batch_size = full_batch['observations'].shape[0]
             
             # Calculate total minibatches for this batch
@@ -110,6 +117,7 @@ class Trainer:
                 for start_idx in range(0, batch_size, self.cfg.training.minibatch_size):
                     end_idx = min(start_idx + self.cfg.training.minibatch_size, batch_size)
                     batch = {k: v[start_idx:end_idx] for k, v in full_batch.items()}
+                    batch = move_batch_to_device(batch, self.device)
                     
                     self.optimizer.zero_grad()
                     
@@ -172,12 +180,21 @@ class Trainer:
                         inner_pbar.set_description(f"Minibatches ({optimizer_info})")
                     
                     inner_pbar.update(1)
+                    self.current_training_step += 1
+
+                    if self.current_training_step >= self.cfg.training.total_training_steps:
+                        break
+                if self.current_training_step >= self.cfg.training.total_training_steps:
+                    break
             
             inner_pbar.close()
             
             if self.cfg.training.create_plots and iteration == len(self.train_loader) - 1:
                 self.train_predictions = predictions[:9].detach()
                 self.train_ground_truth = targets[:9].detach()
+
+            if self.current_training_step >= self.cfg.training.total_training_steps:
+                break
         
         return epoch_stats
 
@@ -278,6 +295,7 @@ class Trainer:
     def save_model(self, is_best: bool = False) -> None:
         save_dict = {
             'epoch': self.current_epoch,
+            'training_step': self.current_training_step,
             'model_save_state': self.model.get_save_state(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'scheduler_state_dict': self.scheduler.state_dict(),
@@ -302,28 +320,34 @@ class Trainer:
             self.wandb.save(str(path))   
 
     def train(self) -> None:
-        for epoch in range(self.start_epoch, self.cfg.training.epochs):
-            self.current_epoch = epoch
+        while self.current_training_step < self.cfg.training.total_training_steps:
             start_time = time.time()
-
             train_stats = self.train_epoch()
+            self.current_epoch += 1
             
             # Only run validation at specified intervals
-            should_validate = (epoch % self.cfg.training.validation_interval == 0)
+            should_validate = (self.current_epoch % self.cfg.training.validation_interval == 0)
             
             if should_validate:
                 if self.cfg.verbose:
                     print("Validating...")
                 self.val_stats = self.validate()
                 val_loss = np.mean(self.val_stats['total_loss'])
+
+                # Early stopping check
+                if val_loss < (self.best_monitored_value - self.min_delta):
+                    self.best_monitored_value = val_loss
+                    self.patience_counter = 0
+                    self.save_model(is_best=True)
+                else:
+                    self.patience_counter += 1
+                    if self.patience_counter >= self.patience:
+                        print(f"Early stopping triggered after {self.current_epoch} epochs")
+                        break
                 
                 # Log validation stats
                 self.log_epoch_stats(train_stats, self.val_stats)
-                
-                # Save best model based on validation loss
-                if val_loss < self.best_val_loss:
-                    self.best_val_loss = val_loss
-                    self.save_model(is_best=True)
+
             else:
                 # Log only training stats when not validating
                 self.log_epoch_stats(train_stats, {})
@@ -333,20 +357,21 @@ class Trainer:
             if self.cfg.verbose:
                 print(f"Current learning rate: {current_lr}")
             if self.wandb.run:
-                self.wandb.log({"learning_rate": current_lr}, step=epoch)
+                self.wandb.log({"learning_rate": current_lr}, step=self.current_epoch)
 
             epoch_time = time.time() - start_time
             epoch_speed = len(self.train_loader) / epoch_time
             if self.cfg.verbose:
                 print(f"Epoch speed: {epoch_speed:.2f} iterations/second")
             if self.wandb.run:
-                self.wandb.log({"epoch_speed": epoch_speed}, step=epoch)
+                self.wandb.log({"epoch_speed": epoch_speed}, step=self.current_epoch)
+                self.wandb.log({"training_step": self.current_training_step}, step=self.current_epoch)
 
             if self.cfg.training.create_plots and should_validate:
                 self.visualize_predictions()
 
             # Save model checkpoint at regular intervals
-            if epoch % self.cfg.training.save_interval == 0:
+            if self.current_epoch % self.cfg.training.save_interval == 0:
                 self.save_model()
 
         self.save_final_model()
@@ -403,7 +428,8 @@ class Trainer:
         
         if results['success']:
             self.start_epoch = results['epoch'] + 1
-            print(f"Resuming training from epoch {self.start_epoch}")
+            self.start_training_step = results['training_step']
+            print(f"Resuming training from epoch {self.start_epoch} at step {self.start_training_step}")
         else:
             print("Failed to load checkpoint, starting from scratch")
 
@@ -423,7 +449,7 @@ def get_optimizer(model, cfg):
         return Adam(param_groups, lr=lr, weight_decay=weight_decay, betas=betas)
     elif optimizer_type == "AdamW":
         betas = (cfg.training.optimizer.beta1, cfg.training.optimizer.beta2)
-        return AdamW(param_groups, lr=lr, weight_decay=weight_decay, betas=betas)
+        return AdamW(param_groups, lr=lr, weight_decay=weight_decay, betas=betas, eps=1e-9)
     elif optimizer_type == "SGD":
         momentum = cfg.training.optimizer.momentum
         return SGD(param_groups, lr=lr, momentum=momentum, weight_decay=weight_decay)
@@ -449,6 +475,8 @@ def get_scheduler(optimizer, cfg):
                                  patience=cfg.training.scheduler.patience, threshold=cfg.training.scheduler.threshold)
     elif scheduler_type == "NoScheduler":
         return NoScheduler(optimizer)
+    elif scheduler_type == 'LinearWarmupCosineAnnealingLR':
+        return get_linear_warmup_cosine_decay_scheduler(optimizer, total_steps=cfg.training.total_training_steps)
     else:
         raise ValueError(f"Unsupported scheduler type: {scheduler_type}")
     

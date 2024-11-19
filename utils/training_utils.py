@@ -1,6 +1,6 @@
 import torch
 from omegaconf import DictConfig, OmegaConf
-from torch.optim.lr_scheduler import _LRScheduler
+from torch.optim.lr_scheduler import _LRScheduler, LambdaLR
 from pathlib import Path
 from torch import nn
 import torch
@@ -13,6 +13,7 @@ from collections import OrderedDict
 import numpy as np
 from typing import Union, Dict, Optional
 import json
+import math
 
 class NoScheduler(_LRScheduler):
     def __init__(self, optimizer):
@@ -24,11 +25,33 @@ class NoScheduler(_LRScheduler):
     def get_last_lr(self):
         return [group['lr'] for group in self.optimizer.param_groups]
 
+def get_linear_warmup_cosine_decay_scheduler(optimizer, total_steps, warmup_steps=10000):
+    """
+    Returns a LambdaLR scheduler with linear warmup and cosine decay.
+    Args:
+        optimizer (torch.optim.Optimizer): Optimizer to apply the scheduler to.
+        warmup_steps (int): Number of steps for linear warmup.
+        total_steps (int): Total number of training steps.
+    Returns:
+        torch.optim.lr_scheduler.LambdaLR: The scheduler.
+    """
+    def lr_lambda(current_step):
+        if current_step < warmup_steps:
+            # Linear warmup
+            return float(current_step) / float(max(1, warmup_steps))
+        elif current_step < total_steps:
+            # Cosine decay
+            progress = float(current_step - warmup_steps) / float(max(1, total_steps - warmup_steps))
+            return 0.5 * (1.0 + math.cos(math.pi * progress))
+        else:
+            # After total_steps, keep the learning rate at 0
+            return 0.0
+    return LambdaLR(optimizer, lr_lambda)
 
 def init_wandb(cfg: DictConfig, project_postfix: str = ""):
     if cfg.wandb.enabled:
         import wandb
-        wandb.init(project=cfg.wandb.project + "-" + cfg.environment + '-' + project_postfix, config=OmegaConf.to_container(cfg, resolve=True))
+        wandb.init(project=cfg.wandb.project + "-" + cfg.environment + '-' + project_postfix, config=OmegaConf.to_container(cfg, resolve=True), mode=cfg.wandb.offline)
         print(f"Initialized wandb project: {cfg.wandb.project}")
         return wandb
     else:
@@ -497,3 +520,49 @@ def save_model_metadata(model: torch.nn.Module, filepath: str,
     
     with open(filepath, 'w') as f:
         json.dump(metadata, f, indent=2)
+
+
+def count_parameters(model):
+    """Count the total number of trainable parameters in a PyTorch model."""
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+def count_parameters_by_group(model):
+    """
+    Count parameters grouped by model component prefixes.
+    
+    Args:
+        model (torch.nn.Module): PyTorch model
+    
+    Returns:
+        dict: Parameter counts by group prefix
+    """
+    groups = {}
+    
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+            
+        group = name.split('.')[0]
+        params = param.numel()
+        
+        if group not in groups:
+            groups[group] = 0
+        groups[group] += params
+        
+    return groups
+
+def print_parameter_summary(model):
+    """Print parameter counts by group and total."""
+    groups = count_parameters_by_group(model)
+    
+    print("\nParameters by group:")
+    print("-" * 50)
+    total = 0
+    for group, count in sorted(groups.items()):
+        print(f"{group:30} {count:,}")
+        total += count
+    
+    print("-" * 50)
+    print(f"{'Total':30} {total:,}")
+    
+    return total  # Return total count for convenience

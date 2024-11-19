@@ -60,6 +60,8 @@ wandb:
   enabled: true
   # Project name for Weights & Biases
   project: PredictiveStateRepresentations-AD
+  # Offline mode
+  offline: false
 
 representation:
   # Type of model to use for encoding
@@ -92,6 +94,8 @@ models:
 evaluation:
   # Number of episodes to evaluate
   num_episodes: 100
+  # Minimum episode length for evaluation (mitigate unfortunate respawning and obs. buffer not filled)
+  min_episode_length: 100
 
 # Training configuration
 training:
@@ -103,8 +107,11 @@ training:
   warmstart_load_scheduler_state: false
   # Latent representation size
   hidden_dim: 64
-  # Number of training epochs
-  epochs: 100000
+  # Number of gradient updates in total
+  total_training_steps: 100
+  early_stopping:
+    patience: 10  # Number of validation checks without improvement before stopping
+    min_delta: 0.000  # Minimum change in monitored value to qualify as an improvement
   # Number of batches to use per epoch (set to null to use all batches)
   batches_per_epoch: 1
   # Batch size for training
