@@ -402,7 +402,7 @@ class Trainer:
     def save_final_model(self) -> None:
         final_model_path = Path(self.cfg.project_dir) / "models" / self.run_name / "final_model.pth"
         torch.save({
-            'epoch': self.cfg.training.epochs,
+            'epoch': self.current_epoch,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'scheduler_state_dict': self.scheduler.state_dict(),

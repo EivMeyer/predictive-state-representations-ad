@@ -5,11 +5,11 @@ import argparse
 import shutil
 from tqdm import tqdm
 
-def to_tensor(data):
+def to_tensor(data, dtype=torch.float32):
     if isinstance(data, np.ndarray):
-        return torch.from_numpy(data)
+        return torch.from_numpy(data).to(dtype)
     elif isinstance(data, torch.Tensor):
-        return data
+        return data.to(dtype)
     else:
         raise TypeError(f"Unsupported data type: {type(data)}")
 
@@ -41,8 +41,20 @@ def change_batch_size(input_dir: Path, output_dir: Path, new_batch_size: int):
                 current_batch[key].extend(new_batch[key])
             
             while len(current_batch['observations']) >= new_batch_size:
-                output_batch = {key: torch.stack([to_tensor(item) for item in value[:new_batch_size]]) 
-                                for key, value in current_batch.items()}
+                # Ensure consistent tensor types for all data
+                output_batch = {}
+                for key, value in current_batch.items():
+                    if key == 'observations' or key == 'next_observations':
+                        # Convert image data to float32 to ensure compatibility with mixed precision
+                        tensor_data = torch.stack([to_tensor(item, dtype=torch.float32) for item in value[:new_batch_size]])
+                    elif key == 'dones':
+                        # Boolean data
+                        tensor_data = torch.stack([to_tensor(item, dtype=torch.bool) for item in value[:new_batch_size]])
+                    else:
+                        # Other numerical data (actions, ego_states)
+                        tensor_data = torch.stack([to_tensor(item, dtype=torch.float32) for item in value[:new_batch_size]])
+                    output_batch[key] = tensor_data
+
                 torch.save(output_batch, output_dir / f'batch_{new_batch_index}.pt')
                 new_batch_index += 1
                 
@@ -52,8 +64,16 @@ def change_batch_size(input_dir: Path, output_dir: Path, new_batch_size: int):
 
     # Save any remaining data
     if len(current_batch['observations']) > 0:
-        output_batch = {key: torch.stack([to_tensor(item) for item in value]) 
-                        for key, value in current_batch.items()}
+        output_batch = {}
+        for key, value in current_batch.items():
+            if key == 'observations' or key == 'next_observations':
+                tensor_data = torch.stack([to_tensor(item, dtype=torch.float32) for item in value])
+            elif key == 'dones':
+                tensor_data = torch.stack([to_tensor(item, dtype=torch.bool) for item in value])
+            else:
+                tensor_data = torch.stack([to_tensor(item, dtype=torch.float32) for item in value])
+            output_batch[key] = tensor_data
+            
         torch.save(output_batch, output_dir / f'batch_{new_batch_index}.pt')
         new_batch_index += 1
 
