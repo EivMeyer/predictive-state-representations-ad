@@ -6,10 +6,13 @@ from stable_baselines3 import PPO
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 import umap
 import os
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D  # Import 3D plotting tools
+from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 from tqdm import tqdm
 from utils.config_utils import config_wrapper
@@ -44,6 +47,110 @@ plt.rcParams['grid.linewidth'] = 0.5
 plt.rcParams['figure.dpi'] = 100
 
 from plotting_setup import setup_plotting
+
+def compute_mutual_information(X: np.ndarray, y: np.ndarray, n_bins: int = 20) -> float:
+    """
+    Compute average mutual information between each latent dimension and target variable.
+    
+    Args:
+        X: Latent representations (n_samples, n_features)
+        y: Target variable (n_samples,)
+        n_bins: Number of bins for discretization
+    
+    Returns:
+        Average mutual information across all dimensions
+    """
+    n_features = X.shape[1]
+    mi_per_dim = []
+    
+    # Compute MI for each dimension separately
+    for dim in range(n_features):
+        x_dim = X[:, dim]
+        
+        # Discretize continuous variables
+        x_bins = np.linspace(x_dim.min(), x_dim.max(), n_bins+1)
+        y_bins = np.linspace(y.min(), y.max(), n_bins+1)
+        
+        # Compute joint and marginal probabilities
+        joint_hist, _, _ = np.histogram2d(x_dim, y, bins=[x_bins, y_bins])
+        joint_prob = joint_hist / np.sum(joint_hist)
+        
+        x_prob = np.sum(joint_prob, axis=1)
+        y_prob = np.sum(joint_prob, axis=0)
+        
+        # Compute mutual information
+        mi = 0
+        for i in range(n_bins):
+            for j in range(n_bins):
+                if joint_prob[i,j] > 0:
+                    mi += joint_prob[i,j] * np.log2(joint_prob[i,j] / (x_prob[i] * y_prob[j]))
+        
+        mi_per_dim.append(mi)
+    
+    # Return average MI across all dimensions
+    return np.mean(mi_per_dim)
+
+def linear_probe_analysis(latent_reps: np.ndarray, target: np.ndarray, n_splits: int = 5) -> Dict[str, List[float]]:
+    """Perform linear probing analysis with multiple train-test splits."""
+    metrics = {'r2': [], 'mae': [], 'rmse': []} #, 'mi': []}
+    
+    for _ in range(n_splits):
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(latent_reps, target, test_size=0.2)
+        
+        # Train linear model
+        model = LinearRegression()
+        model.fit(X_train, y_train)
+        
+        # Make predictions
+        y_pred = model.predict(X_test)
+        
+        # Compute metrics
+        metrics['r2'].append(r2_score(y_test, y_pred))
+        metrics['mae'].append(mean_absolute_error(y_test, y_pred))
+        metrics['rmse'].append(np.sqrt(mean_squared_error(y_test, y_pred)))
+        # metrics['mi'].append(compute_mutual_information(X_test, y_test))
+    
+    return metrics
+
+def generate_linear_probe_results(latent_reps: np.ndarray, metrics: Dict[str, np.ndarray]) -> pd.DataFrame:
+    """Generate linear probing results for all metrics."""
+    results = []
+    
+    for metric_name, metric_values in metrics.items():
+        # Perform linear probing analysis
+        probe_results = linear_probe_analysis(latent_reps, metric_values)
+        
+        # Format results
+        result = {
+            'Metric': metric_name,
+            'R2': f"{np.mean(probe_results['r2']):.3f}±{np.std(probe_results['r2']):.3f}",
+            'MAE': f"{np.mean(probe_results['mae']):.3f}±{np.std(probe_results['mae']):.3f}",
+            'RMSE': f"{np.mean(probe_results['rmse']):.3f}±{np.std(probe_results['rmse']):.3f}",
+            # 'MI': f"{np.mean(probe_results['mi']):.3f}±{np.std(probe_results['mi']):.3f}"
+        }
+        results.append(result)
+    
+    return pd.DataFrame(results)
+
+def generate_latex_table(df: pd.DataFrame) -> str:
+    """Generate LaTeX table from results DataFrame."""
+    latex_table = "\\begin{table}[t]\n"
+    latex_table += "\\caption{Linear Probing Results}\n"
+    latex_table += "\\label{tab:linear_probe}\n"
+    latex_table += "\\begin{tabular}{lcccc}\n"
+    latex_table += "\\hline\n"
+    latex_table += "Metric & $R^2$ & MAE & RMSE\\\\\n"
+    latex_table += "\\hline\n"
+    
+    for _, row in df.iterrows():
+        latex_table += f"{row['Metric']} & {row['R2']} & {row['MAE']} & {row['RMSE']}\\\\\n"
+    
+    latex_table += "\\hline\n"
+    latex_table += "\\end{tabular}\n"
+    latex_table += "\\end{table}"
+    
+    return latex_table
 
 def random_sample_indices(data_length, sample_size):
     """Randomly sample indices."""
@@ -415,7 +522,7 @@ def plot_latent_correlations(latent_reps: np.ndarray, driving_metrics: Dict[str,
 @config_wrapper()
 def main(cfg):
     parser = argparse.ArgumentParser(description="Analyze latent space of a trained RL agent")
-    parser.add_argument('mode', choices=['collect', 'plot'], help="Run mode: collect data or plot results")
+    parser.add_argument('mode', choices=['collect', 'plot', 'probing'], help="Run mode: collect data or plot results or do linear probing")
     parser.add_argument('--num-episodes', type=int, default=1000, help="Number of episodes to collect data from")
     parser.add_argument('--output-dir', type=str, default='./output/latent_analysis', help="Directory to save output files")
     args = parser.parse_args()
@@ -445,6 +552,32 @@ def main(cfg):
         # Save the collected data
         np.savez(output_dir / 'latent_data.npz', **data)
         print(f"Latent representations and driving metrics saved to {output_dir / 'latent_data.npz'}")
+
+    elif args.mode == 'probing':
+        # Load data and perform linear probing
+        data = np.load(output_dir / 'latent_data.npz')
+        latent_reps = data['latent_reps']
+        
+        # Define metrics for probing
+        metrics = {
+            'Speed': data['speeds'],
+            'Steering': data['steering_angles'],
+            'Log NVD': np.log10(data['min_obstacle_distances'] + 0.01),
+            'Log TTT': np.log10(data['time_until_termination']*0.04 + 0.1)
+        }
+
+        # Generate results
+        results_df = generate_linear_probe_results(latent_reps, metrics)
+        print("\nLinear Probing Results:")
+        print(results_df)
+        
+        # Save results
+        latex_table = generate_latex_table(results_df)
+        with open(output_dir / 'linear_probe_table.tex', 'w') as f:
+            f.write(latex_table)
+        results_df.to_csv(output_dir / 'linear_probe_results.csv')
+        print(f"\nSaved to:\n- {output_dir / 'linear_probe_table.tex'}\n- {output_dir / 'linear_probe_results.csv'}")
+
 
     elif args.mode == 'plot':
         # Load the collected data
