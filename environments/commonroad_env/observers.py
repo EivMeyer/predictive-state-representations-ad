@@ -400,3 +400,76 @@ def create_representation_observer(cfg, device):
     dataset = EnvironmentDataset(cfg)
     representation_observer = RepresentationObserver(dataset, representation_model, device, debug=cfg['debug_mode'], render_observer=render_observer, sequence_length=cfg['dataset']['t_obs'])
     return representation_observer
+
+def create_frame_stacking_observer(cfg):
+    base_observer = create_render_observer(cfg['viewer'])
+    frame_stacking_observer = FrameStackingObserver(base_observer, stack_size=cfg['dataset']['t_obs'])
+    return frame_stacking_observer
+
+
+class FrameStackingObserver(BaseObserver):
+    def __init__(self, base_observer: BaseObserver, stack_size: int):
+        """
+        Chains observations together over a specified number of timesteps.
+
+        Args:
+            base_observer (BaseObserver): The observer providing the base observations.
+            stack_size (int): The number of observations to stack.
+        """
+        super().__init__()
+        self.base_observer = base_observer
+        self.stack_size = stack_size
+        self.obs_buffer = deque(maxlen=stack_size)
+        self.is_first_observation = True
+
+    def setup(self, dummy_data: Optional[CommonRoadData] = None) -> gymnasium.Space:
+        """
+        Initialize the observation space based on the base observer.
+
+        Args:
+            dummy_data (Optional[CommonRoadData]): Dummy data for initialization.
+
+        Returns:
+            gymnasium.Space: The observation space of stacked observations.
+        """
+        base_space = self.base_observer.setup(dummy_data)
+        stacked_shape = (self.stack_size, *base_space.shape)
+        return gymnasium.spaces.Box(
+            low=np.tile(base_space.low[np.newaxis, ...], (self.stack_size, 1, 1, 1)),
+            high=np.tile(base_space.high[np.newaxis, ...], (self.stack_size, 1, 1, 1)),
+            shape=stacked_shape,
+            dtype=base_space.dtype
+        )
+
+    def observe(self, data: CommonRoadData, ego_vehicle_simulation: EgoVehicleSimulation) -> T_Observation:
+        """
+        Stack observations over the last `stack_size` timesteps.
+
+        Args:
+            data (CommonRoadData): The simulation data.
+            ego_vehicle_simulation (EgoVehicleSimulation): Ego vehicle simulation instance.
+
+        Returns:
+            T_Observation: The stacked observation tensor.
+        """
+        observation = self.base_observer.observe(data, ego_vehicle_simulation)
+        self.obs_buffer.append(observation)
+
+        if self.is_first_observation:
+            while len(self.obs_buffer) < self.stack_size:
+                self.obs_buffer.appendleft(observation)
+            self.is_first_observation = False
+
+        stacked_observation = np.stack(self.obs_buffer, axis=0)
+        return stacked_observation
+
+    def reset(self, ego_vehicle_simulation: EgoVehicleSimulation) -> None:
+        """
+        Reset the buffer and propagate reset to the base observer.
+
+        Args:
+            ego_vehicle_simulation (EgoVehicleSimulation): Ego vehicle simulation instance.
+        """
+        self.obs_buffer.clear()
+        self.is_first_observation = True
+        self.base_observer.reset(ego_vehicle_simulation)

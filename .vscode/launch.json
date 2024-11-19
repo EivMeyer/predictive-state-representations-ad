@@ -52,7 +52,47 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             },
-            "args": ["hydra.run.dir=.", "verbose=true", "wandb.enabled=false", "debug_mode=true", "rl_training.num_envs=1"]
+            "args": ["hydra.run.dir=.", "verbose=true", "wandb.enabled=false", "debug_mode=true", "rl_training.num_envs=1", "rl_training.n_steps=16"]
+        },
+        {
+            "name": "Python: Train RL Agent (Detached SRL)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/train_rl_agent.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "hydra.run.dir=.",
+                "verbose=true",
+                "wandb.enabled=false",
+                "debug_mode=true",
+                "rl_training.num_envs=1",
+                "rl_training.n_steps=16",
+                "rl_training.detached_srl=true"
+            ]
+        },
+        {
+            "name": "Python: Train RL Agent (End-to-End SRL)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/train_rl_agent.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "hydra.run.dir=.",
+                "verbose=true",
+                "wandb.enabled=false",
+                "debug_mode=true",
+                "rl_training.num_envs=1",
+                "rl_training.n_steps=16",
+                "rl_training.end_to_end=true"
+            ]
         },
         {
             "name": "Python: Train RL Agent (2 Environments)",
@@ -64,7 +104,7 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             },
-            "args": ["hydra.run.dir=.", "verbose=true", "wandb.enabled=true", "debug_mode=false", "rl_training.num_envs=2"]
+            "args": ["hydra.run.dir=.", "verbose=true", "wandb.enabled=true", "debug_mode=false", "rl_training.num_envs=2", "rl_training.n_steps=16"]
         },
         {
             "name": "Python: Enjoy RL Agent",
@@ -120,10 +160,11 @@
             "request": "launch",
             "program": "${workspaceFolder}/collect_dataset.py",
             "console": "integratedTerminal",
-            "justMyCode": true,
+            "justMyCode": false,
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
-            }
+            },
+            "args": ["viewer.window_size=512"]
         },
         {
             "name": "Python: Analyze Dataset",
@@ -162,6 +203,20 @@
             },
             "args": [
                 "plot"
+            ]
+        },
+        {
+            "name": "Python: Visualize Latent Representations (Probing)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/visualize_latent_representations.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "probing"
             ]
         },
         {

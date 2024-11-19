@@ -1,7 +1,7 @@
 from pathlib import Path
 from omegaconf import DictConfig, OmegaConf
 
-from stable_baselines3 import PPO
+from utils.sb3_custom.ppo import PPO
 from stable_baselines3.common.utils import configure_logger
 import wandb
 import torch
@@ -10,24 +10,39 @@ from utils.file_utils import find_model_path
 from utils.config_utils import config_wrapper
 from environments import get_environment
 from utils.rl_utils import VideoRecorderEvalCallback, DebugCallback, BaseWandbCallback, LatestModelCallback, create_representation_model
-from utils.policy_utils import PPOWithNoise
+from utils.policy_utils import PPOWithNoise, RepresentationActorCriticPolicy
+
 
 def create_new_ppo_model(cfg, env, device, tensorboard_log=None):
+    assert not cfg.rl_training.end_to_end_srl and cfg.rl_training.detached_srl, "Detached SRL is not supported with end-to-end SRL"
+    assert not cfg.rl_training.detached_srl and cfg.rl_training.num_envs > 1, "Detached SRL is not supported with multiple environments"
+
+    policy_kwargs = {
+        "net_arch": OmegaConf.to_container(cfg.rl_training.net_arch, resolve=True),
+        "log_std_init": cfg.rl_training.log_std_init,
+        "full_std": cfg.rl_training.full_std,
+        "use_expln": cfg.rl_training.use_expln,
+        "squash_output": cfg.rl_training.squash_output,
+        "activation_fn": nn.Tanh, 
+        "ortho_init": True,
+    }
+
+    # Create representation model if end-to-end SRL is enabled
+    representation_model = None
+    if cfg.rl_training.end_to_end_srl:
+        representation_model = create_representation_model(cfg, device, load=False, eval=False)
+        policy_class = RepresentationActorCriticPolicy
+        policy_kwargs["representation_model"] = representation_model
+    else:
+        policy_class = "MlpPolicy"
+
     return PPO(
-        policy="MlpPolicy",
+        policy=policy_class,
         env=env,
         verbose=1,
         device=device,
         learning_rate=cfg.rl_training.learning_rate,
-        policy_kwargs={
-            "net_arch": OmegaConf.to_container(cfg.rl_training.net_arch, resolve=True),
-            "log_std_init": cfg.rl_training.log_std_init,
-            "full_std": cfg.rl_training.full_std,
-            "use_expln": cfg.rl_training.use_expln,
-            "squash_output": cfg.rl_training.squash_output,
-            "activation_fn": nn.Tanh, 
-            "ortho_init": True,
-        },
+        policy_kwargs=policy_kwargs,
         n_steps=cfg.rl_training.n_steps,
         batch_size=cfg.rl_training.batch_size,
         n_epochs=cfg.rl_training.n_epochs,
@@ -158,7 +173,7 @@ def main(cfg: DictConfig) -> None:
     custom_callbacks = env_instance.custom_callbacks(cfg_dict)
     callbacks.extend(custom_callbacks)
 
-    if cfg.rl_training.online_srl:
+    if cfg.rl_training.detached_srl:
         from utils.baselines_utils import DetachedSRLCallback
         representation_model = create_representation_model(cfg, device)
         callbacks.append(DetachedSRLCallback(

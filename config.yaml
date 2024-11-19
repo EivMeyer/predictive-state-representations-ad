@@ -243,8 +243,13 @@ rl_training:
   net_arch:
     pi: [256, 256]
     vf: [256, 256]
+    
   # Enable online state representation learning
-  online_srl: false
+  detached_srl: false
+
+  # End-to-end training options
+  end_to_end_srl: false  # Set to true to enable end-to-end training
+  load_pretrained_representation: false  # Whether to load pretrained representation model
 
 # Viewer options
 viewer:

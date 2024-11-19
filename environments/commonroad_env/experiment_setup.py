@@ -18,7 +18,7 @@ from commonroad_geometric.simulation.interfaces.static.scenario_simulation impor
 from commonroad_geometric.simulation.ego_simulation.respawning.implementations import *
 from commonroad_geometric.dataset.extraction.traffic.traffic_extractor import TrafficExtractorOptions
 from commonroad.common.solution import VehicleType, VehicleModel
-from environments.commonroad_env.observers import create_representation_observer
+from environments.commonroad_env.observers import create_representation_observer, create_frame_stacking_observer
 from functools import partial
 from environments.commonroad_env.control_space import TrackVehicleControlSpace
 from environments.commonroad_env.rewarders import create_rewarders
@@ -76,7 +76,7 @@ def create_base_experiment_config(config):
             renderer_options=renderer_options_render,
             num_respawns_per_scenario=commonroad_config['num_respawns_per_scenario'],
             observer=create_render_observer(config['viewer']),
-            preprocessor=chain_preprocessors(*preprocessors) if preprocessors else None,
+            preprocessor=chain_preprocessors(*preprocessors) if preprocessors else None
         ),
         respawner_cls=RandomRespawner,
         respawner_options=commonroad_config['respawner'],
@@ -122,9 +122,13 @@ def setup_rl_experiment(cfg):
 
     experiment_config = create_base_experiment_config(OmegaConf.to_container(cfg, resolve=True))
 
-    if not cfg.rl_training.online_srl:
-        representation_observer_constructor = partial(create_representation_observer, cfg=cfg)
-        experiment_config.env_options.observer = representation_observer_constructor
+    if not cfg.rl_training.detached_srl:
+        if cfg.rl_training.end_to_end_srl:
+            observer_constructor = partial(create_frame_stacking_observer, cfg=cfg)
+            experiment_config.env_options.observer = observer_constructor
+        else:
+            observer_constructor = partial(create_representation_observer, cfg=cfg)
+            experiment_config.env_options.observer = observer_constructor
 
     experiment_config.respawner_options['init_steering_angle'] = 0.0
     experiment_config.respawner_options['init_orientation_noise'] = 0.0

@@ -273,7 +273,7 @@ class VideoRecorderEvalCallback(EvalCallback):
 
         return True
 
-def create_representation_model(cfg, device):
+def create_representation_model(cfg, device, load=True, eval=True):
     """
     Create and load a representation model based on configuration.
     """
@@ -298,18 +298,23 @@ def create_representation_model(cfg, device):
         eval_mode=False
     )
 
-    # Find and load model weights
-    model_path = find_model_path(cfg['project_dir'], cfg['representation']['model_path'])
-    if model_path is None:
-        raise FileNotFoundError(
-            f"Model file not found: {cfg['representation']['model_path']}. "
-            f"Searched in {cfg['project_dir']} and its subdirectories."
-        )
-    
-    load_model_state(model_path, model, device)
-    model.to(device)
-    model.eval()
+    if load:
+        # Find and load model weights
+        model_path = find_model_path(cfg['project_dir'], cfg['representation']['model_path'])
+        if model_path is None:
+            raise FileNotFoundError(
+                f"Model file not found: {cfg['representation']['model_path']}. "
+                f"Searched in {cfg['project_dir']} and its subdirectories."
+            )
+        
+        load_model_state(model_path, model, device)
+        print(f"Loaded {ModelClass.__name__} model from: {model_path}")
 
-    print(f"Loaded {ModelClass.__name__} model from: {model_path}")
+    model.to(device)
+    if eval:
+        model.eval()
+
 
     return model
+
+

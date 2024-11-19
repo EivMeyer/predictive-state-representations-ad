@@ -3,14 +3,15 @@ from stable_baselines3 import PPO
 from typing import Optional, Tuple, Dict, Any, Union
 import torch as th
 from gymnasium import spaces
-from stable_baselines3.common.policies import ActorCriticPolicy
+import gymnasium as gym
 from typing import Type
 from typing import Optional, Tuple, Dict, Any, Union
 
+import torch
 import numpy as np
-from stable_baselines3.common.policies import ActorCriticPolicy
 import torch as th
 from typing import Optional, Tuple, Dict, Any, Union
+from utils.sb3_custom.on_policy_algorithm import ActorCriticPolicy
 
 class OrnsteinUhlenbeckNoise:
     """Ornstein-Uhlenbeck process noise generator."""
@@ -159,3 +160,66 @@ class PPOWithNoise(PPO):
         if hasattr(self.policy, 'reset_noise'):
             self.policy.reset_noise()
         return super().collect_rollouts(*args, **kwargs)
+    
+
+class RepresentationActorCriticPolicy(ActorCriticPolicy):
+    def __init__(self, observation_space, action_space, lr_schedule, representation_model=None, **kwargs):
+        # Get encoded dimension before parent init
+        if representation_model is None:
+            raise ValueError("representation_model cannot be None")
+            
+        encoded_dim = representation_model.hidden_dim
+        
+        # Create encoded observation space
+        encoded_observation_space = gym.spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(encoded_dim,),
+            dtype=np.float32
+        )
+        
+        # Call parent init first
+        super().__init__(
+            observation_space=encoded_observation_space,
+            action_space=action_space,
+            lr_schedule=lr_schedule,
+            **kwargs
+        )
+        
+        # Store attributes after parent init
+        self._representation_model = representation_model
+        self._original_observation_space = observation_space
+        self._representation_model.train()
+
+
+    def extract_features(self, obs):
+        # Reshape observation if needed (B, T, H, W, C) or (B, H, W, C)
+        if obs.ndim == 4:
+            obs = obs.unsqueeze(1)
+            
+        # Prepare batch for representation model
+        batch = {
+            'observations': obs.permute(0, 1, 4, 2, 3).float() / 255.0,
+            'ego_states': torch.zeros(obs.shape[0], obs.shape[1], 4, device=obs.device)
+        }
+        
+        # Get encoded state
+        with torch.set_grad_enabled(True):
+            model_outputs = self._representation_model.forward(batch)
+            encoded_state = model_outputs['encoded_state']
+            loss = 0.0
+            #  loss, loss_components = self._representation_model.compute_loss(batch, model_outputs)
+            
+        return encoded_state, loss
+
+    def _get_features(self, obs):
+        """Override to work with original observation space"""
+        features = super()._get_features(obs)
+        return features
+    
+    def predict_values(self, obs: th.Tensor) -> th.Tensor:
+        features, loss = self.extract_features(obs)  
+        if isinstance(features, tuple):
+            features = features[0]
+        latent_vf = self.mlp_extractor.forward_critic(features)
+        return self.value_net(latent_vf), loss

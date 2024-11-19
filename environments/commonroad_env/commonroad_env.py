@@ -1,6 +1,6 @@
 from environments.base_env import BaseEnv
 from environments.commonroad_env.experiment_setup import create_base_experiment_config, setup_base_experiment
-from environments.commonroad_env.observers import create_representation_observer
+from environments.commonroad_env.observers import create_representation_observer, create_frame_stacking_observer
 from environments.commonroad_env.rewarders import create_rewarders
 from environments.commonroad_env.termination_criteria import create_termination_criteria
 from environments.commonroad_env.callbacks import CommonRoadWandbCallback
@@ -17,8 +17,11 @@ class CommonRoadEnv(BaseEnv):
         experiment_config = create_base_experiment_config(OmegaConf.to_container(config, resolve=True))
         experiment_config.termination_criteria = create_termination_criteria(terminate_on_collision=True, terminate_on_timeout=not eval_mode)
         if rl_mode:
-            if not config['rl_training']['online_srl']:
-                experiment_config.env_options.observer = create_representation_observer(config, config['device'])
+            if not config['rl_training']['detached_srl']:
+                if config['rl_training']['end_to_end_srl']:
+                    experiment_config.env_options.observer = create_frame_stacking_observer(config)
+                else:
+                    experiment_config.env_options.observer = create_representation_observer(config, config['device'])
             experiment_config.rewarder = SumRewardAggregator(create_rewarders())
             experiment_config.respawner_options['init_steering_angle'] = 0.0
             experiment_config.respawner_options['init_orientation_noise'] = 0.0
@@ -32,6 +35,7 @@ class CommonRoadEnv(BaseEnv):
             experiment_config.control_space_options['upper_bound_acceleration'] = 10.0
 
         self.experiment, self.env = setup_base_experiment(config, experiment_config)
+
         return self.env
 
     def get_observation_space(self):

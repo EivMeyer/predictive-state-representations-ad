@@ -124,10 +124,10 @@ def generate_linear_probe_results(latent_reps: np.ndarray, metrics: Dict[str, np
         # Format results
         result = {
             'Metric': metric_name,
-            'R2': f"{np.mean(probe_results['r2']):.3f}±{np.std(probe_results['r2']):.3f}",
-            'MAE': f"{np.mean(probe_results['mae']):.3f}±{np.std(probe_results['mae']):.3f}",
-            'RMSE': f"{np.mean(probe_results['rmse']):.3f}±{np.std(probe_results['rmse']):.3f}",
-            # 'MI': f"{np.mean(probe_results['mi']):.3f}±{np.std(probe_results['mi']):.3f}"
+            'R2': f"{np.mean(probe_results['r2']):.4f}±{np.std(probe_results['r2']):.4f}",
+            'MAE': f"{np.mean(probe_results['mae']):.4f}±{np.std(probe_results['mae']):.4f}",
+            'RMSE': f"{np.mean(probe_results['rmse']):.4f}±{np.std(probe_results['rmse']):.4f}",
+            # 'MI': f"{np.mean(probe_results['mi']):.4f}±{np.std(probe_results['mi']):.4f}"
         }
         results.append(result)
     
