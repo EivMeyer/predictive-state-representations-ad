@@ -36,7 +36,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/train_model.py",
             "console": "integratedTerminal",
-            "justMyCode": true,
+            "justMyCode": false,
             "env": {
                 "PYTHONPATH": "${workspaceFolder}",
             },

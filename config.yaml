@@ -165,15 +165,15 @@ training:
   optimizer:
     type: "AdamW"
     beta1: 0.9
-    beta2: 0.999
+    beta2: 0.98
     learning_rate: 1e-4
-    weight_decay: 1e-5
+    weight_decay: 1e-2
     momentum: 0.9
     alpha: 0.99
 
   # Scheduler configuration
   scheduler:
-    type: "NoScheduler"  # Options: "StepLR", "ExponentialLR", "CosineAnnealingLR", "ReduceLROnPlateau", "NoScheduler"
+    type: "LinearWarmupCosineAnnealingLR"  # Options: "StepLR", "ExponentialLR", "CosineAnnealingLR", "ReduceLROnPlateau", "NoScheduler" LinearWarmupCosineAnnealingLR
     T_max: 100  # Period of cosine annealing in epochs
     eta_min: 1e-5  # Minimum learning rate
     # Other scheduler options (uncomment if needed):
