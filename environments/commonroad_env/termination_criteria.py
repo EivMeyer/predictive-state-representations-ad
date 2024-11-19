@@ -53,14 +53,16 @@ class OverspeedCriterion(BaseTerminationCriterion):
         return {'Overspeed'}
     
 
-def create_termination_criteria(terminate_on_collision: bool) -> List[BaseTerminationCriterion]:
+def create_termination_criteria(
+    terminate_on_collision: bool,
+    terminate_on_timeout: bool
+) -> List[BaseTerminationCriterion]:
     termination_criteria = [
-        TimeoutCriterion(max_timesteps=500),
-        # # ReachedGoalCriterion(),
-        # # OvershotGoalCriterion(),
         CustomReachedEndCriterion(remaining_dist_threshold=40.0),
         OverspeedCriterion(max_speed=50.0)
     ]
+    if terminate_on_timeout:
+        termination_criteria.append(TimeoutCriterion(max_timesteps=500))
     if terminate_on_collision:
         termination_criteria.append(OffroadCriterion())
         termination_criteria.append(CollisionCriterion())

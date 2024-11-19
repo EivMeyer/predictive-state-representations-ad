@@ -13,9 +13,9 @@ class CommonRoadEnv(BaseEnv):
         self.experiment = None
         self.env = None
 
-    def make_env(self, config, n_envs, seed, rl_mode=False):
+    def make_env(self, config, n_envs, seed, rl_mode=False, eval_mode=False):
         experiment_config = create_base_experiment_config(OmegaConf.to_container(config, resolve=True))
-        experiment_config.termination_criteria = create_termination_criteria(terminate_on_collision=True)
+        experiment_config.termination_criteria = create_termination_criteria(terminate_on_collision=True, terminate_on_timeout=not eval_mode)
         if rl_mode:
             if not config['rl_training']['online_srl']:
                 experiment_config.env_options.observer = create_representation_observer(config, config['device'])

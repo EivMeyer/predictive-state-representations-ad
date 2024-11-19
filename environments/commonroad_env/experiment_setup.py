@@ -135,7 +135,7 @@ def setup_rl_experiment(cfg):
     experiment_config.control_space_options['lower_bound_acceleration'] = -10.0
     experiment_config.control_space_options['upper_bound_acceleration'] = 10.0
     experiment_config.rewarder = SumRewardAggregator(create_rewarders())
-    experiment_config.termination_criteria = create_termination_criteria(terminate_on_collision=not cfg['dataset']['collect_from_trajectories'])
+    experiment_config.termination_criteria = create_termination_criteria(terminate_on_collision=not cfg['dataset']['collect_from_trajectories'], terminate_on_timeout=True)
 
     experiment = RLExperiment(config=experiment_config)
 
