@@ -14,8 +14,8 @@ from utils.policy_utils import PPOWithNoise, RepresentationActorCriticPolicy
 
 
 def create_new_ppo_model(cfg, env, device, tensorboard_log=None):
-    assert not cfg.rl_training.end_to_end_srl and cfg.rl_training.detached_srl, "Detached SRL is not supported with end-to-end SRL"
-    assert not cfg.rl_training.detached_srl and cfg.rl_training.num_envs > 1, "Detached SRL is not supported with multiple environments"
+    assert not (cfg.rl_training.end_to_end_srl and cfg.rl_training.detached_srl), "Detached SRL is not supported with end-to-end SRL"
+    assert not (cfg.rl_training.detached_srl and cfg.rl_training.num_envs > 1), "Detached SRL is not supported with multiple environments"
 
     policy_kwargs = {
         "net_arch": OmegaConf.to_container(cfg.rl_training.net_arch, resolve=True),
