@@ -15,48 +15,63 @@ def collect_episodes(cfg_dict, env, num_episodes):
     obs_skip_frames = cfg_dict['dataset']['obs_skip_frames']
     pred_skip_frames = cfg_dict['dataset']['pred_skip_frames']
 
+    obs = env.reset()
+
     episodes_collected = 0
     with tqdm(total=num_episodes, desc="Collecting episodes") as pbar:
         while episodes_collected < num_episodes:
-            obs = env.reset()
+            # if env.get_attr('step_counter')[0] > 0:
+            #     obs = env.reset()
             
             # Initialize sequences
             obs_sequences = [[] for _ in range(num_envs)]
             action_sequences = [[] for _ in range(num_envs)]
             ego_state_sequences = [[] for _ in range(num_envs)]
 
-            # Collect observations
-            terminated_during_obs = False
-            for t in range(t_obs * (obs_skip_frames + 1)):
-                actions = [env.action_space.sample() for _ in range(num_envs)]
-                next_obs, rewards, dones, infos = env.step(actions)
-                ego_simulation = env.get_attr('ego_vehicle_simulation')[0]
+            while True:  # Keep trying until enough data is collected from a single episode
+                terminated_during_obs = False
+                obs_sequences[0].clear()  # Reset sequences for new episode
+                action_sequences[0].clear()
+                ego_state_sequences[0].clear()
 
-                if any(dones):
-                    terminated_during_obs = True
-                    break
+                for t in range(t_obs * (obs_skip_frames + 1)):
+                    actions = [env.action_space.sample() for _ in range(num_envs)]
+                    next_obs, rewards, dones, infos = env.step(actions)
+                    ego_simulation = env.get_attr('ego_vehicle_simulation')[0]
 
-                if t % (obs_skip_frames + 1) == 0:
-                    obs_sequences[0].append(obs[0])
-                    action_sequences[0].append(actions[0])
-                    
-                    ego_state = np.array([
-                        ego_simulation.ego_vehicle.state.velocity,
-                        ego_simulation.ego_vehicle.state.acceleration,
-                        ego_simulation.ego_vehicle.state.__dict__.get('steering_angle', 0.0),
-                        ego_simulation.ego_vehicle.state.__dict__.get('yaw_rate', 0.0)
-                    ])
-                    ego_state_sequences[0].append(ego_state)
+                    if any(dones):
+                        terminated_during_obs = True
+                        print(f"Episode terminated prematurely at step {t}. Restarting...")
+                        break
 
-                obs = next_obs
+                    if t % (obs_skip_frames + 1) == 0:
+                        # Append observations and actions
+                        obs_sequences[0].append(obs[0])
+                        action_sequences[0].append(actions[0])
 
-            if terminated_during_obs:
-                continue  # Discard this episode and start a new one
+                        # Extract ego state
+                        ego_state = np.array([
+                            ego_simulation.ego_vehicle.state.velocity,
+                            ego_simulation.ego_vehicle.state.acceleration,
+                            getattr(ego_simulation.ego_vehicle.state, 'steering_angle', 0.0),
+                            getattr(ego_simulation.ego_vehicle.state, 'yaw_rate', 0.0)
+                        ])
+                        ego_state_sequences[0].append(ego_state)
+
+                    obs = next_obs
+
+                    print(f"Step {t} / {t_obs * (obs_skip_frames + 1)}")
+
+                if not terminated_during_obs:
+                    print(f"Collected {len(obs_sequences[0])} observations. Proceeding to prediction.")
+                    break 
 
             # Collect predictions
             next_obs_sequences = [[] for _ in range(num_envs)]
             next_action_sequences = [[] for _ in range(num_envs)]
             done_sequences = [[] for _ in range(num_envs)]
+
+            print("Predicting future observations...")
 
             t = 0
             is_done = False
@@ -64,10 +79,13 @@ def collect_episodes(cfg_dict, env, num_episodes):
                 actions = [0.0*env.action_space.sample() for _ in range(num_envs)] # Zero actions for prediction
                 next_obs, rewards, dones, infos = env.step(actions)
 
+                print(f"Step {t} / {t_pred}")
+
                 if any(dones):
                     is_done = True
 
                 if t % (pred_skip_frames + 1) == 0:
+                    print(f"Predicted {len(next_obs_sequences[0])} observations.")
                     for i in range(num_envs):
                         done_sequences[i].append(is_done)
                         if is_done:
@@ -85,6 +103,8 @@ def collect_episodes(cfg_dict, env, num_episodes):
                             next_action_sequences[i].append(actions[i])
                             
                 t += 1
+
+            print("Episode complete.")
 
             # Add episodes to dataset
             for i in range(num_envs):
