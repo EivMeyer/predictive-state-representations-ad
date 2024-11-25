@@ -2,6 +2,7 @@
 
 from omegaconf import OmegaConf
 import yaml
+import torch
 from pathlib import Path
 from commonroad_geometric.learning.reinforcement.experiment import RLExperiment, RLExperimentConfig, RLEnvironmentOptions, RLEnvironmentParams
 from commonroad_geometric.learning.reinforcement.rewarder.reward_aggregator.implementations import SumRewardAggregator
@@ -119,16 +120,18 @@ def setup_rl_experiment(cfg):
     """
     Configures the downstream RL experiment by modifying the base experiment.
     """
-
     experiment_config = create_base_experiment_config(OmegaConf.to_container(cfg, resolve=True))
 
+    # Configure the device
+    if cfg.device == "auto":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    else:
+        device = cfg.device
+
     if not cfg.rl_training.detached_srl:
-        if cfg.rl_training.end_to_end_srl:
-            observer_constructor = partial(create_frame_stacking_observer, cfg=cfg)
-            experiment_config.env_options.observer = observer_constructor
-        else:
-            observer_constructor = partial(create_representation_observer, cfg=cfg)
-            experiment_config.env_options.observer = observer_constructor
+        # Create a partial function that includes both cfg and device
+        representation_observer_constructor = partial(create_representation_observer, cfg=cfg, device=device)
+        experiment_config.env_options.observer = representation_observer_constructor
 
     experiment_config.respawner_options['init_steering_angle'] = 0.0
     experiment_config.respawner_options['init_orientation_noise'] = 0.0
@@ -140,7 +143,10 @@ def setup_rl_experiment(cfg):
     experiment_config.control_space_options['lower_bound_acceleration'] = -10.0
     experiment_config.control_space_options['upper_bound_acceleration'] = 10.0
     experiment_config.rewarder = SumRewardAggregator(create_rewarders())
-    experiment_config.termination_criteria = create_termination_criteria(terminate_on_collision=not cfg['dataset']['collect_from_trajectories'], terminate_on_timeout=True)
+    experiment_config.termination_criteria = create_termination_criteria(
+        terminate_on_collision=not cfg['dataset']['collect_from_trajectories'],
+        terminate_on_timeout=False
+    )
 
     experiment = RLExperiment(config=experiment_config)
 

@@ -566,3 +566,56 @@ def print_parameter_summary(model):
     print(f"{'Total':30} {total:,}")
     
     return total  # Return total count for convenience
+
+
+def compute_rl_checksums(
+    rl_model,
+    srl_model: Optional[nn.Module] = None,
+    verbose: bool = False
+) -> Dict[str, str]:
+    """
+    Compute checksums for RL and/or SRL models without modifying them.
+    
+    Args:
+        rl_model: The RL model (optional)  
+        srl_model: The SRL model (optional)
+        verbose: Whether to print detailed parameter info
+        
+    Returns:
+        Dict containing checksums for each component
+    """
+    checksums = {}
+    
+    if rl_model is not None:
+        policy_checksum = compute_model_checksum(rl_model.policy, verbose=verbose)
+        checksums['rl_policy'] = policy_checksum
+        
+        if hasattr(rl_model.policy, '_representation_model'):
+            # Special case for end-to-end training
+            checksums['rl_representation'] = compute_model_checksum(
+                rl_model.policy._representation_model, 
+                verbose=verbose
+            )
+    
+    if srl_model is not None:
+        srl_checksum = compute_model_checksum(srl_model, verbose=verbose)
+        checksums['srl'] = srl_checksum
+        
+        # Add component checksums for SRL if available
+        if hasattr(srl_model, 'encoder'):
+            checksums['srl_encoder'] = compute_model_checksum(
+                srl_model.encoder,
+                verbose=verbose
+            )
+        if hasattr(srl_model, 'decoder'):
+            checksums['srl_decoder'] = compute_model_checksum(
+                srl_model.decoder,
+                verbose=verbose
+            )
+    
+    if verbose:
+        print("\nChecksums:")
+        for name, checksum in checksums.items():
+            print(f"{name}: {checksum}")
+            
+    return checksums

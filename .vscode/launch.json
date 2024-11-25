@@ -52,7 +52,8 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             },
-            "args": ["hydra.run.dir=.", "verbose=true", "wandb.enabled=false", "debug_mode=true", "rl_training.num_envs=1", "rl_training.n_steps=16"]
+            "args": ["hydra.run.dir=.", "verbose=true", "wandb.enabled=false", "debug_mode=true", "rl_training.num_envs=1", "rl_training.n_steps=16", "rl_training.eval_freq=50",
+            "rl_training.n_eval_episodes=1"]
         },
         {
             "name": "Python: Train RL Agent (Detached SRL)",
@@ -71,7 +72,9 @@
                 "debug_mode=true",
                 "rl_training.num_envs=1",
                 "rl_training.n_steps=16",
-                "rl_training.detached_srl=true"
+                "rl_training.detached_srl=true",
+                "rl_training.eval_freq=50",
+                "rl_training.n_eval_episodes=1"
             ]
         },
         {
@@ -91,7 +94,9 @@
                 "debug_mode=true",
                 "rl_training.num_envs=1",
                 "rl_training.n_steps=16",
-                "rl_training.end_to_end=true"
+                "rl_training.end_to_end=true",
+                "rl_training.eval_freq=50",
+                "rl_training.n_eval_episodes=1"
             ]
         },
         {
@@ -104,7 +109,7 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             },
-            "args": ["hydra.run.dir=.", "verbose=true", "wandb.enabled=true", "debug_mode=false", "rl_training.num_envs=2", "rl_training.n_steps=16"]
+            "args": ["hydra.run.dir=.", "verbose=true", "wandb.enabled=true", "debug_mode=false", "rl_training.num_envs=2", "rl_training.n_steps=16", "rl_training.eval_freq=50", "rl_training.n_eval_episodes=1"]
         },
         {
             "name": "Python: Enjoy RL Agent",
@@ -112,11 +117,25 @@
             "request": "launch",
             "program": "${workspaceFolder}/enjoy_rl_agent.py",
             "console": "integratedTerminal",
-            "justMyCode": true,
+            "justMyCode": false,
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             },
             "args": []
+        },
+        {
+            "name": "Python: Enjoy RL Agent (Detached SRL)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/enjoy_rl_agent.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "rl_training.detached_srl=true"
+            ]
         },
         {
             "name": "Python: Enjoy RL Agent (Debug)",
@@ -129,6 +148,32 @@
                 "PYTHONPATH": "${workspaceFolder}"
             },
             "args": ["debug_mode=true"]
+        },
+        {
+            "name": "Python: Evaluate RL Agent",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/evaluate_rl_agent.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": []
+        },
+        {
+            "name": "Python: Evaluate RL Agent (Detached SRL)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/evaluate_rl_agent.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "rl_training.detached_srl=true"
+            ]
         },
         {
             "name": "Python: Play RL Agent",

@@ -10,35 +10,45 @@ from utils.file_utils import find_model_path
 from utils.config_utils import config_wrapper
 from environments import get_environment
 from utils.rl_utils import VideoRecorderEvalCallback, DebugCallback, BaseWandbCallback, LatestModelCallback, create_representation_model
-from utils.policy_utils import PPOWithNoise, RepresentationActorCriticPolicy
-
+from utils.policy_utils import PPOWithNoise, RepresentationActorCriticPolicy, PPOWithSRL, DetachedSRLCallback
+from utils.training_utils import init_wandb
+from datetime import datetime
 
 def create_new_ppo_model(cfg, env, device, tensorboard_log=None):
-    assert not (cfg.rl_training.end_to_end_srl and cfg.rl_training.detached_srl), "Detached SRL is not supported with end-to-end SRL"
-    assert not (cfg.rl_training.detached_srl and cfg.rl_training.num_envs > 1), "Detached SRL is not supported with multiple environments"
-
     policy_kwargs = {
         "net_arch": OmegaConf.to_container(cfg.rl_training.net_arch, resolve=True),
         "log_std_init": cfg.rl_training.log_std_init,
         "full_std": cfg.rl_training.full_std,
         "use_expln": cfg.rl_training.use_expln,
         "squash_output": cfg.rl_training.squash_output,
-        "activation_fn": nn.Tanh, 
+        "activation_fn": nn.Tanh,
         "ortho_init": True,
     }
 
-    # Create representation model if end-to-end SRL is enabled
+    # Determine SRL mode and setup
+    srl_mode = "none"
+    srl_callback = None
     representation_model = None
+
     if cfg.rl_training.end_to_end_srl:
-        representation_model = create_representation_model(cfg, device, load=False, eval=False)
+        srl_mode = "end_to_end"
+        representation_model = create_representation_model(cfg, device, load=cfg.rl_training.load_pretrained_representation, eval=False)
         policy_class = RepresentationActorCriticPolicy
-        policy_kwargs["representation_model"] = representation_model
+    elif cfg.rl_training.detached_srl:
+        srl_mode = "detached"
+        representation_model = create_representation_model(cfg, device, load=cfg.rl_training.load_pretrained_representation)
+        srl_callback = DetachedSRLCallback(cfg, representation_model)
+        policy_class = "MlpPolicy"
     else:
         policy_class = "MlpPolicy"
 
-    return PPO(
+    # Create and return model
+    return PPOWithSRL(
         policy=policy_class,
         env=env,
+        srl_mode=srl_mode,
+        srl_callback=srl_callback,
+        representation_model=representation_model,
         verbose=1,
         device=device,
         learning_rate=cfg.rl_training.learning_rate,
@@ -58,13 +68,14 @@ def create_new_ppo_model(cfg, env, device, tensorboard_log=None):
         tensorboard_log=tensorboard_log
     )
 
-def initialize_ppo_model(cfg, env, device):
+
+def initialize_ppo_model(cfg, env, device, run_dir: Path):
     model = None
     tensorboard_log = None
 
     # Set up tensorboard logging path
     if cfg.wandb.enabled:
-        tensorboard_log = Path(cfg.project_dir) / "tensorboard_logs"
+        tensorboard_log = run_dir / "tensorboard_logs"
         tensorboard_log.mkdir(parents=True, exist_ok=True)
         tensorboard_log = str(tensorboard_log)
 
@@ -109,9 +120,13 @@ def load_warmstart_ppo_model(project_dir, model_path, env, device):
 def main(cfg: DictConfig) -> None:
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
 
-    # Initialize wandb if enabled
-    if cfg.wandb.enabled:
-        wandb.init(project=cfg.wandb.project + "-" + cfg.environment + '-RL', config=cfg_dict)
+
+    wandb = init_wandb(cfg, project_postfix="rl")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_name = f"{timestamp}_{wandb.run.name}" if cfg.wandb.enabled else f"{timestamp}_"
+    run_dir = Path(cfg.project_dir) / "rl" / run_name
+    run_dir.mkdir(parents=True, exist_ok=True)
 
     # Create the environment
     env_class = get_environment(cfg.environment)
@@ -124,7 +139,7 @@ def main(cfg: DictConfig) -> None:
         device = torch.device("cpu")
     cfg.device = str(device)
 
-    model = initialize_ppo_model(cfg, env, device)
+    model = initialize_ppo_model(cfg, env, device, run_dir=run_dir)
 
     # Setup evaluation environment
     eval_env = env_instance.make_env(
@@ -135,11 +150,11 @@ def main(cfg: DictConfig) -> None:
     )
     
     # Setup video recording
-    video_folder = Path(cfg.project_dir) / cfg.rl_training.video_folder
+    video_folder = run_dir / cfg.rl_training.video_folder
     video_folder.mkdir(parents=True, exist_ok=True)
 
     # Setup saving paths
-    save_path = Path(cfg.project_dir) / cfg.rl_training.save_path
+    save_path = run_dir / cfg.rl_training.save_path
     save_path.mkdir(parents=True, exist_ok=True)
     
     # Setup latest model callback
@@ -157,7 +172,7 @@ def main(cfg: DictConfig) -> None:
         video_length=cfg.rl_training.video_length,
         n_eval_episodes=cfg.rl_training.n_eval_episodes,
         best_model_save_path=save_path,
-        log_path=Path(cfg.project_dir) / cfg.rl_training.log_path,
+        log_path=run_dir / cfg.rl_training.log_path,
         eval_freq=cfg.rl_training.eval_freq,
         deterministic=True,
         render=False
@@ -173,20 +188,12 @@ def main(cfg: DictConfig) -> None:
     custom_callbacks = env_instance.custom_callbacks(cfg_dict)
     callbacks.extend(custom_callbacks)
 
-    if cfg.rl_training.detached_srl:
-        from utils.baselines_utils import DetachedSRLCallback
-        representation_model = create_representation_model(cfg, device)
-        callbacks.append(DetachedSRLCallback(
-            cfg,
-            representation_model
-        ))
-
     # Train the agent
     model.learn(total_timesteps=cfg.rl_training.total_timesteps, callback=callbacks,
                 tb_log_name="ppo_run" if cfg.wandb.enabled else None)
 
     # Save the final model
-    final_model_path = Path(cfg.project_dir) / cfg.rl_training.save_path / "final_model"
+    final_model_path = run_dir / cfg.rl_training.save_path / "final_model"
     model.save(final_model_path)
 
     if cfg.wandb.enabled:

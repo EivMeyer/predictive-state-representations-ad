@@ -13,7 +13,7 @@ from omegaconf import DictConfig, OmegaConf
 from commonroad_geometric.learning.reinforcement.experiment import RLExperiment, RLExperimentConfig
 from utils.dataset_utils import EnvironmentDataset, get_data_dimensions
 from utils.file_utils import find_model_path
-from utils.training_utils import load_model_state
+from utils.training_utils import load_model_state, compute_rl_checksums
 import wandb
 from functools import partial
 from models import get_model_class
@@ -188,6 +188,12 @@ class LatestModelCallback(BaseCallback):
             self.model.save(latest_path)
             if self.verbose > 0:
                 print(f"Saving latest model to {latest_path}")
+                try:
+                    srl_model = srl_model=self.model.representation_model
+                except AttributeError:
+                    srl_model = None
+                checksums = compute_rl_checksums(rl_model=self.model, srl_model=srl_model)
+                print("Model checksums:", checksums)
         return True
 
 class VideoRecorderEvalCallback(EvalCallback):
@@ -261,7 +267,15 @@ class VideoRecorderEvalCallback(EvalCallback):
                 if self.verbose > 0:
                     print("New best mean reward!")
                 if self.best_model_save_path is not None:
-                    self.model.save(os.path.join(self.best_model_save_path, "best_model"))
+                    self.model.save(os.path.join(self.best_model_save_path, "best_model.zip"))
+                    if self.verbose > 0:
+                        print(f"Saving new best model to {self.best_model_save_path}")
+                        try:
+                            srl_model = srl_model=self.model.representation_model
+                        except AttributeError:
+                            srl_model = None
+                        checksums = compute_rl_checksums(rl_model=self.model, srl_model=srl_model)
+                        print("Model checksums:", checksums)
                 self.best_mean_reward = mean_reward
 
             # Log to wandb
