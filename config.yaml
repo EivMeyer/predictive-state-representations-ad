@@ -212,7 +212,7 @@ rl_training:
   # Learning rate for the optimizer
   learning_rate: 1e-4
   # Number of steps to collect samples for each update
-  n_steps: 512
+  n_steps: 1024
   # Target value for the KL divergence
   target_kl: 0.01
   # Batch size for each update
@@ -269,7 +269,7 @@ commonroad:
   scenario_dir: "scenarios"
 
   # Number of episodes to collect per scenario
-  num_respawns_per_scenario: 500
+  num_respawns_per_scenario: 5
 
   # Whether to collect dataset from existing trajectories in the scenarios
   collect_from_trajectories: true
