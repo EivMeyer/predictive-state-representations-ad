@@ -323,6 +323,8 @@ def create_representation_model(cfg, device, load=True, eval=True):
         
         load_model_state(model_path, model, device)
         print(f"Loaded {ModelClass.__name__} model from: {model_path}")
+    else:
+        print(f"Created new {ModelClass.__name__} model")
 
     model.to(device)
     if eval:

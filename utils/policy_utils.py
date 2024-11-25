@@ -238,6 +238,37 @@ class RepresentationActorCriticPolicy(ActorCriticPolicy):
         latent_vf = self.mlp_extractor.forward_critic(features)
         return self.value_net(latent_vf), loss
     
+    def obs_to_tensor(self, observation):
+        """Convert observation to tensor and handle preprocessing."""
+        # Check if observation is already a tensor
+        if isinstance(observation, torch.Tensor):
+            obs_tensor = observation
+        else:
+            obs_tensor = torch.as_tensor(observation)
+        
+        # Move to correct device and convert to float
+        obs_tensor = obs_tensor.to(device=self.device).float()
+
+        # Ensure observation is in correct format
+        if obs_tensor.ndim == 4:  # Single observation
+            obs_tensor = obs_tensor.unsqueeze(0)  # Add batch dimension
+
+        # Prepare batch for representation model
+        batch = {
+            'observations': obs_tensor.permute(0, 1, 4, 2, 3).float() / 255.0,
+            'ego_states': torch.zeros(obs_tensor.shape[0], obs_tensor.shape[1], 4, 
+                                    device=self.device)
+        }
+
+        # Get encoded state
+        with torch.set_grad_enabled(True):
+            encoded_state = self._representation_model.encode(batch)
+            if isinstance(encoded_state, tuple):
+                encoded_state = encoded_state[0]
+
+        return encoded_state, True
+
+    
 class DetachedSRLCallback(BaseCallback):
     """
     A callback that trains a representation model and saves it alongside the RL agent.
@@ -405,8 +436,8 @@ class PPOWithSRL(PPO):
         # Save PPO state
         super().save(path, exclude=exclude, include=include)
         
-        # Save SRL state if using online or detached SRL
-        if self.srl_mode in ["online", "detached"] and self.srl_callback is not None:
+        # Save SRL state if using end_to_end or detached SRL
+        if self.srl_mode in ["end_to_end", "detached"] and self.srl_callback is not None:
             srl_path = str(path).replace('.zip', '_srl.pth')
             srl_state = {
                 'srl_mode': self.srl_mode,
