@@ -214,6 +214,21 @@
             "args": ["viewer.window_size=512"]
         },
         {
+            "name": "Python: Collect Dataset (Track Vehicle Trajectories)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/collect_dataset.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "viewer.window_size=512",
+                "commonroad.collect_from_trajectories=true"
+            ]
+        },
+        {
             "name": "Python: Analyze Dataset",
             "type": "debugpy",
             "request": "launch",

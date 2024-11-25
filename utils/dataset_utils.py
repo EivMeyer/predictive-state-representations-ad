@@ -14,7 +14,7 @@ class EnvironmentDataset(Dataset):
         if isinstance(cfg, dict):
             cfg = OmegaConf.create(cfg)
         self.cfg = cfg
-        self.data_dir = Path(cfg.project_dir) / "dataset"
+        self.data_dir = Path(cfg.project_dir) / Path(cfg.dataset_dir)
         self.preprocessed_dir = self.data_dir / "preprocessed"
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.preprocessed_dir.mkdir(parents=True, exist_ok=True)
@@ -28,6 +28,9 @@ class EnvironmentDataset(Dataset):
             self.preprocess_dataset()
         
         self.update_file_list()
+
+        if len(self.episode_files) == 0:
+            raise RuntimeError(f"No valid data files found in the dataset directory: {self.data_dir}")
 
     def update_file_list(self):
         if self.cfg.dataset.preprocess_existing and not self.cfg.dataset.preprocess_online:

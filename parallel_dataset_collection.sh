@@ -22,6 +22,7 @@ total_episodes=""
 episodes_per_restart=""
 config_overrides=""
 append_mode=false
+dataset_name="dataset"  # Default value
 base_dir="./output"  # Default value
 
 # Parse command line options
@@ -31,9 +32,10 @@ while [[ $# -gt 0 ]]; do
         -e) total_episodes="$2"; shift 2 ;;
         -r) episodes_per_restart="$2"; shift 2 ;;
         -o|--output-dir) base_dir="$2"; shift 2 ;;
+        -d|--dataset-dir) dataset_name="$2"; shift 2 ;;
         --append) append_mode=true; shift ;;
         *=*) config_overrides="$config_overrides $1"; shift ;;
-        *) echo "Usage: $0 [-w num_workers] [-e total_episodes] [-r episodes_per_restart] [-o|--output-dir base_directory] [--append] [CONFIG_OVERRIDES]" >&2
+        *) echo "Usage: $0 [-w num_workers] [-e total_episodes] [-r episodes_per_restart] [-o|--output-dir base_directory] [-d|--dataset-dir dataset_name] [--append] [CONFIG_OVERRIDES]" >&2
            exit 1 ;;
     esac
 done
@@ -53,7 +55,7 @@ if [ -z "$episodes_per_restart" ]; then
     episodes_per_restart=$(get_integer_input "Enter the number of episodes to collect before restarting a worker: ")
 fi
 
-dataset_dir="$base_dir/dataset"
+dataset_dir="$base_dir/$dataset_name"
 
 echo "Number of workers: $num_workers"
 echo "Total number of episodes: $total_episodes"
@@ -138,6 +140,6 @@ wait
 echo "All dataset collection jobs completed."
 
 # Call the merge_datasets.sh script with the same base directory
-./merge_datasets.sh -o "$base_dir"
+./merge_datasets.sh -o "$base_dir" -d "$dataset_name"
 
 echo "Script completed. Dataset collection and merging are done."

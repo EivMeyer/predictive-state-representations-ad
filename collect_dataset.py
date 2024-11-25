@@ -41,7 +41,7 @@ def collect_episodes(cfg_dict, env, num_episodes):
 
                     if any(dones):
                         terminated_during_obs = True
-                        print(f"Episode terminated prematurely at step {t}. Restarting...")
+                        print(f"Episode {episodes_collected} terminated prematurely at step {t} because of reason: {infos[0]['termination_reason']}. Retrying...")
                         break
 
                     if t % (obs_skip_frames + 1) == 0:
@@ -151,7 +151,7 @@ def main(cfg: DictConfig) -> None:
 
     # Create the environment
     env_class = get_environment(cfg.environment)
-    env = env_class().make_env(cfg, n_envs=1, seed=cfg.seed)
+    env = env_class().make_env(cfg, n_envs=1, seed=cfg.seed, collect_mode=True)
     
     dataset = collect_episodes(cfg_dict, env, cfg.dataset.num_episodes)
     

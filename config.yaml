@@ -16,6 +16,9 @@ project_dir: "./output"
 # Directory for evaluation output files (inside project_dir)
 evaluation_dir: "evaluation"
 
+# Directory for dataset (inside project_dir)
+dataset_dir: "dataset"
+
 # Name of the environment to use
 environment: "commonroad" # Either "commonroad" or "image_cartpole"
 
@@ -55,8 +58,6 @@ dataset:
   preprocess_online: false
   # Number of worker processes for preprocessing (0 for single-process)
   preprocess_workers: 4
-  # Whether to collect dataset from existing trajectories in the scenarios
-  collect_from_trajectories: false
 
 wandb:
   # Enable Weights & Biases logging
@@ -269,6 +270,9 @@ commonroad:
 
   # Number of episodes to collect per scenario
   num_respawns_per_scenario: 500
+
+  # Whether to collect dataset from existing trajectories in the scenarios
+  collect_from_trajectories: true
 
   # Simulation options
   simulation:

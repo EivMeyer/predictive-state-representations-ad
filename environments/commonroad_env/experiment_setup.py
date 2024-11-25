@@ -28,13 +28,13 @@ from utils.rl_utils import create_representation_model
 from environments.commonroad_env.observers import create_render_observer, create_renderer_options
 
 
-def create_base_experiment_config(config):
+def create_base_experiment_config(config: dict, collect_mode: bool = False):
     """Create an RLExperimentConfig based on the provided configuration."""
     rewarder = SumRewardAggregator([])  # Add reward computers as needed
 
     commonroad_config = config['commonroad']
 
-    termination_criteria = [TimeoutCriterion(500)]
+    termination_criteria = [TimeoutCriterion(3000)]
 
     feature_computers = TrafficFeatureComputerOptions(
         v=[],
@@ -50,7 +50,10 @@ def create_base_experiment_config(config):
         window_size=800
     )
 
-    control_space_cls = PIDControlSpace if commonroad_config['pid_control'] else SteeringAccelerationSpace
+    if collect_mode:
+        control_space_cls = TrackVehicleControlSpace if commonroad_config['collect_from_trajectories'] else SteeringAccelerationSpace
+    else:
+        control_space_cls = PIDControlSpace if commonroad_config['pid_control'] else SteeringAccelerationSpace
     control_space_options = commonroad_config['control_space']
 
     preprocessors = [
@@ -144,7 +147,7 @@ def setup_rl_experiment(cfg):
     experiment_config.control_space_options['upper_bound_acceleration'] = 10.0
     experiment_config.rewarder = SumRewardAggregator(create_rewarders())
     experiment_config.termination_criteria = create_termination_criteria(
-        terminate_on_collision=not cfg['dataset']['collect_from_trajectories'],
+        terminate_on_collision=not cfg['commonroad']['collect_from_trajectories'],
         terminate_on_timeout=False
     )
 

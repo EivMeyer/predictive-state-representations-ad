@@ -2,18 +2,20 @@
 
 # Initialize base directory with default value
 base_dir="./output"
+dataset_dir="dataset"
 
 # Parse command line options
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -o|--output-dir) base_dir="$2"; shift 2 ;;
+        -d|--dataset-dir) dataset_dir="$2"; shift 2 ;;
         *) echo "Usage: $0 [-o|--output-dir base_directory]" >&2
            exit 1 ;;
     esac
 done
 
 # Define the merge directory
-merge_dir="${base_dir}/dataset"
+merge_dir="${base_dir}/${dataset_dir}"
 
 # Function to merge datasets
 merge_datasets() {
