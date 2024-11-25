@@ -29,9 +29,6 @@ class EnvironmentDataset(Dataset):
         
         self.update_file_list()
 
-        if len(self.episode_files) == 0:
-            raise RuntimeError(f"No valid data files found in the dataset directory: {self.data_dir}")
-
     def update_file_list(self):
         if self.cfg.dataset.preprocess_existing and not self.cfg.dataset.preprocess_online:
             self.episode_files = sorted([f for f in os.listdir(self.preprocessed_dir) if f.startswith("batch_") and f.endswith(".pt")])
@@ -106,6 +103,9 @@ class EnvironmentDataset(Dataset):
         return torch.from_numpy(image)
 
     def __getitem__(self, idx):
+        if len(self.episode_files) == 0:
+            raise RuntimeError(f"No valid data files found in the dataset directory: {self.data_dir}")
+
         if idx < 0 or idx >= self.batch_count:
             raise IndexError("Batch index out of range")
         
