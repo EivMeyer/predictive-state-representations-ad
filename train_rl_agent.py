@@ -25,30 +25,18 @@ def create_new_ppo_model(cfg, env, device, tensorboard_log=None):
         "ortho_init": True,
     }
 
-    # Determine SRL mode and setup
-    srl_mode = "none"
-    srl_callback = None
-    representation_model = None
-
     if cfg.rl_training.end_to_end_srl:
-        srl_mode = "end_to_end"
-        representation_model = create_representation_model(cfg, device, load=cfg.rl_training.load_pretrained_representation, eval=False)
         policy_class = RepresentationActorCriticPolicy
     elif cfg.rl_training.detached_srl:
-        srl_mode = "detached"
-        representation_model = create_representation_model(cfg, device, load=cfg.rl_training.load_pretrained_representation)
-        srl_callback = DetachedSRLCallback(cfg, representation_model)
-        policy_class = "MlpPolicy"
+        policy_class = RepresentationActorCriticPolicy
     else:
         policy_class = "MlpPolicy"
 
     # Create and return model
-    return PPOWithSRL(
+    model = PPOWithSRL(
         policy=policy_class,
         env=env,
-        srl_mode=srl_mode,
-        srl_callback=srl_callback,
-        representation_model=representation_model,
+        cfg=cfg,
         verbose=1,
         device=device,
         learning_rate=cfg.rl_training.learning_rate,
@@ -67,6 +55,8 @@ def create_new_ppo_model(cfg, env, device, tensorboard_log=None):
         max_grad_norm=cfg.rl_training.max_grad_norm,
         tensorboard_log=tensorboard_log
     )
+
+    return model
 
 
 def initialize_ppo_model(cfg, env, device, run_dir: Path):
@@ -109,7 +99,7 @@ def load_warmstart_ppo_model(project_dir, model_path, env, device):
         return None
     try:
         # Load the model without specifying tensorboard_log
-        model = PPO.load(full_model_path, env=env, device=device, tensorboard_log=None)
+        model = PPOWithSRL.load(full_model_path, env=env, device=device, tensorboard_log=None)
         return model
     except Exception as e:
         print(f"Error loading warmstart model: {e}")
@@ -186,6 +176,9 @@ def main(cfg: DictConfig) -> None:
         debug_callback = DebugCallback()
         callbacks.append(debug_callback)
     custom_callbacks = env_instance.custom_callbacks(cfg_dict)
+    if cfg.rl_training.detached_srl:
+        srl_callback = DetachedSRLCallback(cfg, representation_model=model.policy.representation_model)
+        custom_callbacks.append(srl_callback)
     callbacks.extend(custom_callbacks)
 
     # Train the agent

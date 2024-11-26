@@ -73,7 +73,7 @@
                 "rl_training.num_envs=1",
                 "rl_training.n_steps=16",
                 "rl_training.detached_srl=true",
-                "rl_training.load_pretrained_representation=true",
+                "rl_training.load_pretrained_representation=false",
                 "rl_training.eval_freq=50",
                 "rl_training.n_eval_episodes=1"
             ]
@@ -161,7 +161,9 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             },
-            "args": []
+            "args": [
+                "rl_training.warmstart_model=output/rl/models/best_model.zip"
+            ]
         },
         {
             "name": "Python: Evaluate RL Agent (Detached SRL)",

@@ -83,3 +83,5 @@ class BasePredictiveModel(nn.Module, ABC):
                 nested_states['autoencoder']['state_dict'], 
                 strict=strict
             )
+
+        print(f"Loaded model state from {metadata.get('model_type')}")

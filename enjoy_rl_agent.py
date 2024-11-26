@@ -80,27 +80,13 @@ def load_env_and_model_from_cfg(cfg: DictConfig):
         )[0]
     print("Loading model from:", model_path)
 
-    # Create representation model and callback if needed
-    srl_callback = None
-    if cfg.rl_training.detached_srl:
-        representation_model = create_representation_model(cfg, cfg.device)
-        srl_callback = DetachedSRLCallback(cfg, representation_model)
-    else:
-        representation_model = None
-
     # Load model with SRL support
     model = PPOWithSRL.load(
         model_path,
         env=env,
-        srl_callback=srl_callback,
-        device=cfg.device
+        device=cfg.device,
+        cfg=cfg
     )
-
-    checksums = compute_rl_checksums(
-        rl_model=model,
-        srl_model=representation_model
-    )
-    print("Model checksums:", checksums)
 
     return env, model, model_path
 

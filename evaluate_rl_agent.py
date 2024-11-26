@@ -124,27 +124,13 @@ def main(cfg: DictConfig) -> None:
         for stat_name, value in value_stats.items():
             metrics[f'value_{stat_name}'].append(value)
 
-        # Analyze observation statistics (excluding images)
-        if isinstance(episode_observations[0], dict):
-            for key in episode_observations[0].keys():
-                if isinstance(episode_observations[0][key], np.ndarray):
-                    obs_array = np.array([obs[key] for obs in episode_observations])
-                    obs_stats = analyze_array(obs_array)
-                    for stat_name, value in obs_stats.items():
-                        metrics[f'obs_{key}_{stat_name}'].append(value)
-
         # Process vehicle states
         for state_name, values in episode_vehicle_states.items():
+            if None in values:
+                continue
             state_stats = analyze_array(np.array(values))
             for stat_name, value in state_stats.items():
                 metrics[f'vehicle_{state_name}_{stat_name}'].append(value)
-
-        # Process reward components
-        for comp in reward_components:
-            comp_array = np.array(episode_reward_components[comp])
-            comp_stats = analyze_array(comp_array)
-            for stat_name, value in comp_stats.items():
-                metrics[f'reward_{comp}_{stat_name}'].append(value)
 
         # Process aggregate vehicle stats from info
         for stat, values in final_info['vehicle_aggregate_stats'].items():

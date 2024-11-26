@@ -188,11 +188,7 @@ class LatestModelCallback(BaseCallback):
             self.model.save(latest_path)
             if self.verbose > 0:
                 print(f"Saving latest model to {latest_path}")
-                try:
-                    srl_model = srl_model=self.model.representation_model
-                except AttributeError:
-                    srl_model = None
-                checksums = compute_rl_checksums(rl_model=self.model, srl_model=srl_model)
+                checksums = compute_rl_checksums(rl_model=self.model)
                 print("Model checksums:", checksums)
         return True
 
@@ -270,11 +266,7 @@ class VideoRecorderEvalCallback(EvalCallback):
                     self.model.save(os.path.join(self.best_model_save_path, "best_model.zip"))
                     if self.verbose > 0:
                         print(f"Saving new best model to {self.best_model_save_path}")
-                        try:
-                            srl_model = srl_model=self.model.representation_model
-                        except AttributeError:
-                            srl_model = None
-                        checksums = compute_rl_checksums(rl_model=self.model, srl_model=srl_model)
+                        checksums = compute_rl_checksums(rl_model=self.model)
                         print("Model checksums:", checksums)
                 self.best_mean_reward = mean_reward
 
@@ -290,6 +282,12 @@ class VideoRecorderEvalCallback(EvalCallback):
 def create_representation_model(cfg, device, load=True, eval=True):
     """
     Create and load a representation model based on configuration.
+
+    Args:
+        cfg (DictConfig): Configuration object.
+        device (torch.device): Device to load the model on.
+        load (bool): Whether to load the model weights.
+        eval (bool): Whether to set the model to evaluation mode.
     """
     model_save_dir = Path(cfg['project_dir']) / "models"
     model_save_dir.mkdir(parents=True, exist_ok=True)
