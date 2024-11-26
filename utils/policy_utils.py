@@ -406,9 +406,9 @@ class DetachedSRLCallback(BaseCallback):
             done_sequence = np.array(self.done_buffer)
             
             batch = {
-                'observations': torch.from_numpy(obs_sequence).float().unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.cfg.device),
+                'observations': (torch.from_numpy(obs_sequence).float()/255.0).unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.cfg.device),
                 'ego_states': torch.from_numpy(ego_sequence).float().unsqueeze(0).to(self.cfg.device),
-                'next_observations': torch.from_numpy(next_obs_sequence).float().unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.cfg.device),
+                'next_observations': (torch.from_numpy(next_obs_sequence).float()/255.0).unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.cfg.device),
                 'dones': torch.from_numpy(done_sequence).bool().unsqueeze(0).to(self.cfg.device)
             }
             
