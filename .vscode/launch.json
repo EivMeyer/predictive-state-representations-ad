@@ -191,7 +191,10 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             },
-            "args": []
+            "args": [
+                "rl_training.warmstart_model=output/rl/models/best_model.zip",
+                "debug_mode=true"
+            ]
         },
         {
             "name": "Python: Enjoy RL Agent (Detached SRL)",

@@ -101,6 +101,11 @@ evaluation:
   # Minimum episode length for evaluation (mitigate unfortunate respawning and obs. buffer not filled)
   min_episode_length: 100
 
+# Recording configuration
+recording:
+  # Number of episodes to record
+  num_episodes_to_keep: 10
+
 # Training configuration
 training:
   # Type of model to use for training
@@ -278,10 +283,10 @@ commonroad:
   scenario_dir: "scenarios"
 
   # Number of episodes to collect per scenario
-  num_respawns_per_scenario: 5
+  num_respawns_per_scenario: 1
 
   # Whether to collect dataset from existing trajectories in the scenarios
-  collect_from_trajectories: true
+  collect_from_trajectories: false
 
   # Simulation options
   simulation:
@@ -376,6 +381,9 @@ commonroad:
 
   # Traffic generation options
   spawn_rate: 1.0
+
+  # Rendering options
+  vehicle_expansion_factor: 1.4
 
 image_cartpole:
   max_episode_steps: 500

@@ -335,7 +335,7 @@ class RepresentationObserver(BaseObserver):
         if SAVE_PLOTS:
             self.fig.savefig(f'./debug_plots/step_{self.call_count}_combined.pdf', dpi=100, bbox_inches='tight')
 
-def create_renderer_options(view_range, window_size):
+def create_renderer_options(view_range: int, window_size: int, vehicle_expansion_factor: float):
     renderer_options = TrafficSceneRendererOptions(
         camera=EgoVehicleCamera(
             view_range=view_range,
@@ -363,7 +363,7 @@ def create_renderer_options(view_range, window_size):
                 obstacle_fill_color=Color("red"),
                 obstacle_color=Color("red"),
                 obstacle_line_width=0.0,
-                vehicle_expansion=1.4
+                vehicle_expansion=vehicle_expansion_factor
             ),
         ],
         viewer_options=GLViewerOptions(
@@ -374,10 +374,11 @@ def create_renderer_options(view_range, window_size):
 
     return renderer_options
 
-def create_render_observer(config):
+def create_render_observer(view_config: dict, commonroad_config: dict):
     renderer_options = create_renderer_options(
-        view_range=config["view_range"],
-        window_size=config["window_size"]
+        view_range=view_config["view_range"],
+        window_size=view_config["window_size"],
+        vehicle_expansion_factor=commonroad_config["vehicle_expansion_factor"]
     )
     return RenderObserver(
         renderer_options=renderer_options
@@ -396,13 +397,13 @@ def create_representation_observer(cfg, device):
     from utils.rl_utils import create_representation_model
     representation_model = create_representation_model(cfg, device)
     print_parameter_summary(representation_model)
-    render_observer = create_render_observer(cfg['viewer'])
+    render_observer = create_render_observer(view_config=cfg['viewer'], commonroad_config=cfg['commonroad'])
     dataset = EnvironmentDataset(cfg)
     representation_observer = RepresentationObserver(dataset, representation_model, device, debug=cfg['debug_mode'], render_observer=render_observer, sequence_length=cfg['dataset']['t_obs'])
     return representation_observer
 
 def create_frame_stacking_observer(cfg):
-    base_observer = create_render_observer(cfg['viewer'])
+    base_observer = create_render_observer(view_config=cfg['viewer'], commonroad_config=cfg['commonroad'])
     frame_stacking_observer = FrameStackingObserver(base_observer, stack_size=cfg['dataset']['t_obs'])
     return frame_stacking_observer
 

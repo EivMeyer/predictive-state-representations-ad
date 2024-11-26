@@ -1,7 +1,6 @@
 # experiment_setup.py
 
 from omegaconf import OmegaConf
-import yaml
 import torch
 from pathlib import Path
 from commonroad_geometric.learning.reinforcement.experiment import RLExperiment, RLExperimentConfig, RLEnvironmentOptions, RLEnvironmentParams
@@ -47,7 +46,8 @@ def create_base_experiment_config(config: dict, collect_mode: bool = False):
 
     renderer_options_render = create_renderer_options(
         view_range=150,
-        window_size=800
+        window_size=800,
+        vehicle_expansion_factor=1.0
     )
 
     if collect_mode:
@@ -56,14 +56,7 @@ def create_base_experiment_config(config: dict, collect_mode: bool = False):
         control_space_cls = PIDControlSpace if commonroad_config['pid_control'] else SteeringAccelerationSpace
     control_space_options = commonroad_config['control_space']
 
-    preprocessors = [
-        # MergeLaneletsPreprocessor()
-        # VehicleFilterPreprocessor(),
-        # RemoveIslandsPreprocessor()
-        # SegmentLaneletsPreprocessor(100.0),
-        # ComputeVehicleVelocitiesPreprocessor(),
-        # (DepopulateScenarioPreprocessor(1), 1),
-    ]
+    preprocessors = []
     if commonroad_config['spawn_rate'] < 1.0:
         preprocessors.append(DepopulateScenarioPreprocessor(commonroad_config["spawn_rate"]))
     
@@ -79,7 +72,7 @@ def create_base_experiment_config(config: dict, collect_mode: bool = False):
             raise_exceptions=True,
             renderer_options=renderer_options_render,
             num_respawns_per_scenario=commonroad_config['num_respawns_per_scenario'],
-            observer=create_render_observer(config['viewer']),
+            observer=create_render_observer(view_config=config['viewer'], commonroad_config=commonroad_config),
             preprocessor=chain_preprocessors(*preprocessors) if preprocessors else None
         ),
         respawner_cls=RandomRespawner,

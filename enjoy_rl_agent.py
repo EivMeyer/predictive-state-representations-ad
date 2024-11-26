@@ -78,15 +78,18 @@ def load_env_and_model_from_cfg(cfg: DictConfig):
             key=lambda x: x.stat().st_mtime,  # Sort by last modified time
             reverse=True  # Most recent first
         )[0]
-    print("Loading model from:", model_path)
+
+    ppo_class = PPOWithSRL # if cfg.rl_training.detached_srl or cfg.rl_training.end_to_end_srl else PPO
 
     # Load model with SRL support
-    model = PPOWithSRL.load(
+    model = ppo_class.load(
         model_path,
         env=env,
         device=cfg.device,
         cfg=cfg
     )
+
+    print(f"Loaded {ppo_class.__name__} model from '{model_path}'")
 
     return env, model, model_path
 
