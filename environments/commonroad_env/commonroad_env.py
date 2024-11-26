@@ -18,7 +18,9 @@ class CommonRoadEnv(BaseEnv):
         experiment_config = create_base_experiment_config(config_dict, collect_mode=collect_mode)
         experiment_config.termination_criteria = create_termination_criteria(terminate_on_collision=not (collect_mode and config_dict['commonroad']['collect_from_trajectories']), terminate_on_timeout=not eval_mode)
         if rl_mode:
-            if not config['rl_training']['detached_srl']:
+            assert int(config['rl_training']['end_to_end_srl']) + int(config['rl_training']['detached_srl']) + int(config['rl_training']['use_raw_observations']) <= 1, "At most one of 'end_to_end_srl', 'detached_srl', and 'use_raw_observations' can be enabled"
+    
+            if not config['rl_training']['detached_srl'] and not config['rl_training']['use_raw_observations']:
                 if config['rl_training']['end_to_end_srl']:
                     experiment_config.env_options.observer = create_frame_stacking_observer(config)
                 else:

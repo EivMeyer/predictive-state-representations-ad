@@ -258,6 +258,14 @@ rl_training:
   # Whether to warmstart the model
   load_pretrained_representation: false  # Whether to load pretrained representation model
 
+  # Whether to use raw observations instead of learned representations
+  use_raw_observations: false  # Set to true to use raw observations
+  
+  # CNN policy configuration when using raw observations
+  cnn_policy:
+    features_dim: 512
+    hidden_dims: [256, 128]
+
 # Viewer options
 viewer:
   # Range of view in the simulation

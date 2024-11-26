@@ -10,7 +10,7 @@ from utils.file_utils import find_model_path
 from utils.config_utils import config_wrapper
 from environments import get_environment
 from utils.rl_utils import VideoRecorderEvalCallback, DebugCallback, BaseWandbCallback, LatestModelCallback, create_representation_model
-from utils.policy_utils import PPOWithNoise, RepresentationActorCriticPolicy, PPOWithSRL, DetachedSRLCallback
+from utils.policy_utils import PPOWithNoise, RepresentationActorCriticPolicy, PPOWithSRL, DetachedSRLCallback, create_raw_policy_kwargs
 from utils.training_utils import init_wandb
 from datetime import datetime
 
@@ -31,6 +31,9 @@ def create_new_ppo_model(cfg, env, device, tensorboard_log=None):
         policy_class = RepresentationActorCriticPolicy
     else:
         policy_class = "MlpPolicy"
+
+    if cfg.rl_training.use_raw_observations:
+        policy_kwargs.update(create_raw_policy_kwargs(env))
 
     # Create and return model
     model = PPOWithSRL(

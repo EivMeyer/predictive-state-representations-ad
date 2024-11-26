@@ -29,6 +29,11 @@ import torch
 import os
 from typing import Any, Dict, Optional, Type, Union
 
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+import torch.nn as nn
+import torch
+import gymnasium as gym
+from typing import Dict, List, Tuple, Type, Union
 
 import io
 import pathlib
@@ -761,3 +766,90 @@ class PPOWithSRL(PPO):
     def load_srl_state(self, srl_state):
         """Load SRL model and optimizer state."""
         self.policy.representation_model.load_state_dict(srl_state['srl_model_state'])
+
+
+class CNNFeaturesExtractor(BaseFeaturesExtractor):
+    """
+    Simple CNN architecture for processing raw image observations.
+    """
+    def __init__(self, observation_space: gym.Space, features_dim: int = 512):
+        super().__init__(observation_space, features_dim)
+        
+        n_input_channels = observation_space.shape[0]  # Should be 3 for RGB
+        
+        self.cnn = nn.Sequential(
+            # Initial convolution
+            nn.Conv2d(n_input_channels, 32, kernel_size=3, stride=2, padding=1),
+            nn.InstanceNorm2d(32),
+            nn.LeakyReLU(),
+            
+            # Residual blocks
+            ResidualBlock(32, 64, stride=2),
+            ResidualBlock(64, 128, stride=2),
+            ResidualBlock(128, 256, stride=2),
+            
+            # Global average pooling
+            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.Flatten(),
+        )
+        
+        # Calculate feature dimensions
+        with torch.no_grad():
+            n_flatten = self.cnn(torch.zeros(1, *observation_space.shape)).shape[1]
+        
+        self.linear = nn.Sequential(
+            nn.Linear(n_flatten, features_dim),
+            nn.LeakyReLU()
+        )
+        
+    def forward(self, observations: torch.Tensor) -> torch.Tensor:
+        return self.linear(self.cnn(observations))
+
+class ResidualBlock(nn.Module):
+    """
+    Residual block with instance normalization.
+    """
+    def __init__(self, in_channels: int, out_channels: int, stride: int = 1):
+        super().__init__()
+        
+        # First convolution
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, 
+                              stride=stride, padding=1, bias=False)
+        self.bn1 = nn.InstanceNorm2d(out_channels)
+        
+        # Second convolution
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3,
+                              stride=1, padding=1, bias=False)
+        self.bn2 = nn.InstanceNorm2d(out_channels)
+        
+        # Shortcut connection
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_channels != out_channels:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1,
+                         stride=stride, bias=False),
+                nn.InstanceNorm2d(out_channels)
+            )
+        
+        self.activation = nn.LeakyReLU()
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = self.activation(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        out += self.shortcut(x)
+        return self.activation(out)
+
+def create_raw_policy_kwargs(env):
+    """
+    Create policy kwargs for training with raw observations.
+    """
+    policy_kwargs = {
+        'features_extractor_class': CNNFeaturesExtractor,
+        'features_extractor_kwargs': {'features_dim': 512},
+        'net_arch': {
+            'pi': [256, 128], 
+            'vf': [256, 128]
+        },
+        'activation_fn': nn.LeakyReLU,
+    }
+    return policy_kwargs
