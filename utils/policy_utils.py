@@ -355,11 +355,7 @@ class DetachedSRLCallback(BaseCallback):
         
     def _on_step(self) -> bool:
         # Regular SRL training logic
-        try:
-            obs = self.training_env.unwrapped.get_attr('last_obs')[0]
-        except AttributeError:
-            # Return without doing anything if last_obs is not available
-            return True
+        obs = self.training_env.unwrapped.get_attr('last_obs')[0]
         ego_state = np.zeros((4,))  # TODO: Get actual ego state
         
         if self.obs_shape is None:
