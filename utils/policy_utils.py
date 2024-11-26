@@ -504,6 +504,8 @@ class DetachedSRLCallback(BaseCallback):
                 for name, value in loss_components.items():
                     wandb.log({f"srl/loss_{name}": value}, step=self.num_timesteps)
 
+            self.representation_model.eval()
+
         except Exception as e:
             print(f"Error in training step: {str(e)}")
             self._reset_buffers()
