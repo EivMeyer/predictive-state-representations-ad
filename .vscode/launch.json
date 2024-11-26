@@ -125,6 +125,29 @@
             ]
         },
         {
+            "name": "Python: Train RL Agent (Pretrained End-to-End SRL)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/train_rl_agent.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "hydra.run.dir=.",
+                "verbose=true",
+                "wandb.enabled=false",
+                "debug_mode=true",
+                "rl_training.num_envs=1",
+                "rl_training.n_steps=16",
+                "rl_training.end_to_end_srl=true",
+                "rl_training.load_pretrained_representation=true",
+                "rl_training.eval_freq=50",
+                "rl_training.n_eval_episodes=1"
+            ]
+        },
+        {
             "name": "Python: Train RL Agent (2 Environments)",
             "type": "debugpy",
             "request": "launch",
