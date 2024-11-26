@@ -112,7 +112,7 @@ training:
   # Latent representation size
   hidden_dim: 64
   # Number of gradient updates in total
-  total_training_steps: 100000
+  total_training_steps: 10000000
   # Early stopping configuration
   early_stopping:
     patience: 10  # Number of validation checks without improvement before stopping
