@@ -286,6 +286,8 @@ class RepresentationActorCriticPolicy(ActorCriticPolicy):
             loss = 0.0
             #  loss, loss_components = self.representation_model.compute_loss(batch, model_outputs)
             
+        assert torch.isfinite(encoded_state).all()
+
         return encoded_state, loss
 
     def _get_features(self, obs):
@@ -345,7 +347,14 @@ class DetachedSRLCallback(BaseCallback):
         super().__init__()
         self.cfg = cfg
         self.representation_model = representation_model
-        self.optimizer = torch.optim.Adam(self.representation_model.parameters()) # TODO ?
+        
+        # Initialize optimizer with proper parameters
+        self.optimizer = torch.optim.Adam(
+            self.representation_model.parameters(),
+            lr=cfg.models.PredictiveModelV9M3.decoder_learning_rate,  # Use decoder learning rate from config
+            weight_decay=cfg.training.optimizer.weight_decay
+        )
+        
         # Use the same save frequency as the main RL training
         self.save_freq = save_freq or cfg.rl_training.eval_freq
         
@@ -353,85 +362,149 @@ class DetachedSRLCallback(BaseCallback):
         self._reset_buffers()
         self.obs_shape = None
         
+        # Metrics tracking
+        self.running_loss = None
+        self.loss_alpha = 0.99  # For exponential moving average
+        self.train_count = 0
+
     def _on_step(self) -> bool:
-        # Regular SRL training logic
-        obs = self.training_env.unwrapped.get_attr('last_obs')[0]
-        ego_state = np.zeros((4,))  # TODO: Get actual ego state
-        
-        if self.obs_shape is None:
-            self.obs_shape = obs.shape
-            
-        self.terminated = self.locals['dones'][-1]
-        
-        if self.collecting_obs:
-            if self.terminated:
-                self._reset_buffers()
+        try:
+            # Get current observation safely
+            obs = self.training_env.unwrapped.get_attr('last_obs')[0]
+            if obs is None:
                 return True
+
+            ego_state = np.zeros((4,))  # TODO: Get actual ego state
             
-            if len(self.obs_buffer) < self.cfg.dataset.t_obs:
-                if self.t % (self.cfg.dataset.obs_skip_frames + 1) == 0:
-                    self.obs_buffer.append(obs.copy())
-                    self.ego_buffer.append(ego_state.copy())
-                self.t += 1
+            if self.obs_shape is None:
+                self.obs_shape = obs.shape
                 
-                if len(self.obs_buffer) == self.cfg.dataset.t_obs:
-                    self.collecting_obs = False
-                    self.t = 0
-        else:
-            if len(self.next_obs_buffer) < self.cfg.dataset.t_pred:
-                if self.t % (self.cfg.dataset.pred_skip_frames + 1) == 0:
-                    if self.terminated:
-                        zero_obs = np.zeros(self.obs_shape, dtype=np.float32)
-                        self.next_obs_buffer.append(zero_obs)
-                        self.done_buffer.append(True)
-                        while len(self.next_obs_buffer) < self.cfg.dataset.t_pred:
-                            self.next_obs_buffer.append(zero_obs.copy())
-                            self.done_buffer.append(True)
-                    else:
-                        self.next_obs_buffer.append(obs.copy())
-                        self.done_buffer.append(False)
-                self.t += 1
-                
-                if len(self.next_obs_buffer) == self.cfg.dataset.t_pred:
-                    self._train_step()
+            self.terminated = self.locals['dones'][-1]
+            
+            if self.collecting_obs:
+                if self.terminated:
                     self._reset_buffers()
+                    return True
+                
+                if len(self.obs_buffer) < self.cfg.dataset.t_obs:
+                    if self.t % (self.cfg.dataset.obs_skip_frames + 1) == 0:
+                        # Validate observation before adding
+                        if np.isfinite(obs).all():
+                            self.obs_buffer.append(obs.copy())
+                            self.ego_buffer.append(ego_state.copy())
+                    self.t += 1
                     
-        return True
+                    if len(self.obs_buffer) == self.cfg.dataset.t_obs:
+                        self.collecting_obs = False
+                        self.t = 0
+            else:
+                if len(self.next_obs_buffer) < self.cfg.dataset.t_pred:
+                    if self.t % (self.cfg.dataset.pred_skip_frames + 1) == 0:
+                        if self.terminated:
+                            zero_obs = np.zeros(self.obs_shape, dtype=np.float32)
+                            self.next_obs_buffer.append(zero_obs)
+                            self.done_buffer.append(True)
+                            while len(self.next_obs_buffer) < self.cfg.dataset.t_pred:
+                                self.next_obs_buffer.append(zero_obs.copy())
+                                self.done_buffer.append(True)
+                        else:
+                            # Validate observation before adding
+                            if np.isfinite(obs).all():
+                                self.next_obs_buffer.append(obs.copy())
+                                self.done_buffer.append(False)
+                    self.t += 1
+                    
+                    if len(self.next_obs_buffer) == self.cfg.dataset.t_pred:
+                        self._train_step()
+                        self._reset_buffers()
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error in DetachedSRLCallback._on_step: {str(e)}")
+            self._reset_buffers()
+            return True
     
     def _train_step(self):
         try:
+            # Validate sequence lengths
+            if (len(self.obs_buffer) != self.cfg.dataset.t_obs or 
+                len(self.next_obs_buffer) != self.cfg.dataset.t_pred):
+                print("Invalid sequence lengths, skipping training step")
+                return
+
+            # Stack and validate sequences
             obs_sequence = np.stack(self.obs_buffer)
             ego_sequence = np.stack(self.ego_buffer)
             next_obs_sequence = np.stack(self.next_obs_buffer)
             done_sequence = np.array(self.done_buffer)
+
+            # Validate arrays
+            if not (np.isfinite(obs_sequence).all() and 
+                   np.isfinite(ego_sequence).all() and 
+                   np.isfinite(next_obs_sequence).all()):
+                print("Non-finite values detected in sequences, skipping training step")
+                return
             
+            # Prepare batch
             batch = {
-                'observations': (torch.from_numpy(obs_sequence).float()/255.0).unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.cfg.device),
-                'ego_states': torch.from_numpy(ego_sequence).float().unsqueeze(0).to(self.cfg.device),
-                'next_observations': (torch.from_numpy(next_obs_sequence).float()/255.0).unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.cfg.device),
-                'dones': torch.from_numpy(done_sequence).bool().unsqueeze(0).to(self.cfg.device)
+                'observations': (torch.from_numpy(obs_sequence).float()/255.0)
+                              .unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.cfg.device),
+                'ego_states': torch.from_numpy(ego_sequence).float()
+                              .unsqueeze(0).to(self.cfg.device),
+                'next_observations': (torch.from_numpy(next_obs_sequence).float()/255.0)
+                                   .unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.cfg.device),
+                'dones': torch.from_numpy(done_sequence).bool()
+                         .unsqueeze(0).to(self.cfg.device)
             }
             
+            # Train step with gradient clipping
             self.representation_model.train()
             self.optimizer.zero_grad()
             output = self.representation_model(batch)
-            loss = self.representation_model.compute_loss(batch, output)
+            loss, loss_components = self.representation_model.compute_loss(batch, output)
+            
+            # Check for invalid loss
+            if not torch.isfinite(loss):
+                print(f"Invalid loss value: {loss.item()}, skipping update")
+                return
+                
             if isinstance(loss, tuple):
                 loss = loss[0]
+            
             loss.backward()
+            
+            # Clip gradients
+            torch.nn.utils.clip_grad_norm_(self.representation_model.parameters(), 1.0)
+            
             self.optimizer.step()
 
-            if self.cfg.wandb.enabled:
-                wandb.log({"srl/loss": loss.item()}, step=self.num_timesteps)
+            # Update running loss
+            loss_value = loss.item()
+            if self.running_loss is None:
+                self.running_loss = loss_value
+            else:
+                self.running_loss = self.loss_alpha * self.running_loss + (1 - self.loss_alpha) * loss_value
 
-            if self.cfg.verbose:
-                print(f"SRL Step: {self.num_timesteps}, Loss: {loss.item()}")
+            self.train_count += 1
+
+            # Log metrics
+            if self.cfg.wandb.enabled and self.train_count % 10 == 0:
+                wandb.log({
+                    "srl/loss": loss_value,
+                    "srl/running_loss": self.running_loss,
+                    "srl/train_count": self.train_count
+                }, step=self.num_timesteps)
+                
+                for name, value in loss_components.items():
+                    wandb.log({f"srl/loss_{name}": value}, step=self.num_timesteps)
 
         except Exception as e:
             print(f"Error in training step: {str(e)}")
             self._reset_buffers()
 
     def _reset_buffers(self):
+        """Reset all buffers to initial state."""
         self.obs_buffer = []
         self.ego_buffer = []
         self.next_obs_buffer = []
@@ -441,11 +514,12 @@ class DetachedSRLCallback(BaseCallback):
         self.t = 0
     
     def _on_rollout_end(self):
+        """Clean up at the end of a rollout."""
         self._reset_buffers()
 
     def on_training_end(self):
+        """Clean up at the end of training."""
         self._reset_buffers()
-
 
 
 class PPOWithSRL(PPO):
