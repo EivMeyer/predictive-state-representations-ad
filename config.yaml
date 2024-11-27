@@ -205,13 +205,13 @@ rl_training:
   # Path to save training logs
   log_path: "./logs"
   # Frequency of evaluation during training
-  eval_freq: 10000
+  eval_freq: 100000
   # Number of episodes for evaluation
   n_eval_episodes: 20
   # Frequency of video recording (in steps)
-  video_freq: 20000  
+  video_freq: 100000  
   # Length of each video (in steps)
-  video_length: 6000 
+  video_length: 5000 
   # Folder to save videos (relative to project_dir)
   video_folder: "./videos"  
   # Number of parallel environments for training
