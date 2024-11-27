@@ -119,7 +119,7 @@
                 "rl_training.n_steps=256",
                 "rl_training.detached_srl=true",
                 "rl_training.load_pretrained_representation=true",
-                "rl_training.eval_freq=50",
+                "rl_training.eval_freq=1000",
                 "rl_training.n_eval_episodes=1"
             ]
         },

@@ -344,37 +344,43 @@ class RepresentationActorCriticPolicy(ActorCriticPolicy):
 
     
 class DetachedSRLCallback(BaseCallback):
-    """
-    A callback that trains a representation model and saves it alongside the RL agent.
-    Ensures SRL model states are tied to specific agent checkpoints.
-    """
+    """A callback that trains a representation model and saves it alongside the RL agent."""
     def __init__(self, cfg, representation_model, save_freq=None):
         super().__init__()
         self.cfg = cfg
         self.representation_model = representation_model
-        
-        # Initialize optimizer with proper parameters
         self.optimizer = torch.optim.Adam(
             self.representation_model.parameters(),
-            lr=cfg.models.PredictiveModelV9M3.decoder_learning_rate,  # Use decoder learning rate from config
+            lr=cfg.models.PredictiveModelV9M3.detached_srl_learning_rate,
             weight_decay=cfg.training.optimizer.weight_decay
         )
-        
-        # Use the same save frequency as the main RL training
         self.save_freq = save_freq or cfg.rl_training.eval_freq
         
-        # Initialize buffers
-        self._reset_buffers()
+        # Current sequence buffers
+        self.obs_buffer = []
+        self.ego_buffer = []
+        self.next_obs_buffer = []
+        self.done_buffer = []
+        
+        # Batch collection buffers
+        self.batch_obs_sequences = []
+        self.batch_ego_sequences = []
+        self.batch_next_obs_sequences = []
+        self.batch_done_sequences = []
+        
+        # State tracking
+        self.collecting_obs = True
+        self.terminated = False
+        self.t = 0
         self.obs_shape = None
+        self.train_count = 0
         
         # Metrics tracking
         self.running_loss = None
-        self.loss_alpha = 0.99  # For exponential moving average
-        self.train_count = 0
+        self.loss_alpha = 0.99
 
     def _on_step(self) -> bool:
         try:
-            # Get current observation safely
             obs = self.training_env.unwrapped.get_attr('last_obs')[0]
             if obs is None:
                 return True
@@ -388,12 +394,11 @@ class DetachedSRLCallback(BaseCallback):
             
             if self.collecting_obs:
                 if self.terminated:
-                    self._reset_buffers()
+                    self._reset_sequence_buffers()
                     return True
                 
                 if len(self.obs_buffer) < self.cfg.dataset.t_obs:
                     if self.t % (self.cfg.dataset.obs_skip_frames + 1) == 0:
-                        # Validate observation before adding
                         if np.isfinite(obs).all():
                             self.obs_buffer.append(obs.copy())
                             self.ego_buffer.append(ego_state.copy())
@@ -413,105 +418,112 @@ class DetachedSRLCallback(BaseCallback):
                                 self.next_obs_buffer.append(zero_obs.copy())
                                 self.done_buffer.append(True)
                         else:
-                            # Validate observation before adding
                             if np.isfinite(obs).all():
                                 self.next_obs_buffer.append(obs.copy())
                                 self.done_buffer.append(False)
                     self.t += 1
                     
                     if len(self.next_obs_buffer) == self.cfg.dataset.t_pred:
-                        self._train_step()
-                        self._reset_buffers()
+                        # Add completed sequence to batch buffers
+                        self.batch_obs_sequences.append(np.stack(self.obs_buffer))
+                        self.batch_ego_sequences.append(np.stack(self.ego_buffer))
+                        self.batch_next_obs_sequences.append(np.stack(self.next_obs_buffer))
+                        self.batch_done_sequences.append(np.array(self.done_buffer))
+
+                        if self.cfg.verbose:
+                            print(f"Detached SRL sequence collected: {len(self.batch_obs_sequences)}")
+                        
+                        # Train when batch is full
+                        if len(self.batch_obs_sequences) >= self.cfg.training.minibatch_size:
+                            self._train_step()
+                            self._reset_batch_buffers()
+                            
+                        self._reset_sequence_buffers()
             
             return True
             
         except Exception as e:
             print(f"Error in DetachedSRLCallback._on_step: {str(e)}")
-            self._reset_buffers()
+            self._reset_sequence_buffers()
+            self._reset_batch_buffers()
             return True
-    
+
     def _train_step(self):
+        if self.cfg.verbose:
+            print("Detached SRL training step")
         try:
-            # Validate sequence lengths
-            if (len(self.obs_buffer) != self.cfg.dataset.t_obs or 
-                len(self.next_obs_buffer) != self.cfg.dataset.t_pred):
-                print("Invalid sequence lengths, skipping training step")
-                return
-
-            # Stack and validate sequences
-            obs_sequence = np.stack(self.obs_buffer)
-            ego_sequence = np.stack(self.ego_buffer)
-            next_obs_sequence = np.stack(self.next_obs_buffer)
-            done_sequence = np.array(self.done_buffer)
-
-            # Validate arrays
-            if not (np.isfinite(obs_sequence).all() and 
-                   np.isfinite(ego_sequence).all() and 
-                   np.isfinite(next_obs_sequence).all()):
-                print("Non-finite values detected in sequences, skipping training step")
-                return
+            batch_size = len(self.batch_obs_sequences)
+            indices = np.arange(batch_size)
             
-            # Prepare batch
-            batch = {
-                'observations': (torch.from_numpy(obs_sequence).float()/255.0)
-                              .unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.cfg.device),
-                'ego_states': torch.from_numpy(ego_sequence).float()
-                              .unsqueeze(0).to(self.cfg.device),
-                'next_observations': (torch.from_numpy(next_obs_sequence).float()/255.0)
-                                   .unsqueeze(0).permute(0, 1, 4, 2, 3).to(self.cfg.device),
-                'dones': torch.from_numpy(done_sequence).bool()
-                         .unsqueeze(0).to(self.cfg.device)
-            }
-            
-            # Train step with gradient clipping
-            self.representation_model.train()
-            self.optimizer.zero_grad()
-            output = self.representation_model(batch)
-            loss, loss_components = self.representation_model.compute_loss(batch, output)
-            
-            # Check for invalid loss
-            if not torch.isfinite(loss):
-                print(f"Invalid loss value: {loss.item()}, skipping update")
-                return
+            for _ in range(self.cfg.training.iterations_per_batch):
+                # Shuffle indices for each iteration
+                np.random.shuffle(indices)
                 
-            if isinstance(loss, tuple):
-                loss = loss[0]
-            
-            loss.backward()
-            
-            # Clip gradients
-            torch.nn.utils.clip_grad_norm_(self.representation_model.parameters(), 1.0)
-            
-            self.optimizer.step()
+                for start_idx in range(0, batch_size, self.cfg.training.minibatch_size):
+                    end_idx = min(start_idx + self.cfg.training.minibatch_size, batch_size)
+                    mb_indices = indices[start_idx:end_idx]
+                    
+                    # Prepare minibatch
+                    minibatch = {
+                        'observations': torch.from_numpy(np.stack([self.batch_obs_sequences[i] for i in mb_indices]))
+                                      .float().permute(0, 1, 4, 2, 3).div(255.0).to(self.cfg.device),
+                        'ego_states': torch.from_numpy(np.stack([self.batch_ego_sequences[i] for i in mb_indices]))
+                                     .float().to(self.cfg.device),
+                        'next_observations': torch.from_numpy(np.stack([self.batch_next_obs_sequences[i] for i in mb_indices]))
+                                           .float().permute(0, 1, 4, 2, 3).div(255.0).to(self.cfg.device),
+                        'dones': torch.from_numpy(np.stack([self.batch_done_sequences[i] for i in mb_indices]))
+                                .bool().to(self.cfg.device)
+                    }
 
-            # Update running loss
-            loss_value = loss.item()
-            if self.running_loss is None:
-                self.running_loss = loss_value
-            else:
-                self.running_loss = self.loss_alpha * self.running_loss + (1 - self.loss_alpha) * loss_value
+                    # Training step
+                    self.representation_model.train()
+                    self.optimizer.zero_grad()
+                    output = self.representation_model(minibatch)
+                    loss, loss_components = self.representation_model.compute_loss(minibatch, output)
+                    
+                    if not torch.isfinite(loss):
+                        print(f"Invalid loss value: {loss.item()}, skipping update")
+                        continue
+                        
+                    if isinstance(loss, tuple):
+                        loss = loss[0]
+                    
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.representation_model.parameters(), 1.0)
+                    self.optimizer.step()
 
-            self.train_count += 1
+                    # Update metrics
+                    loss_value = loss.item()
+                    if self.running_loss is None:
+                        self.running_loss = loss_value
+                    else:
+                        self.running_loss = self.loss_alpha * self.running_loss + (1 - self.loss_alpha) * loss_value
 
-            # Log metrics
-            if self.cfg.wandb.enabled and self.train_count % 10 == 0:
-                wandb.log({
-                    "srl/loss": loss_value,
-                    "srl/running_loss": self.running_loss,
-                    "srl/train_count": self.train_count
-                }, step=self.num_timesteps)
-                
-                for name, value in loss_components.items():
-                    wandb.log({f"srl/loss_{name}": value}, step=self.num_timesteps)
+                    self.train_count += 1
 
-            self.representation_model.eval()
+                    # Log metrics every 10 training steps
+                    if self.cfg.wandb.enabled and self.train_count % 10 == 0:
+                        wandb.log({
+                            "srl/loss": loss_value,
+                            "srl/running_loss": self.running_loss,
+                            "srl/train_count": self.train_count
+                        }, step=self.num_timesteps)
+                        
+                        for name, value in loss_components.items():
+                            wandb.log({f"srl/loss_{name}": value}, step=self.num_timesteps)
+
+                    if self.cfg.verbose:
+                        print(f"Detached SRL training step {self.train_count}, Loss: {loss_value}, Running Loss: {self.running_loss}, MiniBatch Size: {len(mb_indices)}")
+
+            self.representation_model.eval() # Set to eval mode after training. Important for dropout, batchnorm, etc.
 
         except Exception as e:
             print(f"Error in training step: {str(e)}")
-            self._reset_buffers()
+            self._reset_sequence_buffers()
+            self._reset_batch_buffers()
 
-    def _reset_buffers(self):
-        """Reset all buffers to initial state."""
+    def _reset_sequence_buffers(self):
+        """Reset buffers for current sequence."""
         self.obs_buffer = []
         self.ego_buffer = []
         self.next_obs_buffer = []
@@ -519,15 +531,21 @@ class DetachedSRLCallback(BaseCallback):
         self.collecting_obs = True
         self.terminated = False
         self.t = 0
+
+    def _reset_batch_buffers(self):
+        """Reset buffers for batch collection."""
+        self.batch_obs_sequences = []
+        self.batch_ego_sequences = []
+        self.batch_next_obs_sequences = []
+        self.batch_done_sequences = []
     
     def _on_rollout_end(self):
         """Clean up at the end of a rollout."""
-        self._reset_buffers()
+        self._reset_sequence_buffers()
 
     def on_training_end(self):
         """Clean up at the end of training."""
-        self._reset_buffers()
-
+        self._reset_sequence_buffers()
 
 class PPOWithSRL(PPO):
     """

@@ -87,6 +87,7 @@ models:
     encoder_learning_rate: 5e-6
     decoder_learning_rate: 2e-5
     survival_loss_weight: 0.1
+    detached_srl_learning_rate: 1e-4
   PredictiveModelV9M2:
     pretrained_model_path: "../models/pretrained/autoencoder_model_v0m1.pth"
     decoder_learning_rate: 2e-5
@@ -129,10 +130,10 @@ training:
   # Minibatch size
   minibatch_size: 8
   # Number of training iterations per batch
-  iterations_per_batch: 1
+  iterations_per_batch: 1 # don't change this!
   # Whether to compute and print a validation error at each minibatch (slow)
   track_val_loss: false
-  # Factor to downsample input images
+  # Factor to downsample input images using cv2
   downsample_factor: 1
   # Maximum gradient norm for gradient clipping
   max_grad_norm: 2.0

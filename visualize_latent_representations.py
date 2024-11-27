@@ -513,7 +513,7 @@ def plot_latent_correlations(latent_reps: np.ndarray, driving_metrics: Dict[str,
 
     # Add percentage labels on top of each bar
     for i, v in enumerate(explained_variance):
-        plt.text(i + 1, v, f'{v:.1f}\%', ha='center', va='bottom')
+        plt.text(i + 1, v, f'{v:.1f}\%', ha='center', va='bottom', fontsize=5)
     
     plt.tight_layout()
     plt.savefig(output_dir / 'explained_variance.pdf', dpi=100, bbox_inches='tight')
