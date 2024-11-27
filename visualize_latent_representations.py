@@ -21,32 +21,26 @@ from typing import List, Tuple, Dict
 import pandas as pd
 from scipy.stats import pearsonr
 
-# Set figure dimensions (width = 3.4 inches for 2-column format)
-plt.rcParams['figure.figsize'] = [3.4, 2.5]  # Width and height in inches
+FONT_SIZE = 8
 
-# Set font sizes for improved readability
-plt.rcParams['font.size'] = 9                # General font size
-plt.rcParams['axes.titlesize'] = 9           # Title font size
-plt.rcParams['axes.labelsize'] = 9           # Axis label font size
-plt.rcParams['xtick.labelsize'] = 8          # X-tick label font size
-plt.rcParams['ytick.labelsize'] = 8          # Y-tick label font size
-plt.rcParams['legend.fontsize'] = 8          # Legend font size
+from plotting_setup import setup_plotting, setup_plotting_old
 
-# Line widths and marker sizes
-plt.rcParams['lines.linewidth'] = 1.0
-plt.rcParams['lines.markersize'] = 4
+def setup_plotting_local(font_size: int = FONT_SIZE):
+    setup_plotting(font_size=font_size)
 
-# Set legend frame
-plt.rcParams['legend.frameon'] = False
+    # Line widths and marker sizes
+    plt.rcParams['lines.linewidth'] = 1.0
+    plt.rcParams['lines.markersize'] = 4
 
-# Set other properties
-plt.rcParams['axes.grid'] = True             # Enable grid if preferred
-plt.rcParams['grid.linewidth'] = 0.5
+    # Set legend frame
+    plt.rcParams['legend.frameon'] = False
 
-# DPI (dots per inch) for clarity in publications
-plt.rcParams['figure.dpi'] = 100
+    # Set other properties
+    plt.rcParams['axes.grid'] = True             # Enable grid if preferred
+    plt.rcParams['grid.linewidth'] = 0.5
 
-from plotting_setup import setup_plotting
+    # DPI (dots per inch) for clarity in publications
+    plt.rcParams['figure.dpi'] = 130
 
 def compute_mutual_information(X: np.ndarray, y: np.ndarray, n_bins: int = 20) -> float:
     """
@@ -232,7 +226,7 @@ def collect_latent_representations(model, env, num_episodes: int = 1000) -> Dict
 
 def plot_3d_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.ndarray], output_dir: Path):
 
-    setup_plotting(font_size=8)
+    setup_plotting_local()
 
     sample_size = int(0.05 * len(latent_reps))  # 10% of the data
     sampled_indices = random_sample_indices(len(latent_reps), sample_size)
@@ -318,7 +312,7 @@ def plot_3d_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.nd
 
 def plot_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.ndarray], output_dir: Path):
 
-    setup_plotting(font_size=8)
+    setup_plotting_local(font_size=11)
     
     sample_size = min(300, len(latent_reps))  # 300  samples or less
     sampled_indices = random_sample_indices(len(latent_reps), sample_size)
@@ -372,7 +366,7 @@ def plot_latent_projections(latent_reps: np.ndarray, metrics: Dict[str, np.ndarr
         print(f"Plots saved for {metric_name}")
 
 def plot_latent_trajectory(latent_reps: np.ndarray, episode_indices: np.ndarray, output_dir: Path):
-    setup_plotting(font_size=8)
+    setup_plotting_local()
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -409,7 +403,7 @@ def plot_latent_trajectory(latent_reps: np.ndarray, episode_indices: np.ndarray,
     print("Latent trajectory plot for the first episode saved.")
 
 def plot_3d_latent_trajectory(latent_reps: np.ndarray, episode_indices: np.ndarray, output_dir: Path):
-    setup_plotting(font_size=8)
+    setup_plotting_local()
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -464,7 +458,7 @@ def plot_3d_latent_trajectory(latent_reps: np.ndarray, episode_indices: np.ndarr
     print("3D Latent trajectory plot for the first episode saved.")
 
 def plot_latent_correlations(latent_reps: np.ndarray, driving_metrics: Dict[str, np.ndarray], output_dir: Path, n_components_heatmap: int = 12, n_components_variance: int = 12):
-    setup_plotting(font_size=6)
+    setup_plotting_local()
 
     sample_size = int(0.35 * len(latent_reps))  # 35% of the data
     sampled_indices = np.random.choice(len(latent_reps), size=sample_size, replace=False)
@@ -494,24 +488,32 @@ def plot_latent_correlations(latent_reps: np.ndarray, driving_metrics: Dict[str,
     plt.yticks(rotation=0)  # Ensure y-axis labels are not rotated
     # plt.title('Correlation between PCs and Driving Metrics')
     plt.tight_layout()
+    # Remove grid lines
+    plt.grid(False)
     plt.savefig(output_dir / 'latent_correlation_heatmap.pdf', dpi=100, bbox_inches='tight')
     plt.close()
+
+    setup_plotting_local(font_size=7)
 
     pca_explained_variance = PCA(n_components=n_components_variance)
     pca_explained_variance.fit(normalized_latent_reps)
     explained_variance = pca_explained_variance.explained_variance_ratio_ * 100  # Convert to percentage
 
     # Plot explained variance
-    plt.figure(figsize=(4.0, 1.6))
+    plt.figure(figsize=(3.5, 1.4))
     plt.bar(range(1, n_components_variance + 1), explained_variance, align='center', alpha=0.8)
     plt.xlabel('Principal Component')
-    plt.ylabel('Explained Variance (%)')
+    plt.ylabel('Explained Variance')
+    # Remove grid lines
+    plt.grid(False)
     # plt.title('Explained Variance by Principal Component')
     plt.xticks(range(1, n_components_variance + 1), [f'{i}' for i in range(1, n_components_variance + 1)])
-    
+    # Increase max y-axis limit slightly to make space for percentage labels
+    plt.ylim(0, min(100, max(explained_variance) + 5))
+
     # Add percentage labels on top of each bar
     for i, v in enumerate(explained_variance):
-        plt.text(i + 1, v, f'{v:.1f}%', ha='center', va='bottom')
+        plt.text(i + 1, v, f'{v:.1f}\%', ha='center', va='bottom')
     
     plt.tight_layout()
     plt.savefig(output_dir / 'explained_variance.pdf', dpi=100, bbox_inches='tight')

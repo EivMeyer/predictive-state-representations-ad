@@ -6,45 +6,6 @@ import argparse
 from scipy.ndimage import gaussian_filter1d
 import os
 
-def setup_plotting(font_size=9):
-    plt.rcParams.update({
-        "font.family": "serif",
-        "font.serif": ["Computer Modern Roman"],
-        "text.usetex": True,
-        "pgf.rcfonts": False,
-        "font.size": font_size,
-        "axes.titlesize": font_size,
-        "axes.labelsize": font_size,
-        "xtick.labelsize": font_size-1,
-        "ytick.labelsize": font_size-1,
-        "legend.fontsize": font_size-1,
-        "lines.linewidth": 1.0,
-        "lines.markersize": 4,
-        "legend.frameon": False,
-        "axes.grid": True,
-        "grid.linewidth": 0.5,
-        "figure.dpi": 300
-    })
-
-# def smooth_data(x, y, window_size=100):
-#     """Smooth data using Gaussian filter and calculate confidence intervals."""
-#     # Remove NaN values
-#     mask = ~np.isnan(y)
-#     x, y = x[mask], y[mask]
-    
-#     # Calculate rolling std for confidence intervals
-#     sigma = window_size / 4  # Convert window size to sigma
-#     y_smooth = gaussian_filter1d(y, sigma, mode='reflect')
-    
-#     # Calculate rolling standard deviation
-#     rolling_std = np.array([np.std(y[max(0, i-window_size):min(len(y), i+window_size)]) 
-#                            for i in range(len(y))])
-#     stderr = rolling_std / np.sqrt(window_size)
-    
-#     y_upper = y_smooth + 2 * stderr
-#     y_lower = y_smooth - 2 * stderr
-    
-#     return x, y, y_smooth, y_lower, y_upper
 
 def smooth_data(x, y, window_size=100, num_std=0.1):
     """Smooth data using EMA and calculate variability bands."""
@@ -123,8 +84,11 @@ def plot_training_curves(runs, output_path, ylabel, window_size=100, num_std=2):
             window_size=window_size,
             num_std=num_std
         )
+
+        # Make 'Base' bold in the legend by wrapping it in \textbf{}
+        label = f"\\textbf{{{name}}}" if name == 'Base' else name
         
-        ax.plot(x, y_smooth, label=name, color=colors[name], alpha=0.8)
+        ax.plot(x, y_smooth, label=label, color=colors[name], alpha=0.8)
         ax.fill_between(x, y_lower, y_upper, color=colors[name], alpha=0.2)
     
     ax.set_xlabel('Training Steps')
