@@ -288,6 +288,9 @@ commonroad:
   # Number of episodes to collect per scenario
   num_respawns_per_scenario: 1
 
+  # Whether to activate commonroad-geometric's 'async_resets'. Probably broken.
+  async_resets: false
+
   # Whether to collect dataset from existing trajectories in the scenarios
   collect_from_trajectories: false
 

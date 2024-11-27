@@ -72,6 +72,7 @@ def create_base_experiment_config(config: dict, collect_mode: bool = False):
             raise_exceptions=True,
             renderer_options=renderer_options_render,
             num_respawns_per_scenario=commonroad_config['num_respawns_per_scenario'],
+            async_resets=commonroad_config['async_resets'],
             observer=create_render_observer(view_config=config['viewer'], commonroad_config=commonroad_config),
             preprocessor=chain_preprocessors(*preprocessors) if preprocessors else None
         ),
@@ -96,7 +97,7 @@ def create_base_experiment_config(config: dict, collect_mode: bool = False):
 
     return experiment_config
 
-def setup_base_experiment(config, experiment_config):
+def setup_base_experiment(config, experiment_config, n_envs=1, seed=0):
     """Set up the RL experiment using the provided configuration."""
 
     if isinstance(config, OmegaConf):
@@ -107,9 +108,12 @@ def setup_base_experiment(config, experiment_config):
     # Create the environment
     environment = experiment.make_env(
         scenario_dir=Path(config['commonroad']["scenario_dir"]),
-        n_envs=config["dataset"]["num_workers"],
-        seed=config["seed"]
+        n_envs=n_envs,
+        seed=seed
     )
+
+    print(f"Environment created with observation space {environment.observation_space} and action space {environment.action_space}, using {n_envs} parallel environments and seed {seed}.")
+
     return experiment, environment
 
 def setup_rl_experiment(cfg):

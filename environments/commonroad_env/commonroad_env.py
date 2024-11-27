@@ -13,7 +13,7 @@ class CommonRoadEnv(BaseEnv):
         self.experiment = None
         self.env = None
 
-    def make_env(self, config, n_envs, seed, rl_mode=False, eval_mode=False, collect_mode=False):
+    def make_env(self, config, n_envs: int, seed: int, rl_mode=False, eval_mode=False, collect_mode=False):
         config_dict = OmegaConf.to_container(config, resolve=True)
         experiment_config = create_base_experiment_config(config_dict, collect_mode=collect_mode)
         experiment_config.termination_criteria = create_termination_criteria(
@@ -41,7 +41,7 @@ class CommonRoadEnv(BaseEnv):
             experiment_config.control_space_options['lower_bound_acceleration'] = -10.0
             experiment_config.control_space_options['upper_bound_acceleration'] = 10.0
 
-        self.experiment, self.env = setup_base_experiment(config, experiment_config)
+        self.experiment, self.env = setup_base_experiment(config, experiment_config, n_envs=n_envs, seed=seed)
 
         return self.env
 
