@@ -1,6 +1,12 @@
-# Predictive State Representation Learning for Autonomous Vehicles
+# Enhancing State Representation Learning through Constant Action Interventions and Survival Analysis for Autonomous Highway Driving
 
 This project develops and evaluates predictive models for autonomous vehicle navigation using deep learning. The goal is to learn ego-centric representations of the future environmental states. It uses [CommonRoad-Geometric](https://github.com/CommonRoad/crgeo) as the autonomous driving software environment.
+
+## Demo Video
+
+Click the thumbnail above to watch the demonstration video on Google Drive.
+
+[![Demo Video](https://via.placeholder.com/800x450.png?text=Click+to+Play+Demo+Video)](https://drive.google.com/file/d/10EsDURpRJGALAWMYhDsLXZd_Gxnlbww2/view?usp=drive_link)
 
 ---
 
