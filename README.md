@@ -6,8 +6,7 @@ This project develops and evaluates predictive models for autonomous vehicle nav
 
 Click the thumbnail above to watch the demonstration video on Google Drive.
 
-[![Demo Video](https://via.placeholder.com/800x450.png?text=Click+to+Play+Demo+Video)](https://drive.google.com/file/d/10EsDURpRJGALAWMYhDsLXZd_Gxnlbww2/view?usp=drive_link)
-
+[![Demo Video](https://via.placeholder.com/800x450.png?text=Click+to+Play+Demo+Video)](https://drive.google.com/file/d/1ZDKHsqMhnGXWziVpE1_HnlSOTkUTk3sG/view?usp=drive_link)
 ---
 
 ## Table of Contents
