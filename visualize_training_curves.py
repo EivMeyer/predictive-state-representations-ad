@@ -103,7 +103,7 @@ def main():
         runs = process_data(df, args.metric)
         all_runs.update(runs)
 
-    output_file = os.path.join('output', args)
+    output_file = os.path.join('output', args.output)
 
     plot_training_curves(all_runs, output_file, args.window)
     print(f"Plot saved to {args.output}")

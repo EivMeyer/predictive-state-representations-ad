@@ -348,7 +348,7 @@ def record_episode(env, model, record_debug: bool = False) -> Episode:
     plt.close(plotter.fig)
     
     # Determine if episode was successful
-    success = info[0].get('termination_reason') == 'ReachedEnd'
+    success = info[0].get('termination_reason') not in {'Collision', 'Offroad'}
     
     return Episode(
         frames=frames,
