@@ -66,6 +66,8 @@ wandb:
   project: PredictiveStateRepresentations-AD
   # Offline mode
   offline: false
+  # Optional name for the run (added as postfix after wandb random name)
+  run: null
 
 representation:
   # Type of model to use for encoding

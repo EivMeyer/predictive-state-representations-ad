@@ -53,6 +53,10 @@ def init_wandb(cfg: DictConfig, project_postfix: str = ""):
         project_postfix = '-' + project_postfix if project_postfix else ""
         import wandb
         wandb.init(project=cfg.wandb.project + "-" + cfg.environment + project_postfix, config=OmegaConf.to_container(cfg, resolve=True), mode="offline" if cfg.wandb.offline else "online")
+        run_postfix = cfg.wandb.run if cfg.wandb.run else ""
+        if run_postfix != "":
+            wandb.run.name = wandb.run.name + " " + run_postfix
+            wandb.run.save()
         print(f"Initialized wandb project: {cfg.wandb.project}")
         return wandb
     else:
