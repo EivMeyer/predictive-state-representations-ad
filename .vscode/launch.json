@@ -182,6 +182,21 @@
             "args": ["hydra.run.dir=.", "verbose=true", "wandb.enabled=true", "debug_mode=false", "rl_training.num_envs=2", "rl_training.n_steps=16", "rl_training.eval_freq=50", "rl_training.n_eval_episodes=1"]
         },
         {
+            "name": "Python: Record RL Agent",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/record_rl_agent.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "rl_training.warmstart_model=output/rl/models/best_model.zip",
+                "debug_mode=true"
+            ]
+        },
+        {
             "name": "Python: Enjoy RL Agent",
             "type": "debugpy",
             "request": "launch",

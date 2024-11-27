@@ -180,6 +180,14 @@ class RepresentationObserver(BaseObserver):
         if self.debug:
             print("RepresentationObserver reset: Cleared observation and ego state buffers.")
 
+    def get_debug_figure(self):
+        """Get the current debug visualization figure."""
+        if not self.debug:
+            return None
+        if SAVE_SEPARATE_PLOTS:
+            return None  # We don't support separate plots for recording
+        return self.fig
+
     def setup_debug_plot(self):
         # Set up LaTeX-like plotting style
         plt.rcParams.update({

@@ -16,7 +16,11 @@ class CommonRoadEnv(BaseEnv):
     def make_env(self, config, n_envs, seed, rl_mode=False, eval_mode=False, collect_mode=False):
         config_dict = OmegaConf.to_container(config, resolve=True)
         experiment_config = create_base_experiment_config(config_dict, collect_mode=collect_mode)
-        experiment_config.termination_criteria = create_termination_criteria(terminate_on_collision=not (collect_mode and config_dict['commonroad']['collect_from_trajectories']), terminate_on_timeout=not eval_mode)
+        experiment_config.termination_criteria = create_termination_criteria(
+            commonroad_config=config_dict['commonroad'],
+            terminate_on_collision=not (collect_mode and config_dict['commonroad']['collect_from_trajectories']), 
+            terminate_on_timeout=not eval_mode
+        )
         if rl_mode:
             assert int(config['rl_training']['end_to_end_srl']) + int(config['rl_training']['detached_srl']) + int(config['rl_training']['use_raw_observations']) <= 1, "At most one of 'end_to_end_srl', 'detached_srl', and 'use_raw_observations' can be enabled"
     

@@ -54,6 +54,7 @@ class OverspeedCriterion(BaseTerminationCriterion):
     
 
 def create_termination_criteria(
+    commonroad_config: dict,
     terminate_on_collision: bool,
     terminate_on_timeout: bool
 ) -> List[BaseTerminationCriterion]:
@@ -62,7 +63,7 @@ def create_termination_criteria(
         OverspeedCriterion(max_speed=50.0)
     ]
     if terminate_on_timeout:
-        termination_criteria.append(TimeoutCriterion(max_timesteps=3000))
+        termination_criteria.append(TimeoutCriterion(max_timesteps=commonroad_config['timeout']))
     if terminate_on_collision:
         termination_criteria.append(OffroadCriterion())
         termination_criteria.append(CollisionCriterion())

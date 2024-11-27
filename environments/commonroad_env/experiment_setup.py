@@ -33,7 +33,7 @@ def create_base_experiment_config(config: dict, collect_mode: bool = False):
 
     commonroad_config = config['commonroad']
 
-    termination_criteria = [TimeoutCriterion(3000)]
+    termination_criteria = [TimeoutCriterion(commonroad_config['timeout'])]
 
     feature_computers = TrafficFeatureComputerOptions(
         v=[],
@@ -141,7 +141,8 @@ def setup_rl_experiment(cfg):
     experiment_config.rewarder = SumRewardAggregator(create_rewarders())
     experiment_config.termination_criteria = create_termination_criteria(
         terminate_on_collision=not cfg['commonroad']['collect_from_trajectories'],
-        terminate_on_timeout=False
+        terminate_on_timeout=False,
+        commonroad_config=cfg['commonroad']
     )
 
     experiment = RLExperiment(config=experiment_config)
