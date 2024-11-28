@@ -126,8 +126,16 @@ def main(cfg: DictConfig) -> None:
 
         # Process vehicle states
         for state_name, values in episode_vehicle_states.items():
-            if None in values:
+            try:
+                # Convert values to a NumPy array of floats
+                values_array = np.array(values, dtype=float)
+            except ValueError:
+                # Skip if conversion fails due to non-numeric data
                 continue
+            if np.any(np.isnan(values_array)):
+                # Skip if any NaN values are present
+                continue
+
             state_stats = analyze_array(np.array(values))
             for stat_name, value in state_stats.items():
                 metrics[f'vehicle_{state_name}_{stat_name}'].append(value)
