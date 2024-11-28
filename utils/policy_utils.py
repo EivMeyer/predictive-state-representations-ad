@@ -16,7 +16,6 @@ import os
 
 import torch
 from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.policies import MlpExtractor
 import numpy as np
 from pathlib import Path
 import wandb
@@ -240,31 +239,21 @@ class RepresentationActorCriticPolicy(ActorCriticPolicy):
         train_representations=True,
         **kwargs
     ):
-        representation_model = create_representation_model(cfg, device, load=cfg.rl_training.load_pretrained_representation)
-        self.sequence_length = cfg.dataset.t_obs
-        self.obs_buffer = {}  # Buffer for each environment
-        self.ego_state_buffer = {}  # Buffer for ego states
-        self.encoded_dim = representation_model.hidden_dim
+        self._original_observation_space = observation_space
+        self._train_representations = train_representations
+        self.cfg = cfg
+        self._device = device
+        self._encoded_dim = cfg.training.hidden_dim
         
         # Create encoded observation space
         encoded_observation_space = gym.spaces.Box(
             low=-np.inf,
             high=np.inf,
-            shape=(self.encoded_dim,),
+            shape=(self._encoded_dim,),
             dtype=np.float32
         )
         
-        # Pass a dummy features extractor class that just returns identity
-        class IdentityExtractor(BaseFeaturesExtractor):
-            def __init__(self, observation_space, features_dim=None):
-                super().__init__(observation_space, features_dim or self.encoded_dim)
-                
-            def forward(self, observations):
-                return observations
-        
-        kwargs["features_extractor_class"] = IdentityExtractor
-        kwargs["features_extractor_kwargs"] = dict(features_dim=self.encoded_dim)
-        
+        # Call parent init first
         super().__init__(
             observation_space=encoded_observation_space,
             action_space=action_space,
@@ -272,145 +261,104 @@ class RepresentationActorCriticPolicy(ActorCriticPolicy):
             **kwargs
         )
 
-        self.representation_model = representation_model
+    def _build(self, lr_schedule):
+        self.representation_model = create_representation_model(self.cfg, self._device, load=self.cfg.rl_training.load_pretrained_representation)
+
+        """Override the _build method to include representation model parameters"""
+        super()._build(lr_schedule)
+        if self._train_representations:
+            # Recreate optimizer with combined parameters. Otherwise the representation model will not be trained.
+            all_parameters = list(self.parameters()) + list(self.representation_model.parameters())
+            self.optimizer = self.optimizer_class(
+                all_parameters,
+                lr=lr_schedule(1),
+                **self.optimizer_kwargs
+            )
+
+    def extract_features(self, obs):
+        # Reshape observation if needed (B, T, H, W, C) or (B, H, W, C)
+        if obs.ndim == 4:
+            obs = obs.unsqueeze(1)
+
+        obs = obs.float() / 255.0 # Normalize
+
+        if obs.shape[-1] == 3:
+            obs = obs.permute(0, 1, 4, 2, 3) # (B, T, C, H, W)
+            
+        # Prepare batch for representation model
+        batch = {
+            'observations': obs,
+            'ego_states': torch.zeros(obs.shape[0], obs.shape[1], 4, device=obs.device) # TODO: Get actual ego state
+        }
         
-        self._train_representations = train_representations
-        if train_representations:
-            self.representation_model.train()
+        # Get encoded state
+        if self._train_representations:
+            # Gradients enabled for training
+            encoded_state = self.representation_model.encode(batch)
         else:
-            self.representation_model.eval()
+            # Gradients disabled for inference
+            with torch.no_grad():
+                encoded_state = self.representation_model.encode(batch)
+            
+        assert torch.isfinite(encoded_state).all()
 
-    def forward(self, obs: torch.Tensor, deterministic: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Forward pass in all the networks (actor and critic)
-        
-        :param obs: Observation
-        :param deterministic: Whether to sample or use deterministic actions
-        :return: action, value and log probability of the action
-        """
-        # First get latent representation using our sequence-based encoder
-        encoded_features, _ = self.obs_to_tensor(obs)
-        
-        # Get latent features for policy and value function
-        latent_pi, latent_vf = self.mlp_extractor(encoded_features)
-        
-        # Get values and distribution
-        values = self.value_net(latent_vf)
-        distribution = self._get_action_dist_from_latent(latent_pi)
-        actions = distribution.get_actions(deterministic=deterministic)
-        log_prob = distribution.log_prob(actions)
-        
-        actions = actions.reshape((-1, *self.action_space.shape))
-        return actions, values, log_prob
+        return encoded_state, 0.0
 
-    def _predict(self, observation: torch.Tensor, deterministic: bool = False) -> torch.Tensor:
-        """
-        Get the action according to the policy for a given observation.
-        
-        :param observation:
-        :param deterministic: Whether to use stochastic or deterministic actions
-        :return: Taken action according to the policy
-        """
-        # First get latent representation using our sequence-based encoder
-        encoded_features, _ = self.obs_to_tensor(observation)
-        
-        latent_pi, _ = self.mlp_extractor(encoded_features)
-        distribution = self._get_action_dist_from_latent(latent_pi)
-        return distribution.get_actions(deterministic=deterministic)
-
-    def _build_mlp_extractor(self) -> None:
-        """
-        Create the policy and value networks.
-        """
-        self.mlp_extractor = MlpExtractor(
-            self.encoded_dim,  # Input is the encoded representation
-            net_arch=self.net_arch,
-            activation_fn=self.activation_fn,
-            device=self.device,
-        )
-
-    def extract_features(self, obs: torch.Tensor) -> torch.Tensor:
-        """
-        Override feature extraction to use encoded representation directly.
-        """
-        return obs  # obs is already the encoded representation from obs_to_tensor
-
-    def _buffer_observation(self, obs: torch.Tensor, env_idx: int = 0):
-        """Buffer observations for each environment"""
-        if env_idx not in self.obs_buffer:
-            # Initialize buffer with repeated first observation
-            self.obs_buffer[env_idx] = deque([obs] * self.sequence_length, maxlen=self.sequence_length)
-            self.ego_state_buffer[env_idx] = deque([torch.zeros(4, device=obs.device)] * self.sequence_length, maxlen=self.sequence_length)
-        else:
-            self.obs_buffer[env_idx].append(obs)
-            # Add dummy ego state for now - in practice you'd want to get this from the environment
-            self.ego_state_buffer[env_idx].append(torch.zeros(4, device=obs.device))
-
-    def _get_sequence(self, env_idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Get observation sequence for an environment"""
-        obs_sequence = torch.stack(list(self.obs_buffer[env_idx]))
-        ego_sequence = torch.stack(list(self.ego_state_buffer[env_idx]))
-        return obs_sequence, ego_sequence
-
+    def _get_features(self, obs):
+        """Override to work with original observation space"""
+        features = super()._get_features(obs)
+        return features
+    
+    def predict_values(self, obs: th.Tensor) -> th.Tensor:
+        features, loss = self.extract_features(obs)  
+        if isinstance(features, tuple):
+            features = features[0]
+        latent_vf = self.mlp_extractor.forward_critic(features)
+        return self.value_net(latent_vf), loss
+    
     def obs_to_tensor(self, observation):
         """Convert observation to tensor and handle preprocessing."""
+        # Check if observation is already a tensor
         if isinstance(observation, torch.Tensor):
             obs_tensor = observation
         else:
             obs_tensor = torch.as_tensor(observation)
         
+        # Move to correct device and convert to float
         obs_tensor = obs_tensor.to(device=self.device).float()
-        
-        # Handle both single and batched observations
-        if obs_tensor.ndim == 3:  # Single observation
-            obs_tensor = obs_tensor.unsqueeze(0)
-            
-        batch_size = obs_tensor.shape[0]
-        
-        # Buffer observations and build sequences
-        sequences = []
-        ego_sequences = []
-        for i in range(batch_size):
-            self._buffer_observation(obs_tensor[i], env_idx=i)
-            obs_seq, ego_seq = self._get_sequence(i)
-            sequences.append(obs_seq)
-            ego_sequences.append(ego_seq)
-            
-        obs_sequences = torch.stack(sequences)
-        ego_sequences = torch.stack(ego_sequences)
-            
-        # Normalize observations
-        obs_sequences = obs_sequences.float() / 255.0
-        
-        # Handle channel ordering
-        if obs_sequences.shape[-1] == 3:
-            obs_sequences = obs_sequences.permute(0, 1, 4, 2, 3)
+
+        # Ensure observation is in correct format
+        if obs_tensor.ndim == 4:  # Single observation
+            obs_tensor = obs_tensor.unsqueeze(0)  # Add batch dimension
+
+        obs_tensor = obs_tensor.float() / 255.0  # Normalize
+
+        if obs_tensor.shape[-1] == 3:
+            obs_tensor = obs_tensor.permute(0, 1, 4, 2, 3)  # (B, T, C, H, W)
 
         # Prepare batch for representation model
         batch = {
-            'observations': obs_sequences,
-            'ego_states': ego_sequences
+            'observations': obs_tensor,
+            'ego_states': torch.zeros(obs_tensor.shape[0], obs_tensor.shape[1], 4, 
+                                    device=self.device) # TDOO: Get actual ego state
         }
 
         # Get encoded state
-        with torch.set_grad_enabled(self._train_representations):
+        if self._train_representations:
+            # Gradients enabled for training
             encoded_state = self.representation_model.encode(batch)
-            if isinstance(encoded_state, tuple):
-                encoded_state = encoded_state[0]
+        else:
+            # Gradients disabled for inference
+            with torch.no_grad():
+                encoded_state = self.representation_model.encode(batch)
 
-        # Ensure we're returning a tensor that matches our encoded_dim
-        if encoded_state.ndim == 3:
-            encoded_state = encoded_state.squeeze(1)
-        if encoded_state.shape[-1] != self.encoded_dim:
-            raise ValueError(f"Encoded state dimension {encoded_state.shape[-1]} does not match expected dimension {self.encoded_dim}")
+        # Handle tuple outputs, if applicable
+        if isinstance(encoded_state, tuple):
+            encoded_state = encoded_state[0]
 
         return encoded_state, True
-        
-    def reset_buffers(self):
-        """Reset observation buffers - call this when environments reset"""
-        self.obs_buffer.clear()
-        self.ego_state_buffer.clear()
 
+    
 class DetachedSRLCallback(BaseCallback):
     """A callback that trains a representation model and saves it alongside the RL agent."""
     def __init__(self, cfg, representation_model, save_freq=None):
@@ -649,29 +597,6 @@ class PPOWithSRL(PPO):
         
         super().__init__(policy=policy, env=env, **kwargs)
 
-    def _setup_learn(
-        self,
-        total_timesteps: int,
-        callback: MaybeCallback = None,
-        reset_num_timesteps: bool = True,
-        tb_log_name: str = "run",
-        progress_bar: bool = False,
-    ) -> Tuple[int, BaseCallback]:
-        # Call parent setup
-        retval = super()._setup_learn(
-            total_timesteps,
-            callback,
-            reset_num_timesteps,
-            tb_log_name,
-            progress_bar
-        )
-                          
-        # Reset observation buffers
-        if hasattr(self.policy, 'reset_buffers'):
-            self.policy.reset_buffers()
-            
-        return retval
-
     def save(
         self,
         path: str,
@@ -697,17 +622,6 @@ class PPOWithSRL(PPO):
                 'model_state': self.get_srl_state()
             }
             torch.save(srl_state, srl_path)
-
-    def collect_rollouts(self,
-                        env,
-                        callback,
-                        rollout_buffer,
-                        n_rollout_steps: int) -> bool:
-        # Reset buffers at the start of rollout collection
-        if hasattr(self.policy, 'reset_buffers'):
-            self.policy.reset_buffers()
-            
-        return super().collect_rollouts(env, callback, rollout_buffer, n_rollout_steps)
 
     @classmethod
     def load(

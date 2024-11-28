@@ -15,6 +15,23 @@ from stable_baselines3.common.utils import explained_variance, get_schedule_fn
 
 SelfPPO = TypeVar("SelfPPO", bound="PPO")
 
+def list_updated_parameters(model, optimizer):
+    print(f"{'Parameter Name':<30} {'Shape':<20} {'Mean Abs Gradient':<20}")
+    print("-" * 70)
+    
+    # Create a mapping of parameter IDs to their names
+    param_to_name = {id(param): name for name, param in model.named_parameters()}
+    
+    for param_group in optimizer.param_groups:
+        for param in param_group['params']:
+            if param.grad is not None:  # Ensure the parameter has a gradient
+                param_name = param_to_name.get(id(param), "Unnamed Parameter")
+                shape = str(list(param.shape))
+                mean_abs_grad = param.grad.abs().mean().item()
+                print(f"{param_name:<30} {shape:<20} {mean_abs_grad:<20.6f}")
+            else:
+                print(f"{'Unnamed Parameter':<30} {'N/A':<20} {'N/A':<20}")
+
 
 class PPO(OnPolicyAlgorithm):
     """
@@ -290,6 +307,9 @@ class PPO(OnPolicyAlgorithm):
                 loss.backward()
                 # Clip grad norm
                 th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
+
+                # list_updated_parameters(self.policy, self.policy.optimizer) # debugging
+
                 self.policy.optimizer.step()
 
             self._n_updates += 1
