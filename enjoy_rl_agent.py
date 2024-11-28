@@ -67,19 +67,19 @@ def load_env_and_model_from_cfg(cfg: DictConfig):
     env = env_class().make_env(cfg, n_envs=1, seed=cfg.seed, rl_mode=True)
 
     # Determine model path
-    if cfg.rl_training.warmstart_model is not None:
+    if cfg.rl_training.warmstart_model is not None and cfg.rl_training.warmstart_model != "latest":
         model_path = Path(cfg.rl_training.warmstart_model)
         if not model_path.exists():
             raise FileNotFoundError(f"Specified model path does not exist: {model_path}")
     else:
-        # Default behavior: load the most recent "best_model.zip" in the project directory
+        # Default behavior: load the most recent "latest_model.zip" in the project directory
         model_path = sorted(
-            Path(cfg.project_dir).rglob('best_model.zip'),  # Only match the file named "best_model.zip"
+            Path(cfg.project_dir).rglob('latest_model.zip'),  # Only match the file named "latest_model.zip"
             key=lambda x: x.stat().st_mtime,  # Sort by last modified time
             reverse=True  # Most recent first
         )[0]
 
-    ppo_class = PPOWithSRL # if cfg.rl_training.detached_srl or cfg.rl_training.end_to_end_srl else PPO
+    ppo_class = PPOWithSRL
 
     # Load model with SRL support
     model = ppo_class.load(

@@ -92,21 +92,17 @@ echo "All evaluation jobs completed."
 
 # Merge results
 echo "Merging evaluation results..."
-
-# Use Python to merge detailed metrics
-python3 merge_csv_helper.py merge "${eval_dir}/worker_*/detailed_metrics_*.csv" "${eval_dir}/merged_detailed_metrics.csv"
-
-# Use Python to merge and average aggregate metrics
-python3 merge_csv_helper.py average "${eval_dir}/worker_*/aggregate_metrics_*.csv" "${eval_dir}/merged_aggregate_metrics.csv"
+python3 merge_csv_helper.py merge "output/evaluation/worker_*/detailed_metrics_*.csv" "output/${eval_dir}/merged_detailed_metrics.csv"
+python3 merge_csv_helper.py average "output/evaluation/worker_*/aggregate_metrics_*.csv" "output/${eval_dir}/merged_aggregate_metrics.json"
 
 echo "Results merged successfully:"
-echo "- Detailed metrics: ${eval_dir}/merged_detailed_metrics.csv"
-echo "- Aggregate metrics: ${eval_dir}/merged_aggregate_metrics.csv"
+echo "- Detailed metrics: output/${eval_dir}/merged_detailed_metrics.csv"
+echo "- Aggregate metrics: output/${eval_dir}/merged_aggregate_metrics.json"
 
 # Clean up worker directories
 for ((i=1; i<=${num_workers}; i++)); do
-    rm -rf "${eval_dir}/worker_${i}"
-    echo "Removed worker directory: ${eval_dir}/worker_${i}"
+    rm -rf "output/${eval_dir}/worker_${i}"
+    echo "Removed worker directory: output/${eval_dir}/worker_${i}"
 done
 echo "All worker directories cleaned up."
 
