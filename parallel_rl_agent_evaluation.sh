@@ -4,7 +4,7 @@
 get_integer_input() {
     local prompt="$1"
     local value
-    
+
     while true; do
         read -p "$prompt" value
         if [[ "$value" =~ ^[0-9]+$ ]]; then
@@ -19,7 +19,7 @@ get_integer_input() {
 # Initialize variables
 num_workers=""
 total_episodes=""
-config_overrides=""
+config_overrides=()
 base_dir="."
 
 # Parse command line options
@@ -28,11 +28,17 @@ while [[ $# -gt 0 ]]; do
         -w) num_workers="$2"; shift 2 ;;
         -e) total_episodes="$2"; shift 2 ;;
         -o|--output-dir) base_dir="$2"; shift 2 ;;
-        *=*) config_overrides="$config_overrides $1"; shift ;;
-        *) echo "Usage: $0 [-w num_workers] [-e total_episodes] [-o|--output-dir base_directory] [CONFIG_OVERRIDES]" >&2
-           exit 1 ;;
+        --) shift; break ;;  # End of options
+        -*)
+            echo "Unknown option: $1" >&2
+            echo "Usage: $0 [-w num_workers] [-e total_episodes] [-o|--output-dir base_directory] [CONFIG_OVERRIDES]" >&2
+            exit 1 ;;
+        *) break ;;  # First non-option argument
     esac
 done
+
+# Capture all remaining arguments as config overrides
+config_overrides=("$@")
 
 # Get number of workers if not provided
 if [ -z "$num_workers" ]; then
@@ -63,8 +69,11 @@ evaluate_model() {
     episodes=$2
     worker_dir="${eval_dir}/worker_${worker_id}"
     mkdir -p "$worker_dir"
-    
-    python3 evaluate_rl_agent.py evaluation_dir="${worker_dir}" evaluation.num_episodes=${episodes} $config_overrides
+
+    python3 evaluate_rl_agent.py \
+        evaluation_dir="${worker_dir}" \
+        evaluation.num_episodes=${episodes} \
+        "${config_overrides[@]}"
 }
 
 # Run workers in parallel
@@ -85,18 +94,18 @@ echo "All evaluation jobs completed."
 echo "Merging evaluation results..."
 
 # Use Python to merge detailed metrics
-python3 merge_csv_helper.py merge "output/${eval_dir}/worker_*/detailed_metrics_*.csv" "output/${eval_dir}/merged_detailed_metrics.csv"
+python3 merge_csv_helper.py merge "${eval_dir}/worker_*/detailed_metrics_*.csv" "${eval_dir}/merged_detailed_metrics.csv"
 
 # Use Python to merge and average aggregate metrics
-python3 merge_csv_helper.py average "output/${eval_dir}/worker_*/aggregate_metrics_*.csv" "output/${eval_dir}/merged_aggregate_metrics.csv"
+python3 merge_csv_helper.py average "${eval_dir}/worker_*/aggregate_metrics_*.csv" "${eval_dir}/merged_aggregate_metrics.csv"
 
 echo "Results merged successfully:"
-echo "- Detailed metrics: output/${eval_dir}/merged_detailed_metrics.csv"
-echo "- Aggregate metrics: output/${eval_dir}/merged_aggregate_metrics.csv"
+echo "- Detailed metrics: ${eval_dir}/merged_detailed_metrics.csv"
+echo "- Aggregate metrics: ${eval_dir}/merged_aggregate_metrics.csv"
 
 # Clean up worker directories
 for ((i=1; i<=${num_workers}; i++)); do
-    rm -rf "output/${eval_dir}/worker_${i}"
+    rm -rf "${eval_dir}/worker_${i}"
     echo "Removed worker directory: ${eval_dir}/worker_${i}"
 done
 echo "All worker directories cleaned up."
