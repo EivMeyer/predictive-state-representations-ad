@@ -5,9 +5,13 @@ import numpy as np
 from utils.config_utils import config_wrapper
 from commonroad_geometric.simulation.ego_simulation.control_space.keyboard_input import UserAdvanceScenarioInterrupt, UserQuitInterrupt, UserResetInterrupt, get_keyboard_action
 from environments import get_environment
+from commonroad_geometric.common.logging import setup_logging
+import logging
 
 @config_wrapper()
 def main(cfg: DictConfig) -> None:
+    if cfg.verbose:
+        setup_logging(level=logging.DEBUG)
 
     # Create the environment
     env_class = get_environment(cfg.environment)

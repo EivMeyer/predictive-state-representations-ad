@@ -288,8 +288,9 @@ commonroad:
   # Number of episodes to collect per scenario
   num_respawns_per_scenario: 1
 
-  # Whether to activate commonroad-geometric's 'async_resets'. Probably broken.
-  async_resets: false
+  # Whether to activate commonroad-geometric's 'async_resets'. 
+  async_resets: true
+  async_reset_delay: 0.05
 
   # Whether to collect dataset from existing trajectories in the scenarios
   collect_from_trajectories: false
@@ -352,10 +353,10 @@ commonroad:
     init_orientation_noise: 0.35
     # Noise in initial position
     init_position_noise: 3.0
-    # Minimum distance to goal
+    # Minimum distance to goal (if any)
     min_goal_distance: 100.0
-    # Minimum L2 distance to goal
-    min_goal_distance_l2: 100.0
+    # Minimum L2 distance to goal (if any)
+    min_goal_distance_l2: 400.0
     # Maximum L2 distance to goal (if any)
     max_goal_distance_l2: null
     # Maximum distance to goal (if any)

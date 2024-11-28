@@ -73,6 +73,7 @@ def create_base_experiment_config(config: dict, collect_mode: bool = False):
             renderer_options=renderer_options_render,
             num_respawns_per_scenario=commonroad_config['num_respawns_per_scenario'],
             async_resets=commonroad_config['async_resets'],
+            async_reset_delay=commonroad_config['async_reset_delay'],
             observer=create_render_observer(view_config=config['viewer'], commonroad_config=commonroad_config),
             preprocessor=chain_preprocessors(*preprocessors) if preprocessors else None
         ),
@@ -136,7 +137,7 @@ def setup_rl_experiment(cfg):
     experiment_config.respawner_options['init_steering_angle'] = 0.0 # TODO don't hardcode
     experiment_config.respawner_options['init_orientation_noise'] = 0.0
     experiment_config.respawner_options['init_position_noise'] = 0.0
-    experiment_config.respawner_options['min_goal_distance_l2'] = 400.0
+    experiment_config.respawner_options['min_goal_distance_l2'] = 400.0 # needed to avoid spawning vehicles too close to the goal
     experiment_config.respawner_options['route_length'] = 1
     experiment_config.respawner_options['min_vehicle_distance'] = 20.0
     experiment_config.respawner_options['init_speed'] = 'auto'

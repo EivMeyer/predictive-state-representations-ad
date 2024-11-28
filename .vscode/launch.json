@@ -275,7 +275,12 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             },
-            "args": ["hydra.run.dir=.", "debug_mode=false", "rl_training.num_envs=1"]
+            "args": [
+                "hydra.run.dir=.", 
+                "debug_mode=false", 
+                "rl_training.num_envs=1",
+                "commonroad.async_resets=true"
+            ]
         },
         {
             "name": "Python: Play RL Agent (Debug)",
@@ -287,7 +292,11 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             },
-            "args": ["hydra.run.dir=.", "debug_mode=true", "rl_training.num_envs=1"]
+            "args": [
+                "hydra.run.dir=.", 
+                "debug_mode=true", 
+                "rl_training.num_envs=1"
+            ]
         },
         {
             "name": "Python: Collect Dataset",
