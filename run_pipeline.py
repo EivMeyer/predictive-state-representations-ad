@@ -131,6 +131,10 @@ def run_pipeline(config: Dict[str, Any]):
 
     print(f"Using representation model: {config['model_path']}")
 
+    if not config['train_new_model']:
+        print("Skipping RL model training.")
+        return
+    
     print("Step 3: Training RL model...")
     cmd = [
         "python", "train_rl_agent.py",
@@ -149,6 +153,13 @@ def main():
     parser.add_argument("--non-interactive", action="store_true", help="Run in non-interactive mode")
     parser.add_argument("--collect_new_dataset", type=str, choices=['true', 'false'], help="Whether to collect a new dataset")
     parser.add_argument("--train_new_model", type=str, choices=['true', 'false'], help="Whether to train a new representation model")
+    parser.add_argument("--train-rl-model", type=str, choices=['true', 'false'], help="Whether to train a new RL model")
+    parser.add_argument("--num-workers", type=int, help="Number of workers for dataset collection", default=16)
+    parser.add_argument("--total-episodes", type=int, help="Total number of episodes to collect", default=1000)
+    parser.add_argument("--training-epochs", type=int, help="Number of epochs for training the representation model", default=10)
+    parser.add_argument("--rl-timesteps", type=int, help="Total number of timesteps for RL training", default=100000)
+    parser.add_argument("--rl-num-envs", type=int, help="Number of parallel environments for RL training", default=16)
+
     parser.add_argument("config_overrides", nargs="*", help="Configuration overrides")
     args = parser.parse_args()
 
@@ -156,14 +167,14 @@ def main():
 
     config = {
         'use_existing_dataset': not (args.collect_new_dataset == 'true' if args.collect_new_dataset else False),
-        'num_workers': 16,
-        'total_episodes': 10000,
-        'episodes_per_restart': 500,
+        'num_workers': args.num_workers,
+        'total_episodes': args.total_episodes,
+        'episodes_per_restart': args.total_episodes,
         'train_new_model': args.train_new_model == 'true' if args.train_new_model else True,
-        'representation_epochs': 1000,
+        'representation_epochs': args.training_epochs,
         'model_path': "",
-        'rl_timesteps': 10000000,
-        'rl_num_envs': 16,
+        'rl_timesteps': args.rl_timesteps,
+        'rl_num_envs': args.rl_num_envs,
         'config_overrides': [override for override in args.config_overrides if not override.startswith(("collect_new_dataset=", "train_new_model="))]
     }
 
