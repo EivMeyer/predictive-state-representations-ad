@@ -11,6 +11,8 @@ wandb/
 *.zip
 config.local.yaml
 logs/
+commonroad_geometric/
+autoencoder*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
