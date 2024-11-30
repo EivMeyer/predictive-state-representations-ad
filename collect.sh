@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #SBATCH --time=24:00:00
-#SBATCH -p bigmem
+#SBATCH -p cpufat
 #SBATCH -N 1
-#SBATCH --cpus-per-task=72
+#SBATCH --cpus-per-task=256
 #SBATCH --ntasks-per-node=1
 #SBATCH --exclusive
 #SBATCH --job-name=collect_crgeo
@@ -19,7 +19,6 @@ srun singularity exec \
     --bind $(pwd)/output:/app/psr-ad/output \
     --bind /home/users/tdupuis/codes/crgeo_scenarios:/app/psr-ad/scenarios \
     /home/users/tdupuis/codes/psr-ad_latest.sif \
-    python3 change_dataset_batch_size.py ./output/dataset/ ./output/dataset2 100000
-    
-    # ./parallel_dataset_collection.sh dataset.collect_from_trajectories=true commonroad.async_reset=false -e 100000 -w 72 -r 100000
+    ./parallel_dataset_collection.sh dataset.collect_from_trajectories=true commonroad.async_reset=false -e 1000000 -w 256 -r 1000000
 
+    # python3 change_dataset_batch_size.py ./output/dataset/ ./output/dataset2 1024

@@ -11,7 +11,7 @@
 
 set -e
 
-CUDA_VISIBLE_DEVICES=0
+export CUDA_LAUNCH_BLOCKING=1
 
 # Remove --nv flag if you don't need GPU support
 srun singularity exec --nv \
@@ -19,4 +19,4 @@ srun singularity exec --nv \
     --bind $(pwd)/output:/app/psr-ad/output \
     --bind /home/users/tdupuis/codes/crgeo_scenarios:/app/psr-ad/scenarios \
     /home/users/tdupuis/codes/psr-ad_latest.sif \
-    python3 train_model.py wandb.offline=true
+    python3 train_model.py training.model_type="AutoEncoderModelV0" wandb.offline=true

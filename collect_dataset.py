@@ -60,10 +60,10 @@ def collect_episodes(cfg_dict, env, num_episodes):
 
                     obs = next_obs
 
-                    print(f"Step {t} / {t_obs * (obs_skip_frames + 1)}")
+                    # print(f"Step {t} / {t_obs * (obs_skip_frames + 1)}")
 
                 if not terminated_during_obs:
-                    print(f"Collected {len(obs_sequences[0])} observations. Proceeding to prediction.")
+                    # print(f"Collected {len(obs_sequences[0])} observations. Proceeding to prediction.")
                     break 
 
             # Collect predictions
@@ -71,7 +71,7 @@ def collect_episodes(cfg_dict, env, num_episodes):
             next_action_sequences = [[] for _ in range(num_envs)]
             done_sequences = [[] for _ in range(num_envs)]
 
-            print("Predicting future observations...")
+            # print("Predicting future observations...")
 
             t = 0
             is_done = False
@@ -79,13 +79,13 @@ def collect_episodes(cfg_dict, env, num_episodes):
                 actions = [0.0*env.action_space.sample() for _ in range(num_envs)] # Zero actions for prediction
                 next_obs, rewards, dones, infos = env.step(actions)
 
-                print(f"Step {t} / {t_pred}")
+                # print(f"Step {t} / {t_pred}")
 
                 if any(dones):
                     is_done = True
 
                 if t % (pred_skip_frames + 1) == 0:
-                    print(f"Predicted {len(next_obs_sequences[0])} observations.")
+                    # print(f"Predicted {len(next_obs_sequences[0])} observations.")
                     for i in range(num_envs):
                         done_sequences[i].append(is_done)
                         if is_done:
@@ -104,7 +104,7 @@ def collect_episodes(cfg_dict, env, num_episodes):
                             
                 t += 1
 
-            print("Episode complete.")
+            # print("Episode complete.")
 
             # Add episodes to dataset
             for i in range(num_envs):

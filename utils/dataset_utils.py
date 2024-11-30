@@ -29,6 +29,19 @@ class EnvironmentDataset(Dataset):
         
         self.update_file_list()
 
+        self.episode_files = sorted([f for f in os.listdir(self.data_dir) if f.startswith("batch_") and f.endswith(".pt")])
+        self.batch_count = len(self.episode_files)
+        
+        if self.batch_count == 1:
+            print("Loading single dataset file into memory...")
+            self.data = self._load_and_process_file(self.episode_files[0])
+            self.num_samples = self.data['observations'].shape[0]
+            print(f"Dataset loaded. Total samples: {self.num_samples}")
+        else:
+            self.data = None
+            self.num_samples = None
+
+
     def update_file_list(self):
         if self.cfg.dataset.preprocess_existing and not self.cfg.dataset.preprocess_online:
             self.episode_files = sorted([f for f in os.listdir(self.preprocessed_dir) if f.startswith("batch_") and f.endswith(".pt")])
@@ -108,21 +121,24 @@ class EnvironmentDataset(Dataset):
 
         if idx < 0 or idx >= self.batch_count:
             raise IndexError("Batch index out of range")
-        
-        file = self.episode_files[idx]
-        try:
-            data = self._load_and_process_file(file)
-            return self._shuffle_batch(data)
-        except Exception as e:
-            logging.error(f"Error loading file {file}: {str(e)}. Removing it from the dataset.")
-            self._remove_corrupted_batch(idx)
-            
-            # Recursively try the next file
-            idx = min(idx, self.batch_count - 1)
-            if idx < self.batch_count:
-                return self.__getitem__(idx)
-            else:
-                raise RuntimeError("No valid files found after the specified index.")
+
+        if self.data is not None:
+            return {key: value[idx] for key, value in self.data.items()}
+        else:
+            file = self.episode_files[idx]
+            try:
+                data = self._load_and_process_file(file)
+                return self._shuffle_batch(data)
+            except Exception as e:
+                logging.error(f"Error loading file {file}: {str(e)}. Removing it from the dataset.")
+                self._remove_corrupted_batch(idx)
+                
+                # Recursively try the next file
+                idx = min(idx, self.batch_count - 1)
+                if idx < self.batch_count:
+                    return self.__getitem__(idx)
+                else:
+                    raise RuntimeError("No valid files found after the specified index.")
             
     def _shuffle_batch(self, data):
         batch_size = data['observations'].shape[0]
@@ -137,9 +153,7 @@ class EnvironmentDataset(Dataset):
             file_path = self.preprocessed_dir / file
         else:
             file_path = self.data_dir / file
-        
         data = torch.load(file_path, map_location='cpu')
-
         if not self.use_preprocessed and self.cfg.dataset.preprocess_online:
             # Apply preprocessing on-the-fly
             for key in ['observations', 'next_observations']:
@@ -148,22 +162,19 @@ class EnvironmentDataset(Dataset):
                 elif isinstance(data[key], torch.Tensor):
                     if data[key].dtype == torch.uint8:
                         data[key] = torch.stack([self.preprocess_image(img.numpy()) for img in data[key]])
-
         else:
             # Convert to tensors if necessary
             for key in data:
                 if isinstance(data[key], np.ndarray):
-                    # Normalize observations and next_observations to [0, 1]
-                    if key in ['observations', 'next_observations']:
-                        data[key] = torch.from_numpy(data[key].astype(np.float32) / 255.0)
-                    else:
-                        data[key] = torch.from_numpy(data[key])
+                    data[key] = torch.from_numpy(data[key])
+                elif isinstance(data[key], torch.Tensor):
+                    if data[key].dtype == torch.uint8:
+                        data[key] = data[key].to(torch.float32) / 255.0
 
         # Remove 3rd dimension if present and has length 1
         for key in ['observations', 'next_observations']:
             if data[key].shape[2] == 1:
                 data[key] = data[key].squeeze(2)
-
         # Permute to (seq_len, batch_size, channels, height, width) if necessary
         if data['observations'].shape[-1] != data['observations'].shape[-2]:
             for key in ['observations', 'next_observations']:
@@ -171,7 +182,6 @@ class EnvironmentDataset(Dataset):
                     data[key] = np.transpose(data[key], (0, 1, 4, 2, 3))
                 else:
                     data[key] = data[key].permute(0, 1, 4, 2, 3).contiguous()
-
         return data
 
     def _remove_corrupted_batch(self, idx):        
@@ -267,7 +277,7 @@ class EnvironmentDataset(Dataset):
         print("Sanity check passed successfully.")
 
     def __len__(self):
-        return self.batch_count
+        return self.num_samples if self.num_samples is not None else self.batch_count
 
     @staticmethod
     def collate_fn(batch):
@@ -277,7 +287,6 @@ class EnvironmentDataset(Dataset):
             for key in batch[0].keys()
         }
     
-
 class SubsetRandomSampler(Sampler):
     def __init__(self, indices, num_samples=None):
         self.indices = indices
@@ -293,8 +302,6 @@ class SubsetRandomSampler(Sampler):
     def __len__(self):
         return self.num_samples
 
-
-
 def create_data_loaders(dataset, batch_size, val_size, prefetch_factor, num_workers, pin_memory, batches_per_epoch=None):
     dataset_size = len(dataset)
     if isinstance(val_size, float):
@@ -303,16 +310,13 @@ def create_data_loaders(dataset, batch_size, val_size, prefetch_factor, num_work
 
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
-    if batches_per_epoch is not None:
-        train_sampler = SubsetRandomSampler(range(len(train_dataset)), num_samples=batches_per_epoch)
-    else:
-        train_sampler = None
+    # train_sampler = SubsetRandomSampler(range(len(train_dataset)), num_samples=len(train_dataset))
 
     train_loader = DataLoader(
         train_dataset, 
         batch_size=batch_size,
-        shuffle=(train_sampler is None),
-        sampler=train_sampler,
+        shuffle=True,
+        # sampler=train_sampler,
         num_workers=num_workers,
         pin_memory=pin_memory,
         collate_fn=EnvironmentDataset.collate_fn,

@@ -118,6 +118,9 @@ class Trainer:
                     end_idx = min(start_idx + self.cfg.training.minibatch_size, batch_size)
                     batch = {k: v[start_idx:end_idx] for k, v in full_batch.items()}
                     batch = move_batch_to_device(batch, self.device)
+
+                    batch['observations'] = batch['observations'].float() / 255.0
+                    batch['next_observations'] = batch['next_observations'].float() / 255.0
                     
                     self.optimizer.zero_grad()
                     
@@ -210,6 +213,9 @@ class Trainer:
                 for start_idx in range(0, batch_size, self.val_batch_size):
                     end_idx = min(start_idx + self.val_batch_size, batch_size)
                     minibatch = {k: v[start_idx:end_idx] for k, v in batch.items()}
+
+                    minibatch['observations'] = minibatch['observations'].float() / 255.0
+                    minibatch['next_observations'] = minibatch['next_observations'].float() / 255.0
                     
                     if self.use_amp:
                         with autocast():

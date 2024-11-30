@@ -46,7 +46,7 @@ def change_batch_size(input_dir: Path, output_dir: Path, new_batch_size: int):
                 for key, value in current_batch.items():
                     if key == 'observations' or key == 'next_observations':
                         # Convert image data to float32 to ensure compatibility with mixed precision
-                        tensor_data = torch.stack([to_tensor(item, dtype=torch.float32) for item in value[:new_batch_size]])
+                        tensor_data = torch.stack([to_tensor(item, dtype=torch.uint8) for item in value[:new_batch_size]])
                     elif key == 'dones':
                         # Boolean data
                         tensor_data = torch.stack([to_tensor(item, dtype=torch.bool) for item in value[:new_batch_size]])
@@ -67,7 +67,7 @@ def change_batch_size(input_dir: Path, output_dir: Path, new_batch_size: int):
         output_batch = {}
         for key, value in current_batch.items():
             if key == 'observations' or key == 'next_observations':
-                tensor_data = torch.stack([to_tensor(item, dtype=torch.float32) for item in value])
+                tensor_data = torch.stack([to_tensor(item, dtype=torch.uint8) for item in value])
             elif key == 'dones':
                 tensor_data = torch.stack([to_tensor(item, dtype=torch.bool) for item in value])
             else:
