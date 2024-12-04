@@ -17,6 +17,8 @@ import argparse
 from plotting_setup import setup_plotting
 setup_plotting()
 
+STEP_LENGTH = 0.04
+
 def calculate_metrics(model, dataset, device, num_samples=1000):
     """Calculate prediction metrics across different time horizons."""
     model.eval()
@@ -28,7 +30,9 @@ def calculate_metrics(model, dataset, device, num_samples=1000):
         'obs_error': {k: [] for k in horizons},
         'survival_nll': {k: [] for k in horizons},
         'termination_times': [],
-        'predicted_termination_times': []
+        'predicted_termination_times': [],
+        'termination_steps': [],
+        'predicted_termination_steps': []
     }
 
     sample_idx = 0
@@ -69,14 +73,25 @@ def calculate_metrics(model, dataset, device, num_samples=1000):
                 # Get actual termination times
                 dones = batch['dones'][0]  # [T]
                 if dones.any():
-                    actual_term_time = dones.nonzero()[0][0].item() + 1
-                    metrics['termination_times'].append(actual_term_time)
+                    actual_term_time_steps = dones.nonzero()[0][0].item() + 1
+                    metrics['termination_steps'].append(actual_term_time_steps)
+                    metrics['termination_times'].append(STEP_LENGTH*actual_term_time_steps)
                     
                     if hazard is not None:
-                        # Calculate predicted termination time as expectation under hazard
-                        time_steps = torch.arange(1, len(hazard) + 1, device=hazard.device)
-                        pred_term_time = (hazard * time_steps).sum().item()
-                        metrics['predicted_termination_times'].append(pred_term_time)
+                        hazard_softplus = F.softplus(hazard)
+                        # print("Hazard rates after softplus:", hazard_softplus)
+
+                        cumulative_hazard = torch.cumsum(hazard_softplus, dim=0)
+                        cumulative_hazard_padded = torch.cat([torch.zeros(1, device=hazard.device), cumulative_hazard])
+                        survival_prob = torch.exp(-cumulative_hazard_padded)
+                        # print("Survival probabilities:", survival_prob)
+
+                        pred_term_time_steps = survival_prob[:-1].sum().item()
+                        pred_term_time_seconds = pred_term_time_steps * STEP_LENGTH
+                        # print("Predicted termination time (seconds):", pred_term_time_seconds)
+
+                        metrics['predicted_termination_steps'].append(pred_term_time_steps)
+                        metrics['predicted_termination_times'].append(pred_term_time_seconds)
                 
                 # Calculate metrics for each horizon
                 for k in horizons:
@@ -148,12 +163,15 @@ def compute_summary_statistics(metrics):
             summary['survival_nll_std'].append(np.nan)
     
     # Calculate termination prediction metrics
-    if metrics['termination_times'] and metrics['predicted_termination_times']:
-        actual_times = np.array(metrics['termination_times'])
-        pred_times = np.array(metrics['predicted_termination_times'])
+    if metrics['termination_steps'] and metrics['predicted_termination_steps']:
+        actual_times = np.array(metrics['termination_steps'])
+        pred_times = np.array(metrics['predicted_termination_steps'])
+
+        actual_times_seconds = np.array(metrics['termination_times'])
+        pred_times_seconds = np.array(metrics['predicted_termination_times'])
         
         # Calculate MAE for termination timing
-        mae = mean_absolute_error(actual_times, pred_times)
+        mae = mean_absolute_error(actual_times_seconds, pred_times_seconds)
         
         # Calculate AUC for termination prediction
         # Convert to binary predictions for each time step
@@ -358,7 +376,7 @@ def main():
     
     print("\nTermination Prediction Performance:")
     print(f"  AUC: {summary['termination_auc']:.3f}")
-    print(f"  MAE: {summary['termination_mae']:.3f} time steps")
+    print(f"  MAE: {summary['termination_mae']:.3f} seconds")
     
     print(f"\nResults saved to {output_dir}")
 

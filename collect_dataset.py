@@ -1,28 +1,30 @@
 from omegaconf import DictConfig, OmegaConf
 import numpy as np
 from utils.dataset_utils import EnvironmentDataset
-from pathlib import Path
 from tqdm import tqdm
 from utils.config_utils import config_wrapper
 from environments import get_environment
+
 
 def collect_episodes(cfg_dict, env, num_episodes):
     dataset = EnvironmentDataset(cfg_dict)
     num_envs = env.num_envs if hasattr(env, 'num_envs') else 1
 
+    verbose = cfg_dict['verbose']
     t_obs = cfg_dict['dataset']['t_obs']
     t_pred = cfg_dict['dataset']['t_pred']
     obs_skip_frames = cfg_dict['dataset']['obs_skip_frames']
     pred_skip_frames = cfg_dict['dataset']['pred_skip_frames']
+    collect_mode = cfg_dict['dataset']['collect_mode']
+
+    assert collect_mode in {'zero', 'constant', 'constant_stochastic', 'full_stochastic'}, f"{collect_mode=} must be one of 'zero', 'constant', 'constant_stochastic', 'full_stochastic'!"
 
     obs = env.reset()
 
     episodes_collected = 0
     with tqdm(total=num_episodes, desc="Collecting episodes") as pbar:
         while episodes_collected < num_episodes:
-            # if env.get_attr('step_counter')[0] > 0:
-            #     obs = env.reset()
-            
+
             # Initialize sequences
             obs_sequences = [[] for _ in range(num_envs)]
             action_sequences = [[] for _ in range(num_envs)]
@@ -34,14 +36,19 @@ def collect_episodes(cfg_dict, env, num_episodes):
                 action_sequences[0].clear()
                 ego_state_sequences[0].clear()
 
-                for t in range(t_obs * (obs_skip_frames + 1)):
+                if collect_mode == 'constant':
                     actions = [env.action_space.sample() for _ in range(num_envs)]
+                for t in range(t_obs * (obs_skip_frames + 1)):
+                    if collect_mode != 'constant':
+                        actions = [env.action_space.sample() for _ in range(num_envs)]
+
                     next_obs, rewards, dones, infos = env.step(actions)
                     ego_simulation = env.get_attr('ego_vehicle_simulation')[0]
 
                     if any(dones):
                         terminated_during_obs = True
-                        print(f"Episode {episodes_collected} terminated prematurely at step {t} because of reason: {infos[0]['termination_reason']}. Retrying...")
+                        if verbose:
+                            print(f"Episode {episodes_collected} terminated prematurely at step {t} because of reason: {infos[0]['termination_reason']}. Retrying...")
                         break
 
                     if t % (obs_skip_frames + 1) == 0:
@@ -60,10 +67,12 @@ def collect_episodes(cfg_dict, env, num_episodes):
 
                     obs = next_obs
 
-                    # print(f"Step {t} / {t_obs * (obs_skip_frames + 1)}")
+                    if verbose:
+                        print(f"Step {t} / {t_obs * (obs_skip_frames + 1)}")
 
                 if not terminated_during_obs:
-                    # print(f"Collected {len(obs_sequences[0])} observations. Proceeding to prediction.")
+                    if verbose:
+                        print(f"Collected {len(obs_sequences[0])} observations. Proceeding to prediction.")
                     break 
 
             # Collect predictions
@@ -71,21 +80,31 @@ def collect_episodes(cfg_dict, env, num_episodes):
             next_action_sequences = [[] for _ in range(num_envs)]
             done_sequences = [[] for _ in range(num_envs)]
 
-            # print("Predicting future observations...")
+            if verbose:
+                print("Predicting future observations...")
 
             t = 0
             is_done = False
+
+            if collect_mode == 'constant_stochastic':
+                actions = [env.action_space.sample() for _ in range(num_envs)]
             while len(next_obs_sequences[0]) < t_pred:
-                actions = [0.0*env.action_space.sample() for _ in range(num_envs)] # Zero actions for prediction
+                if collect_mode == 'zero':
+                    actions = [np.zeros(env.action_space.shape) for _ in range(num_envs)]
+                elif collect_mode == 'full_stochastic':
+                    actions = [env.action_space.sample() for _ in range(num_envs)]
+
                 next_obs, rewards, dones, infos = env.step(actions)
 
-                # print(f"Step {t} / {t_pred}")
+                if verbose:
+                    print(f"Step {t} / {t_pred}: actions={actions} ({collect_mode})")
 
                 if any(dones):
                     is_done = True
 
                 if t % (pred_skip_frames + 1) == 0:
-                    # print(f"Predicted {len(next_obs_sequences[0])} observations.")
+                    if verbose:
+                        print(f"Predicted {len(next_obs_sequences[0])} observations.")
                     for i in range(num_envs):
                         done_sequences[i].append(is_done)
                         if is_done:
@@ -104,7 +123,8 @@ def collect_episodes(cfg_dict, env, num_episodes):
                             
                 t += 1
 
-            # print("Episode complete.")
+            if verbose:
+                print("Episode complete.")
 
             # Add episodes to dataset
             for i in range(num_envs):

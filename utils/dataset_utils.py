@@ -170,7 +170,6 @@ class EnvironmentDataset(Dataset):
                 elif isinstance(data[key], torch.Tensor):
                     if data[key].dtype == torch.uint8:
                         data[key] = data[key].to(torch.float32) / 255.0
-
         # Remove 3rd dimension if present and has length 1
         for key in ['observations', 'next_observations']:
             if data[key].shape[2] == 1:

@@ -404,7 +404,7 @@
             },
             "args": [
                 "--model-type", "PredictiveModelV9M3",
-                "--model-path", "models/pretrained/model_latest.pth"
+                "--model-path", "./models/pretrained/predictive_model_v9m3.pth"
             ]
         },
         {
@@ -421,7 +421,7 @@
                 "--model-type",
                 "PredictiveModelV9M3",
                 "--model-path",
-                "models/pretrained/model_latest.pth"
+                "./models/pretrained/predictive_model_v9m3.pth"
             ]
         },
         {

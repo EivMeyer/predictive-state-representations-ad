@@ -80,14 +80,6 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     micromamba activate myenv && \
     pip install /wheels/*.whl
 
-# Clone and install crgeo
-SHELL ["/bin/bash", "-c"]
-RUN source /opt/conda/etc/profile.d/micromamba.sh && \
-    micromamba activate myenv && \
-    git clone --depth 1 --single-branch https://github.com/CommonRoad/crgeo.git /app/crgeo && \
-    cd /app/crgeo && \
-    pip install --no-cache-dir -e .
-
 # Stage 3: Runtime
 FROM nvidia/cuda:12.6.2-cudnn-runtime-ubuntu22.04 as runtime
 
@@ -120,11 +112,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 # Copy only necessary files from builder
 COPY --from=builder /opt/conda /opt/conda
-COPY --from=builder /app/crgeo /app/crgeo
 COPY --from=builder /root/.bashrc /root/.bashrc
 
 # Create directories and start Xvfb in one layer
-RUN mkdir -p /app/psr-ad/output /app/psr-ad/scenarios && \
+RUN mkdir -p /app/psr-ad/output /app/psr-ad/scenarios /app/crgeo && \
     Xvfb :99 -screen 0 1024x768x16 &
 
 # Clean up unnecessary files

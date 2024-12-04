@@ -5,7 +5,7 @@ from pathlib import Path
 import argparse
 from scipy.ndimage import gaussian_filter1d
 import os
-
+from plotting_setup import setup_plotting
 
 def smooth_data(x, y, window_size=100, num_std=0.1):
     """Smooth data using EMA and calculate variability bands."""
@@ -30,15 +30,25 @@ def smooth_data(x, y, window_size=100, num_std=0.1):
     
     return x, y, y_smooth, y_lower, y_upper
 
-def process_data(df, metric_name="train/ep_cumulative_reward"):
+def process_data(df: pd.DataFrame, metric_name: str = "train/ep_cumulative_reward", y_threshold: float = None):
     """Extract and process data for each run."""
     runs = {}
     for col in df.columns:
         if metric_name in col and "__MIN" not in col and "__MAX" not in col:
             run_name = col.split(" - ")[0]
+            values = df[col].values
+            raw_values = values
+            normalized_values = None
+
+            print(values, y_threshold)
+            if y_threshold is not None:
+                # Normalize y values by this threshold
+                normalized_values = np.divide(values, y_threshold)
+                values = normalized_values
+            print(y_threshold, values, normalized_values, raw_values)
             runs[run_name] = {
                 'steps': df['Step'].values,
-                'values': df[col].values,
+                'values': values,
             }
     return runs
 
@@ -62,9 +72,12 @@ def plot_training_curves(runs, output_path, ylabel, window_size=100, num_std=2):
             name = 'VAE'
         elif name == 'End-to-end':
             name = 'E2E'
+        if name == "Base":
+            name = "Ours"
         if name in used_names:
             print(f"Warning: Duplicate name {raw_name}")
             continue
+
         used_names.add(name)
         clean_names[raw_name] = name
     
@@ -85,8 +98,8 @@ def plot_training_curves(runs, output_path, ylabel, window_size=100, num_std=2):
             num_std=num_std
         )
 
-        # Make 'Base' bold in the legend by wrapping it in \textbf{}
-        label = f"\\textbf{{{name}}}" if name == 'Base' else name
+        # Make 'Ours' bold in the legend by wrapping it in \textbf{}
+        label = f"\\textbf{{{name}}}" if name == 'Ours' else name
         
         ax.plot(x, y_smooth, label=label, color=colors[name], alpha=0.8)
         ax.fill_between(x, y_lower, y_upper, color=colors[name], alpha=0.2)
@@ -120,6 +133,7 @@ def main():
     parser.add_argument('--window', type=int, default=100, help='Smoothing window size')
     parser.add_argument('--num-std', type=float, default=2, help='Number of standard deviations for variability bands')
     parser.add_argument('--ylabel', default='Episode Return', help='Y-axis label')
+    parser.add_argument('--ythreshold', default=None, type=float, help='Scaling factor for y-axis')
     parser.add_argument('--x-cutoff', type=int, default=None, help='Cut off x-axis at this value')
     parser.add_argument('--font-size', type=int, default=7, help='Font size for plotting')
     args = parser.parse_args()
@@ -143,7 +157,7 @@ def main():
         df = pd.read_csv(csv_file)
         if args.x_cutoff is not None:
             df = df[df['Step'] <= args.x_cutoff]
-        runs = process_data(df, args.metric)
+        runs = process_data(df, args.metric, args.ythreshold)
         all_runs.update(runs)
 
     output_file = os.path.join('output', 'training_curves',clean_filename(args.ylabel.lower()) + '.pdf')

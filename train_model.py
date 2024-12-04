@@ -119,8 +119,9 @@ class Trainer:
                     batch = {k: v[start_idx:end_idx] for k, v in full_batch.items()}
                     batch = move_batch_to_device(batch, self.device)
 
-                    batch['observations'] = batch['observations'].float() / 255.0
-                    batch['next_observations'] = batch['next_observations'].float() / 255.0
+                    if batch['observations'].dtype == torch.uint8:
+                        batch['observations'] = batch['observations'].float() / 255.0
+                        batch['next_observations'] = batch['next_observations'].float() / 255.0
                     
                     self.optimizer.zero_grad()
                     
@@ -214,8 +215,9 @@ class Trainer:
                     end_idx = min(start_idx + self.val_batch_size, batch_size)
                     minibatch = {k: v[start_idx:end_idx] for k, v in batch.items()}
 
-                    minibatch['observations'] = minibatch['observations'].float() / 255.0
-                    minibatch['next_observations'] = minibatch['next_observations'].float() / 255.0
+                    if minibatch['observations'].dtype == torch.uint8:
+                        minibatch['observations'] = minibatch['observations'].float() / 255.0
+                        minibatch['next_observations'] = minibatch['next_observations'].float() / 255.0
                     
                     if self.use_amp:
                         with autocast():

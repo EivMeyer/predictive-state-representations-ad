@@ -189,6 +189,11 @@ class PredictiveModelV9M3(BasePredictiveModel):
         return predictions, hazard, done_probability
 
     def forward(self, batch):
+        if batch['observations'].dtype == torch.uint8:
+            batch['observations'] = batch['observations'].float() / 255.0
+        if batch['next_observations'].dtype == torch.uint8:
+            batch['next_observations'] = batch['next_observations'].float() / 255.0
+
         encoded_state = self.encode(batch)
         predicted_latents, hazard = self.decode(batch, encoded_state)
 

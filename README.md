@@ -45,7 +45,7 @@ To simplify environment management, we use Docker with GPU support. Follow the s
 2. **Run the Docker Container**  
    Use the following command to start a Docker container:
    ```bash
-   docker run -it --gpus all        -v $(pwd):/app/psr-ad        -v $(pwd)/output:/app/psr-ad/output        -v $(pwd)/scenarios:/app/psr-ad/scenarios        -v $(pwd)/../../data:/app/psr-ad/data        -e CUDA_VISIBLE_DEVICES=0        -e WANDB_API_KEY=<your_key>        ge32luk/psr-ad:latest
+   docker run -it --gpus all   -v $(pwd):/app/psr-ad   -v $(pwd)/output:/app/psr-ad/output   -v $(pwd)/scenarios:/app/psr-ad/scenarios -v $(pwd)/../../data:/app/psr-ad/data   -e CUDA_VISIBLE_DEVICES=0   -e WANDB_API_KEY=...   ge32luk/psr-ad:latest
    ```
 
    **Explanation of Flags**:

@@ -45,7 +45,7 @@ dataset:
   # Number of timesteps for observation
   t_obs: 5
   # Number of timesteps for prediction
-  t_pred: 10
+  t_pred: 25
   # Number of frames to skip between each recorded observation frame
   obs_skip_frames: 0
   # Number of frames to skip between each recorded prediction frame
@@ -58,6 +58,8 @@ dataset:
   preprocess_online: false
   # Number of worker processes for preprocessing (0 for single-process)
   preprocess_workers: 4
+  # Whether to collect with zero, constant, constant_stochastic or full_stochastic actions during the prediction phase
+  collect_mode: zero # {zero, constant, constant_stochastic, full_stochastic}
 
 wandb:
   # Enable Weights & Biases logging
