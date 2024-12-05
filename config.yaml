@@ -399,9 +399,8 @@ commonroad:
   # Rendering options
   vehicle_expansion_factor: 1.4
 
-image_cartpole:
-  max_episode_steps: 500
-
 cartpole:
-  max_episode_steps: 500
+  render: false
+
+mountain_car:
   render: false
