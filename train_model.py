@@ -102,7 +102,7 @@ class Trainer:
 
         total_batches = len(self.train_loader) if self.cfg.training.batches_per_epoch is None else self.cfg.training.batches_per_epoch
 
-        pbar = tqdm(enumerate(self.train_loader), total=total_batches, leave=False, disable=not self.cfg.verbose, desc="Batches")
+        pbar = tqdm(enumerate(self.train_loader), total=total_batches, leave=False, disable=False, desc="Batches")
 
         for iteration, full_batch in pbar:
             batch_size = full_batch['observations'].shape[0]
@@ -186,9 +186,9 @@ class Trainer:
                     inner_pbar.update(1)
                     self.current_training_step += 1
 
-                    if self.current_training_step >= self.cfg.training.total_training_steps:
+                    if self.cfg.training.total_training_steps is not None and self.current_training_step >= self.cfg.training.total_training_steps:
                         break
-                if self.current_training_step >= self.cfg.training.total_training_steps:
+                if self.cfg.training.total_training_steps is not None and self.current_training_step >= self.cfg.training.total_training_steps:
                     break
             
             inner_pbar.close()
@@ -197,7 +197,7 @@ class Trainer:
                 self.train_predictions = predictions[:9].detach()
                 self.train_ground_truth = targets[:9].detach()
 
-            if self.current_training_step >= self.cfg.training.total_training_steps:
+            if self.cfg.training.total_training_steps is not None and self.current_training_step >= self.cfg.training.total_training_steps:
                 break
         
         return epoch_stats
@@ -328,7 +328,7 @@ class Trainer:
             self.wandb.save(str(path))   
 
     def train(self) -> None:
-        while self.current_training_step < self.cfg.training.total_training_steps:
+        while self.cfg.training.total_training_steps is None or self.current_training_step < self.cfg.training.total_training_steps:
             start_time = time.time()
             train_stats = self.train_epoch()
             self.current_epoch += 1
@@ -352,6 +352,8 @@ class Trainer:
                     if self.patience_counter >= self.patience:
                         print(f"Early stopping triggered after {self.current_epoch} epochs")
                         break
+                    else:
+                        print(f"Patience counter: {self.patience_counter}/{self.patience}")
                 
                 # Log validation stats
                 self.log_epoch_stats(train_stats, self.val_stats)
@@ -484,6 +486,7 @@ def get_scheduler(optimizer, cfg):
     elif scheduler_type == "NoScheduler":
         return NoScheduler(optimizer)
     elif scheduler_type == 'LinearWarmupCosineAnnealingLR':
+        assert cfg.training.total_training_steps is not None, "Total training steps must be specified for LinearWarmupCosineAnnealingLR"
         return get_linear_warmup_cosine_decay_scheduler(optimizer, total_steps=cfg.training.total_training_steps)
     else:
         raise ValueError(f"Unsupported scheduler type: {scheduler_type}")
@@ -517,7 +520,8 @@ def main(cfg: DictConfig) -> None:
         num_workers=cfg.training.num_workers, 
         pin_memory=cfg.training.pin_memory,
         prefetch_factor=cfg.training.prefetch_factor,
-        batches_per_epoch=cfg.training.batches_per_epoch
+        batches_per_epoch=cfg.training.batches_per_epoch,
+        subset_size=cfg.training.subset_size
     )
     print(f"Training on {device}")
     print(f"Total batches: {len(full_dataset)}")

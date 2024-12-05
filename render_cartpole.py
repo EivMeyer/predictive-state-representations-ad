@@ -3,8 +3,8 @@ from environments.base_env import BaseEnv
 from environments.image_cartpole_env import ImageCartPoleEnv
 def simulate_image_cartpole():
     # Create the environment with human-friendly rendering
-    env = ImageCartPoleEnv()
-    # env = gym.make("CartPole-v1", render_mode="human")
+    # env = ImageCartPoleEnv()
+    env = gym.make("CartPole-v1", render_mode="human")
     # Run for 5 episodes
     for episode in range(5):
         obs, info = env.reset()

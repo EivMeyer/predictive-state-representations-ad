@@ -73,7 +73,7 @@ wandb:
 
 representation:
   # Type of model to use for encoding
-  model_type: "PredictiveModelV9M3" # AutoEncoderModelV0, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, PredictiveModelV9M3, VQVAEPredictiveModel
+  model_type: "PredictiveModelV9M3" # {AutoEncoderModelV0, AutoEncoderModelV1, PredictiveModelV8, PredictiveModelV9, PredictiveModelV9M1, PredictiveModelV9M3, VQVAEPredictiveModel, CartPolePredictiveModel}
   # Path to the model
   model_path: "../models/pretrained/predictive_model_v9m3.pth"
 
@@ -129,6 +129,8 @@ training:
     min_delta: 0.000  # Minimum change in monitored value to qualify as an improvement
   # Number of batches to use per epoch (set to null to use all batches)
   batches_per_epoch: 1
+  # Select subset of training data (set to null to use all data)
+  subset_size: null
   # Batch size for training
   batch_size: 1
   # Minibatch size
@@ -399,3 +401,7 @@ commonroad:
 
 image_cartpole:
   max_episode_steps: 500
+
+cartpole:
+  max_episode_steps: 500
+  render: false

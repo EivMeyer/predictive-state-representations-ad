@@ -15,9 +15,8 @@ def enjoy_agent(env, model):
     obs = env.reset()
     if hasattr(model.policy, 'reset_noise'):
         try:
-            model.policy.reset_noise()
+            model.policy.reset_noise() # TODO: Check if this is necessary
         except Exception as e:
-            print(f"Error resetting noise: {str(e)}")
             pass
     
     total_reward = 0.0
@@ -48,14 +47,13 @@ def enjoy_agent(env, model):
                 
                 obs = env.reset()
                 try:
-                    model.policy.reset_noise()
+                    model.policy.reset_noise() # TODO: Check if this is necessary
                 except Exception as e:
-                    print(f"Error resetting noise: {str(e)}")
                     pass
                 total_reward = 0.0
 
             # Render
-            env.render('rgb_array')
+            env.render('human') # TODO
 
     except KeyboardInterrupt:
         print("\nInterrupted by user")

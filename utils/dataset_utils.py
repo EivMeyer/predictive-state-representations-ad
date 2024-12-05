@@ -175,7 +175,7 @@ class EnvironmentDataset(Dataset):
             if data[key].shape[2] == 1:
                 data[key] = data[key].squeeze(2)
         # Permute to (seq_len, batch_size, channels, height, width) if necessary
-        if data['observations'].shape[-1] != data['observations'].shape[-2]:
+        if data['observations'].ndim > 3 and data['observations'].shape[-1] != data['observations'].shape[-2]:
             for key in ['observations', 'next_observations']:
                 if isinstance(data[key], np.ndarray):
                     data[key] = np.transpose(data[key], (0, 1, 4, 2, 3))
@@ -226,7 +226,7 @@ class EnvironmentDataset(Dataset):
 
         # Stack the data along the batch dimension
         for key in batch_data:
-            if key in ['observations', 'next_observations']:
+            if key in ['observations', 'next_observations'] and batch_data[key][0].dtype == torch.uint8:
                 batch_data[key] = np.stack(batch_data[key])  # uint8 storage
             else:
                 batch_data[key] = torch.stack(batch_data[key])
@@ -273,8 +273,6 @@ class EnvironmentDataset(Dataset):
         # Check for correct batch size
         assert batch_data['observations'].shape[0] == self.storage_batch_size, f"Incorrect batch size: {batch_data['observations'].shape[0]} vs {self.storage_batch_size}"
 
-        print("Sanity check passed successfully.")
-
     def __len__(self):
         return self.num_samples if self.num_samples is not None else self.batch_count
 
@@ -301,7 +299,12 @@ class SubsetRandomSampler(Sampler):
     def __len__(self):
         return self.num_samples
 
-def create_data_loaders(dataset, batch_size, val_size, prefetch_factor, num_workers, pin_memory, batches_per_epoch=None):
+def create_data_loaders(dataset, batch_size, val_size, prefetch_factor, num_workers, pin_memory, batches_per_epoch=None, subset_size=None):
+    if subset_size is not None:
+        if subset_size > len(dataset):
+            raise ValueError(f"Subset size ({subset_size}) cannot be greater than the dataset size ({len(dataset)})")
+        dataset = torch.utils.data.Subset(dataset, range(subset_size))
+        
     dataset_size = len(dataset)
     if isinstance(val_size, float):
         val_size = int(val_size * dataset_size)

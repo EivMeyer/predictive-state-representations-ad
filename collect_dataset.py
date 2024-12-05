@@ -10,7 +10,7 @@ def collect_episodes(cfg_dict, env, num_episodes):
     dataset = EnvironmentDataset(cfg_dict)
     num_envs = env.num_envs if hasattr(env, 'num_envs') else 1
 
-    verbose = cfg_dict['verbose']
+    verbose = False # cfg_dict['verbose']
     t_obs = cfg_dict['dataset']['t_obs']
     t_pred = cfg_dict['dataset']['t_pred']
     obs_skip_frames = cfg_dict['dataset']['obs_skip_frames']
@@ -43,12 +43,16 @@ def collect_episodes(cfg_dict, env, num_episodes):
                         actions = [env.action_space.sample() for _ in range(num_envs)]
 
                     next_obs, rewards, dones, infos = env.step(actions)
-                    ego_simulation = env.get_attr('ego_vehicle_simulation')[0]
+
+                    try:
+                        ego_simulation = env.get_attr('ego_vehicle_simulation')[0]
+                    except AttributeError: # TODO hack hack hack
+                        ego_simulation = None
 
                     if any(dones):
                         terminated_during_obs = True
                         if verbose:
-                            print(f"Episode {episodes_collected} terminated prematurely at step {t} because of reason: {infos[0]['termination_reason']}. Retrying...")
+                            print(f"Episode {episodes_collected} terminated prematurely at step {t} because of reason: {infos[0].get('termination_reason', 'Unknown')}. Retrying...")
                         break
 
                     if t % (obs_skip_frames + 1) == 0:
@@ -62,7 +66,7 @@ def collect_episodes(cfg_dict, env, num_episodes):
                             ego_simulation.ego_vehicle.state.acceleration,
                             getattr(ego_simulation.ego_vehicle.state, 'steering_angle', 0.0),
                             getattr(ego_simulation.ego_vehicle.state, 'yaw_rate', 0.0)
-                        ])
+                        ]) if ego_simulation is not None else np.zeros(4)
                         ego_state_sequences[0].append(ego_state)
 
                     obs = next_obs
@@ -84,13 +88,13 @@ def collect_episodes(cfg_dict, env, num_episodes):
                 print("Predicting future observations...")
 
             t = 0
-            is_done = False
+            is_done = False # TODO SHOULD NOT DO MULTIENV
 
             if collect_mode == 'constant_stochastic':
                 actions = [env.action_space.sample() for _ in range(num_envs)]
             while len(next_obs_sequences[0]) < t_pred:
                 if collect_mode == 'zero':
-                    actions = [np.zeros(env.action_space.shape) for _ in range(num_envs)]
+                    actions = [np.zeros(env.action_space.shape, dtype=env.action_space.dtype) for _ in range(num_envs)]
                 elif collect_mode == 'full_stochastic':
                     actions = [env.action_space.sample() for _ in range(num_envs)]
 
@@ -175,7 +179,7 @@ def main(cfg: DictConfig) -> None:
     
     dataset = collect_episodes(cfg_dict, env, cfg.dataset.num_episodes)
     
-    print(f"Dataset collection complete. Total episodes: {len(dataset)}")
+    print(f"Dataset collection complete. Total batches: {len(dataset)}")
 
 if __name__ == "__main__":
     main()
