@@ -45,7 +45,7 @@ dataset:
   # Number of timesteps for observation
   t_obs: 5
   # Number of timesteps for prediction
-  t_pred: 25
+  t_pred: 60
   # Number of frames to skip between each recorded observation frame
   obs_skip_frames: 0
   # Number of frames to skip between each recorded prediction frame
@@ -60,6 +60,8 @@ dataset:
   preprocess_workers: 4
   # Whether to collect with zero, constant, constant_stochastic or full_stochastic actions during the prediction phase
   collect_mode: zero # {zero, constant, constant_stochastic, full_stochastic}
+  # Always reset environment after termination
+  always_reset: false
 
 wandb:
   # Enable Weights & Biases logging
@@ -128,7 +130,7 @@ training:
     patience: 10  # Number of validation checks without improvement before stopping
     min_delta: 0.000  # Minimum change in monitored value to qualify as an improvement
   # Number of batches to use per epoch (set to null to use all batches)
-  batches_per_epoch: 1
+  batches_per_epoch: null
   # Select subset of training data (set to null to use all data)
   subset_size: null
   # Batch size for training

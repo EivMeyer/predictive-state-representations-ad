@@ -311,14 +311,17 @@ def create_data_loaders(dataset, batch_size, val_size, prefetch_factor, num_work
     train_size = dataset_size - val_size
 
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
-
-    # train_sampler = SubsetRandomSampler(range(len(train_dataset)), num_samples=len(train_dataset))
+    
+    if batches_per_epoch is not None:
+        train_sampler = SubsetRandomSampler(range(len(train_dataset)), num_samples=batches_per_epoch * batch_size)
+    else:
+        train_sampler = None
 
     train_loader = DataLoader(
         train_dataset, 
         batch_size=batch_size,
-        shuffle=True,
-        # sampler=train_sampler,
+        shuffle=batches_per_epoch is None,
+        sampler=train_sampler,
         num_workers=num_workers,
         pin_memory=pin_memory,
         collate_fn=EnvironmentDataset.collate_fn,

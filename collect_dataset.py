@@ -16,6 +16,7 @@ def collect_episodes(cfg_dict, env, num_episodes):
     obs_skip_frames = cfg_dict['dataset']['obs_skip_frames']
     pred_skip_frames = cfg_dict['dataset']['pred_skip_frames']
     collect_mode = cfg_dict['dataset']['collect_mode']
+    always_reset = cfg_dict['dataset']['always_reset']
 
     assert collect_mode in {'zero', 'constant', 'constant_stochastic', 'full_stochastic'}, f"{collect_mode=} must be one of 'zero', 'constant', 'constant_stochastic', 'full_stochastic'!"
 
@@ -163,6 +164,9 @@ def collect_episodes(cfg_dict, env, num_episodes):
 
                 if episodes_collected >= num_episodes:
                     break
+
+            if always_reset:
+                obs = env.reset()
 
             if episodes_collected >= num_episodes:
                 break
