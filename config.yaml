@@ -45,7 +45,7 @@ dataset:
   # Number of timesteps for observation
   t_obs: 5
   # Number of timesteps for prediction
-  t_pred: 60
+  t_pred: 25
   # Number of frames to skip between each recorded observation frame
   obs_skip_frames: 0
   # Number of frames to skip between each recorded prediction frame
@@ -149,6 +149,8 @@ training:
   use_amp: true 
   # Validation set split size (if float, it is the ratio of the dataset, if int, it is the number of samples)
   val_size: 8
+  # Validation batch size (set to null to derive automatically) # TODO fix
+  val_batch_size: null
   # How often to validate
   validation_interval: 100
   # Whether to use pinned host memory for faster data copies
@@ -212,6 +214,8 @@ rl_training:
   log_path: "./logs"
   # Frequency of evaluation during training
   eval_freq: 100000
+  # Frequency of saving latest model during training
+  save_latest_freq: 100000
   # Number of episodes for evaluation
   n_eval_episodes: 20
   # Frequency of video recording (in steps)
@@ -280,6 +284,9 @@ rl_training:
     features_dim: 512
     hidden_dims: [256, 128]
 
+  # Whether to render the training model's behavior live in a subprocess
+  live_rendering: false
+
 # Viewer options
 viewer:
   # Range of view in the simulation
@@ -300,6 +307,9 @@ commonroad:
 
   # Whether to collect dataset from existing trajectories in the scenarios
   collect_from_trajectories: false
+
+  # Whether to use state vector observations
+  use_commonroad_observer: false 
 
   # Simulation options
   simulation:
@@ -406,3 +416,5 @@ cartpole:
 
 mountain_car:
   render: false
+  use_shaped_reward: false
+  shaped_reward_weight: 1.0

@@ -60,7 +60,7 @@ class Trainer:
         self.use_amp = cfg.training.use_amp if hasattr(cfg.training, 'use_amp') else False
         self.scaler = GradScaler(init_scale=2**10, growth_factor=2**(1/4), backoff_factor=0.5, growth_interval=100)  if self.use_amp else None
 
-        self.val_batch_size = self._calculate_val_batch_size()
+        self.val_batch_size = self._calculate_val_batch_size() if cfg.training.val_batch_size is None else cfg.training.val_batch_size
 
         # Add early stopping parameters
         self.patience = cfg.training.early_stopping.patience
@@ -339,8 +339,10 @@ class Trainer:
             if should_validate:
                 if self.cfg.verbose:
                     print("Validating...")
+
                 self.val_stats = self.validate()
                 val_loss = np.mean(self.val_stats['total_loss'])
+                print(f"Validation loss: {val_loss:.4f} (previous best: {self.best_monitored_value:.4f})")
 
                 # Early stopping check
                 if val_loss < (self.best_monitored_value - self.min_delta):
