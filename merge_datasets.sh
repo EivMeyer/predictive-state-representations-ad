@@ -9,7 +9,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         -o|--output-dir) base_dir="$2"; shift 2 ;;
         -d|--dataset-dir) dataset_dir="$2"; shift 2 ;;
-        *) echo "Usage: $0 [-o|--output-dir base_directory]" >&2
+        *) echo "Usage: $0 [-o|--output-dir base_directory] [-d|--dataset-dir dataset_directory]" >&2
            exit 1 ;;
     esac
 done
@@ -35,13 +35,13 @@ merge_datasets() {
     file_counter=$((highest_batch + 1))
 
     # Find all worker directories
-    worker_dirs=$(find "$base_dir" -type d -name "worker_*" | sort)
+    worker_dirs=$(find "${base_dir}" -type d -name "worker_*" | sort)
 
     # Loop through all worker directories and merge files
     for worker_dir in $worker_dirs; do
         for run_dir in "$worker_dir"/run_*; do
-            if [ -d "$run_dir/dataset" ]; then
-                for file in "$run_dir/dataset"/*; do
+            if [ -d "$run_dir/${dataset_dir}" ]; then
+                for file in "$run_dir/${dataset_dir}"/*; do
                     if [ -f "$file" ]; then
                         new_name=$(printf "batch_%d.pt" $file_counter)
                         cp "$file" "${merge_dir}/${new_name}"
