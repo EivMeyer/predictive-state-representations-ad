@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from models.base_predictive_model import BasePredictiveModel
-from models.autoencoder_model_v0 import AutoEncoderModelV0
+from models.autoencoder_model_v0 import AutoEncoderModelV0 
 from models.loss_functions import CombinedLoss
 from utils.file_utils import find_model_path
 import copy
@@ -15,7 +15,8 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         return x + self.pe[:x.size(0)]
 
-class PredictiveModelV9M3(BasePredictiveModel):
+class PredictiveModelV9M3CA(BasePredictiveModel):
+    """Action-conditioned version of PredictiveModelV9M3."""
     def __init__(self, obs_shape, action_dim, ego_state_dim, cfg, 
                  pretrained_model_path=None, nhead=16, num_encoder_layers=8, num_decoder_layers=8, eval_mode: bool = False):
         super().__init__(obs_shape, action_dim, ego_state_dim, cfg)
@@ -44,6 +45,7 @@ class PredictiveModelV9M3(BasePredictiveModel):
         # Projectors
         self.latent_projector = nn.Linear(latent_dim, self.hidden_dim) if latent_dim != self.hidden_dim else nn.Identity()
         self.ego_state_projector = nn.Linear(ego_state_dim, self.hidden_dim)
+        self.action_projector = nn.Linear(action_dim, self.hidden_dim)  # New action projector
 
         # Readout token
         self.readout_token = nn.Parameter(torch.randn(1, 1, self.hidden_dim))
@@ -164,10 +166,18 @@ class PredictiveModelV9M3(BasePredictiveModel):
     def decode(self, batch, memory):
         batch_size, hidden_dim = memory.shape
 
+        # Project future actions to hidden dimension
+        future_actions = batch['next_actions'][:, :self.num_frames_to_predict]  # [B, T, A]
+        action_features = self.action_projector(future_actions)  # [B, T, H]
+        action_features = action_features.permute(1, 0, 2)  # [T, B, H]
+
         # Prepare decoder input
         decoder_input = self.pos_encoder_decoding(memory.unsqueeze(0).repeat(self.num_frames_to_predict, 1, 1))
 
-        # Generate future latent predictions using only the last memory state
+        # Add action features to decoder input
+        decoder_input = decoder_input + action_features
+
+        # Generate future latent predictions using the last memory state
         output = self.transformer_decoder(decoder_input, memory.unsqueeze(0))
 
         # Project output back to latent space
@@ -177,7 +187,7 @@ class PredictiveModelV9M3(BasePredictiveModel):
         hazard = self.hazard_projector(output.permute(1, 0, 2)).squeeze(-1)
 
         return predicted_latents, hazard
-    
+
     def decode_image(self, batch, encoded_state):
         predicted_latents, hazard = self.decode(batch, encoded_state)
 
@@ -207,15 +217,15 @@ class PredictiveModelV9M3(BasePredictiveModel):
             "predictions": predictions,
             "hazard": hazard
         }
-    
+
     def calculate_target_latents(self, batch):
         target_observations = batch['next_observations'][:, :self.num_frames_to_predict].contiguous()
-
         batch_size, seq_len, channels, height, width = target_observations.shape
         
         target_observations = target_observations.view(-1, channels, height, width)
         target_ego_states = batch['ego_states'][:, :self.num_frames_to_predict, :]
         target_ego_states = target_ego_states.view(-1, target_ego_states.shape[-1])
+        
         target_batch = {
             'observations': target_observations,
             'ego_states': target_ego_states
