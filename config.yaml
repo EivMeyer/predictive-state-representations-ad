@@ -152,7 +152,7 @@ training:
   # Validation batch size (set to null to derive automatically) # TODO fix
   val_batch_size: null
   # How often to validate
-  validation_interval: 100
+  validation_interval: 1
   # Whether to use pinned host memory for faster data copies
   pin_memory: true
   # Number of processes for fetching data in dataloader
