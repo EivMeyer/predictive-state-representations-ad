@@ -194,7 +194,7 @@ training:
 
   # Scheduler configuration
   scheduler:
-    type: "LinearWarmupCosineAnnealingLR"  # Options: "StepLR", "ExponentialLR", "CosineAnnealingLR", "ReduceLROnPlateau", "NoScheduler" LinearWarmupCosineAnnealingLR
+    type: "NoScheduler"  # Options: "StepLR", "ExponentialLR", "CosineAnnealingLR", "ReduceLROnPlateau", "NoScheduler" LinearWarmupCosineAnnealingLR
     T_max: 100  # Period of cosine annealing in epochs
     eta_min: 1e-5  # Minimum learning rate
     # Other scheduler options (uncomment if needed):
