@@ -62,6 +62,8 @@ dataset:
   collect_mode: zero # {zero, constant, constant_stochastic, full_stochastic}
   # Always reset environment after termination
   always_reset: false
+  # Whether to sample minibatches by episode length 
+  sample_by_episode_length: false
 
 wandb:
   # Enable Weights & Biases logging
@@ -181,6 +183,7 @@ training:
     r_weight: 1.0
     g_weight: 1.0
     b_weight: 1.0
+    episode_length_scaling: false
 
   # Optimizer options
   optimizer:

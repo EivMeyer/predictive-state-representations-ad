@@ -5,11 +5,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 class CombinedLoss(nn.Module):
-    def __init__(self, mse_weight=0.5, l1_weight=0.3, diversity_weight=0.1, 
+    def __init__(self, mse_weight=0.5, l1_weight=0.3, diversity_weight=0.1,
                  latent_l1_weight=0.05, latent_l2_weight=0.05, temporal_decay=0.9,
                  perceptual_weight=0.1, num_scales=1, use_sample_weights=True,
-                 r_weight=1.0, g_weight=1.0, b_weight=1.0, warmup_iterations=1000, momentum=0.99):
-        super(CombinedLoss, self).__init__()
+                 r_weight=1.0, g_weight=1.0, b_weight=1.0, warmup_iterations=1000, 
+                 momentum=0.99, episode_length_scaling=True):
+        super().__init__()
         self.mse_weight = mse_weight
         self.l1_weight = l1_weight
         self.diversity_weight = diversity_weight
@@ -22,14 +23,43 @@ class CombinedLoss(nn.Module):
         self.r_weight = r_weight
         self.g_weight = g_weight
         self.b_weight = b_weight
+        self.episode_length_scaling = episode_length_scaling
 
         if self.use_sample_weights:
-            # Setup for running statistics for sample weights
             self.warmup_iterations = warmup_iterations
             self.momentum = momentum
             self.register_buffer('iteration_count', torch.tensor(0))
             self.register_buffer('running_mean', None)
             self.register_buffer('running_std', None)
+
+    def compute_episode_length_weights(self, valid_mask):
+        """
+        Compute sample weights based on episode length.
+        
+        Args:
+            valid_mask: Boolean tensor indicating non-terminated timesteps [batch_size, seq_len]
+            
+        Returns:
+            Tensor of shape [batch_size] with weights proportional to episode length
+        """
+        # Calculate episode lengths
+        episode_lengths = valid_mask.sum(dim=1).float()  # [batch_size]
+        
+        # Normalize lengths to [0, 1] range for numerical stability
+        min_length = episode_lengths.min()
+        max_length = episode_lengths.max()
+        if max_length > min_length:
+            normalized_lengths = (episode_lengths - min_length) / (max_length - min_length)
+        else:
+            normalized_lengths = torch.ones_like(episode_lengths)
+            
+        # Apply softplus to ensure positive weights while maintaining relative scaling
+        weights = F.softplus(normalized_lengths)
+        
+        # Normalize weights to sum to batch_size (preserves loss scale)
+        weights = weights * (weights.size(0) / weights.sum())
+        
+        return weights
 
     def update_running_stats(self, batch_mean, batch_std):
         if self.running_mean is None:
@@ -156,7 +186,7 @@ class CombinedLoss(nn.Module):
     def sobel_filter_y(self):
         return torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32).view(1, 1, 3, 3).repeat(3, 1, 1, 1)
 
-    def forward(self, pred, target, latent):
+    def forward(self, pred, valid_mask, target, latent):
         device = pred.device
 
         if pred.ndim == 3 and target.ndim == 3:
@@ -171,13 +201,22 @@ class CombinedLoss(nn.Module):
         
         batch_size, seq_len, channels, height, width = pred.shape
         
+        # Compute temporal weights
         temporal_weights = self.compute_temporal_weights(seq_len, device=device)
         temporal_weights = temporal_weights.unsqueeze(0).repeat(batch_size, 1)
-
-        if self.use_sample_weights and width > 1 and height > 1:
-            sample_weights = self.compute_sample_weights(target).to(device)
+        
+        # Get episode length-based weights if enabled
+        if self.episode_length_scaling:
+            episode_weights = self.compute_episode_length_weights(valid_mask)
         else:
-            sample_weights = torch.ones(batch_size, device=device)
+            episode_weights = torch.ones(batch_size, device=device)
+
+        # Combine with other sample weights if enabled
+        if self.use_sample_weights and width > 1 and height > 1:
+            content_weights = self.compute_sample_weights(target)
+            sample_weights = content_weights * episode_weights
+        else:
+            sample_weights = episode_weights
 
         total_loss = 0
         loss_components = {}

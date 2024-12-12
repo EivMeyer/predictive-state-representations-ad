@@ -71,7 +71,8 @@ class PredictiveModelV9M3(BasePredictiveModel):
             latent_l1_weight=self.cfg.training.loss.latent_l1_weight,
             latent_l2_weight=self.cfg.training.loss.latent_l2_weight,
             temporal_decay=self.cfg.training.loss.temporal_decay,
-            use_sample_weights=False
+            use_sample_weights=False,
+            episode_length_scaling=self.cfg.training.loss.episode_length_scaling
         )
 
         self.loss_function_observations = CombinedLoss(
@@ -81,7 +82,8 @@ class PredictiveModelV9M3(BasePredictiveModel):
             latent_l1_weight=0.0,
             latent_l2_weight=0.0,
             temporal_decay=self.cfg.training.loss.temporal_decay,
-            use_sample_weights=False
+            use_sample_weights=False,
+            episode_length_scaling=self.cfg.training.loss.episode_length_scaling
         )
 
         if eval_mode:
@@ -251,11 +253,13 @@ class PredictiveModelV9M3(BasePredictiveModel):
         # Calculate losses with masking
         loss_obs, loss_components_obs = self.loss_function_observations(
             predictions * valid_mask.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1),
+            valid_mask,
             target_observations * valid_mask.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1),
             encoded_state
         )
         loss_latent, loss_components_latent = self.loss_function_latent(
             predicted_latents * valid_mask.unsqueeze(-1),
+            valid_mask,
             target_latents * valid_mask.unsqueeze(-1),
             encoded_state
         )

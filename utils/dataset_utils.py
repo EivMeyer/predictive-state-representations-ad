@@ -9,6 +9,44 @@ from tqdm import tqdm
 from multiprocessing import Pool, cpu_count
 from omegaconf import OmegaConf
 
+
+def sample_minibatches(batch, minibatch_size, episode_length_exp=1.0):
+    # First identify episode boundaries using dones
+    episodes = []
+    episode_start = 0
+    dones = batch['dones']
+    
+    for i in range(len(dones)):
+        if dones[i].any():  # End of episode
+            episodes.append((episode_start, i + 1))
+            episode_start = i + 1
+    
+    # Add final episode if exists
+    if episode_start < len(dones):
+        episodes.append((episode_start, len(dones)))
+
+    # Calculate sampling weights based on episode lengths
+    lengths = np.array([end - start for start, end in episodes])
+    weights = lengths ** episode_length_exp
+    weights = weights / weights.sum()
+
+    # Create array of selected indices same size as original batch
+    total_samples = len(dones)
+    selected_indices = []
+    
+    for i in range(total_samples):
+        # Sample an episode based on weights
+        episode_idx = np.random.choice(len(episodes), p=weights)
+        start, end = episodes[episode_idx]
+        # Random sample from the episode
+        sample_idx = np.random.randint(start, end)
+        selected_indices.append(sample_idx)
+
+    # Return reordered batch with same structure
+    return {
+        key: value[selected_indices] for key, value in batch.items()
+    }
+
 class EnvironmentDataset(Dataset):
     def __init__(self, cfg):
         if isinstance(cfg, dict):
@@ -128,7 +166,7 @@ class EnvironmentDataset(Dataset):
             file = self.episode_files[idx]
             try:
                 data = self._load_and_process_file(file)
-                return self._shuffle_batch(data)
+                return self._sample_minibatches(data) if self.cfg.dataset.sample_by_episode_length else self._shuffle_batch(data)
             except Exception as e:
                 logging.error(f"Error loading file {file}: {str(e)}. Removing it from the dataset.")
                 self._remove_corrupted_batch(idx)
@@ -139,7 +177,14 @@ class EnvironmentDataset(Dataset):
                     return self.__getitem__(idx)
                 else:
                     raise RuntimeError("No valid files found after the specified index.")
-            
+
+    def _sample_minibatches(self, data):
+        return sample_minibatches(
+            data,
+            minibatch_size=self.cfg.training.minibatch_size,
+            episode_length_exp=1.0  # Configurable
+        )
+
     def _shuffle_batch(self, data):
         batch_size = data['observations'].shape[0]
         shuffle_idx = torch.randperm(batch_size)
@@ -311,6 +356,8 @@ def create_data_loaders(dataset, batch_size, val_size, prefetch_factor, num_work
     train_size = dataset_size - val_size
 
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+
+    print(f"Length of training dataset: {len(train_dataset)}")
     
     if batches_per_epoch is not None:
         train_sampler = SubsetRandomSampler(range(len(train_dataset)), num_samples=batches_per_epoch * batch_size)
