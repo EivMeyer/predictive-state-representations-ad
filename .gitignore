@@ -9,7 +9,8 @@ settings.json
 wandb/
 *.out
 *.zip
-config.local.yaml
+config.local.*
+!config.local.template.yaml
 logs/
 commonroad_geometric/
 autoencoder*

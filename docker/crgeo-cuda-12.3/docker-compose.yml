@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  psr-ad:
+    build:
+      context: ../../
+      dockerfile: docker/crgeo-cuda-12.3/Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    volumes:
+      - ../../output:/app/psr-ad/output:cached
+      - ../../scenarios:/app/psr-ad/scenarios:cached
+      - ../..:/app/psr-ad:cached
+      - pip-cache:/root/.cache/pip:cached
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - WANDB_API_KEY=${WANDB_API_KEY}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    tty: true
+    stdin_open: true
+    working_dir: /app/psr-ad
+
+volumes:
+  pip-cache:    
