@@ -440,7 +440,7 @@ class Trainer:
         
         if results['success']:
             self.start_epoch = results['epoch'] + 1
-            self.start_training_step = results['training_step']
+            self.start_training_step = results.get('training_step', 0)
             print(f"Resuming training from epoch {self.start_epoch} at step {self.start_training_step}")
         else:
             print("Failed to load checkpoint, starting from scratch")
