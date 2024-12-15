@@ -129,7 +129,7 @@ training:
   total_training_steps: 1_000_000_000
   # Early stopping configuration
   early_stopping:
-    patience: 50  # Number of validation checks without improvement before stopping
+    patience: 25  # Number of validation checks without improvement before stopping
     min_delta: 0.000  # Minimum change in monitored value to qualify as an improvement
   # Number of batches to use per epoch (set to null to use all batches)
   batches_per_epoch: null
